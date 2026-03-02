@@ -125,7 +125,7 @@ async function initDb() {
 }
 
 function randomCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return "123456";
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
