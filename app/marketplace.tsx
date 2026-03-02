@@ -14,7 +14,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   summer_only: "Summer Only",
   august_gap: "August Gap",
   semester_takeover: "Semester / Full Year",
-  short_term: "Short-Term",
+  short_term: "Short-Term & Events",
 };
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -31,6 +31,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   august_gap: Colors.ocean,
   semester_takeover: Colors.grassGreen,
   short_term: Colors.goldDark,
+};
+
+const CATEGORY_DATES: Record<string, string> = {
+  summer_only: "May 15 – Aug 10",
+  august_gap: "1–2 weeks in Aug",
+  semester_takeover: "Aug–Dec, Jan–May, or Full Year",
+  short_term: "1–14 days",
 };
 
 const ZONE_LABELS: Record<string, string> = {
@@ -52,80 +59,96 @@ const LANDLORD_LABELS: Record<Landlord, string> = {
 
 const LEASE_LABELS: Record<string, string> = {
   full_year: "Full Year",
-  fall_sublease: "Fall",
-  spring_sublease: "Spring",
-  summer_sublease: "Summer",
+  fall_sublease: "Fall Sublease",
+  spring_sublease: "Spring Sublease",
+  summer_sublease: "Summer Sublease",
 };
 
 type CategoryFilter = "all" | "summer_only" | "august_gap" | "semester_takeover" | "short_term";
 
-function TrustLine({ userEmail }: { userEmail: string }) {
-  const { getTrustInfo } = useApp();
-  const trust = getTrustInfo(userEmail);
-
-  const parts: string[] = [];
-  if (trust.isFriend) parts.push("Friend");
-  if (trust.mutualFriendNames.length > 0) {
-    const names = trust.mutualFriendNames.slice(0, 2).join(", ");
-    const extra = trust.mutualFriendNames.length > 2 ? ` +${trust.mutualFriendNames.length - 2}` : "";
-    parts.push(`${trust.mutualFriendNames.length} mutual: ${names}${extra}`);
-  }
-  if (trust.vouchedByFriend) parts.push(`Vouched by ${trust.vouchedByFriend}`);
-  if (trust.sharedOrg && !trust.isFriend) parts.push(`Both in ${trust.sharedOrg}`);
-
-  if (parts.length === 0) return null;
-
-  const color = trust.isFriend ? Colors.grassGreen : trust.mutualFriendNames.length > 0 ? Colors.ocean : Colors.goldDark;
-  const icon: keyof typeof Ionicons.glyphMap = trust.isFriend ? "people" : trust.mutualFriendNames.length > 0 ? "person-add" : "star";
+function TrustBadge({ label, type }: { label: string; type: "friend" | "mutual" | "vouched" | "org" }) {
+  const bg =
+    type === "friend" ? Colors.grassGreen + "20" :
+    type === "vouched" ? Colors.orange + "20" :
+    type === "mutual" ? Colors.ocean + "18" :
+    Colors.goldDark + "18";
+  const color =
+    type === "friend" ? Colors.grassGreen :
+    type === "vouched" ? Colors.orange :
+    type === "mutual" ? Colors.ocean :
+    Colors.goldDark;
+  const icon: keyof typeof Ionicons.glyphMap =
+    type === "friend" ? "people" :
+    type === "vouched" ? "star" :
+    type === "mutual" ? "link" :
+    "school-outline";
 
   return (
-    <View style={trust_styles.row}>
-      <Ionicons name={icon} size={11} color={color} />
-      <Text style={[trust_styles.text, { color }]}>{parts.join(" · ")}</Text>
+    <View style={[badge.wrap, { backgroundColor: bg, borderColor: color + "40" }]}>
+      <Ionicons name={icon} size={10} color={color} />
+      <Text style={[badge.text, { color }]}>{label}</Text>
     </View>
   );
 }
 
-const trust_styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
-  text: { fontFamily: "Nunito_600SemiBold", fontSize: 11, flex: 1 },
+const badge = StyleSheet.create({
+  wrap: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, borderWidth: 1,
+  },
+  text: { fontFamily: "Nunito_700Bold", fontSize: 10 },
 });
 
 function SubleaseCard({ post }: { post: SubleasePost }) {
+  const { getTrustInfo } = useApp();
+  const trust = getTrustInfo(post.userEmail);
+  const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
   const cat = post.category || "semester_takeover";
   const catColor = CATEGORY_COLORS[cat] || Colors.ocean;
-  const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <View style={[styles.catTag, { backgroundColor: catColor + "18", borderColor: catColor + "40" }]}>
-          <Ionicons name={CATEGORY_ICONS[cat] || "home-outline"} size={11} color={catColor} />
-          <Text style={[styles.catTagText, { color: catColor }]}>
-            {cat === "semester_takeover" ? LEASE_LABELS[post.leaseType] : CATEGORY_LABELS[cat]}
-          </Text>
-        </View>
-        {post.availableDuringBreaks && (
-          <View style={styles.breakTag}>
-            <Ionicons name="home" size={10} color={Colors.grassGreen} />
-            <Text style={styles.breakTagText}>Break OK</Text>
+        {cat !== "semester_takeover" && (
+          <View style={[styles.catTag, { backgroundColor: catColor + "18", borderColor: catColor + "40" }]}>
+            <Ionicons name={CATEGORY_ICONS[cat] || "home-outline"} size={11} color={catColor} />
+            <Text style={[styles.catTagText, { color: catColor }]}>{CATEGORY_LABELS[cat] ?? cat}</Text>
           </View>
         )}
+        {cat === "semester_takeover" && (
+          <View style={[styles.catTag, { backgroundColor: Colors.grassGreen + "18", borderColor: Colors.grassGreen + "40" }]}>
+            <Text style={[styles.catTagText, { color: Colors.grassGreen }]}>{LEASE_LABELS[post.leaseType]}</Text>
+          </View>
+        )}
+        {post.availableDuringBreaks && (
+          <View style={styles.breakAvailTag}>
+            <Ionicons name="home" size={10} color={Colors.grassGreen} />
+            <Text style={styles.breakAvailText}>Break-Friendly</Text>
+          </View>
+        )}
+        <Text style={styles.cardTime}>
+          {Math.floor((Date.now() - post.timestamp) / 86400000)}d ago
+        </Text>
       </View>
 
       <Text style={styles.buildingName}>{post.buildingName}</Text>
-      {post.address ? <Text style={styles.address}>{post.address}</Text> : null}
+      <Text style={styles.address}>{post.address}</Text>
 
       <View style={styles.priceRow}>
         <Text style={styles.price}>${post.pricePerMonth}</Text>
-        <Text style={styles.priceSub}>/mo</Text>
-        {(post.moveInDate && post.moveOutDate) ? (
-          <View style={styles.dateBadge}>
-            <Ionicons name="calendar-outline" size={11} color={Colors.textMuted} />
-            <Text style={styles.dateBadgeText}>{post.moveInDate} → {post.moveOutDate}</Text>
+        <Text style={styles.priceSub}>/month</Text>
+        {cat === "august_gap" || cat === "short_term" ? (
+          <View style={[styles.dateBadge, { backgroundColor: catColor + "15" }]}>
+            <Text style={[styles.dateBadgeText, { color: catColor }]}>
+              {CATEGORY_DATES[cat]}
+            </Text>
           </View>
         ) : null}
       </View>
+
+      {post.description ? (
+        <Text style={styles.description} numberOfLines={2}>{post.description}</Text>
+      ) : null}
 
       <View style={styles.metaRow}>
         <View style={styles.metaItem}>
@@ -144,8 +167,16 @@ function SubleaseCard({ post }: { post: SubleasePost }) {
         </View>
         <View style={styles.posterInfo}>
           <Text style={styles.posterName}>{post.userName}</Text>
-          <TrustLine userEmail={post.userEmail} />
+          <Text style={styles.posterEmail}>{post.userEmail}</Text>
         </View>
+        {(trust.degree !== null || trust.sharedOrg) && (
+          <View style={styles.trustBadges}>
+            {trust.degree === 1 && <TrustBadge label="1st Degree" type="friend" />}
+            {trust.degree === 2 && <TrustBadge label="2nd Degree" type="mutual" />}
+            {trust.vouchedByFriend && <TrustBadge label="Vouched" type="vouched" />}
+            {trust.sharedOrg && !trust.degree && <TrustBadge label={trust.sharedOrg} type="org" />}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -179,9 +210,12 @@ export default function MarketplaceScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>
-            {activeFilter === "all" ? "Marketplace" : CATEGORY_LABELS[activeFilter]}
+            {activeFilter === "all" ? "Sublease Marketplace" : CATEGORY_LABELS[activeFilter]}
           </Text>
-          <Text style={styles.headerSub}>{filtered.length} listing{filtered.length !== 1 ? "s" : ""}</Text>
+          <Text style={styles.headerSub}>
+            {filtered.length} listing{filtered.length !== 1 ? "s" : ""}
+            {activeFilter !== "all" && CATEGORY_DATES[activeFilter] ? ` · ${CATEGORY_DATES[activeFilter]}` : ""}
+          </Text>
         </View>
         <TouchableOpacity style={[styles.postBtn, { backgroundColor: headerCatColor }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/post-sublease"); }}>
@@ -201,11 +235,21 @@ export default function MarketplaceScreen() {
           return (
             <TouchableOpacity
               key={key}
-              style={[styles.filterChip, isActive && { backgroundColor: chipColor, borderColor: chipColor }]}
+              style={[
+                styles.filterChip,
+                isActive && { backgroundColor: chipColor, borderColor: chipColor }
+              ]}
               onPress={() => { setActiveFilter(key); Haptics.selectionAsync(); }}
             >
-              <Ionicons name={CATEGORY_ICONS[key]} size={12} color={isActive ? Colors.white : Colors.textMuted} />
-              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+              <Ionicons
+                name={CATEGORY_ICONS[key]}
+                size={12}
+                color={isActive ? Colors.white : Colors.textMuted}
+              />
+              <Text style={[
+                styles.filterChipText,
+                isActive && styles.filterChipTextActive
+              ]}>
                 {CATEGORY_LABELS[key]}
               </Text>
             </TouchableOpacity>
@@ -224,8 +268,13 @@ export default function MarketplaceScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="storefront-outline" size={44} color={Colors.textLight} />
             <Text style={styles.emptyTitle}>No listings yet</Text>
+            <Text style={styles.emptySub}>
+              {activeFilter !== "all"
+                ? `No ${CATEGORY_LABELS[activeFilter]} listings posted yet.`
+                : "Be the first to post a sublease!"}
+            </Text>
             <TouchableOpacity style={styles.postFirstBtn} onPress={() => router.push("/post-sublease")}>
-              <Text style={styles.postFirstBtnText}>Post a sublease</Text>
+              <Text style={styles.postFirstBtnText}>Post a Sublease</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -266,7 +315,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 16, gap: 12 },
   card: {
     backgroundColor: Colors.cardBg, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.borderSoft,
-    padding: 16, gap: 9,
+    padding: 16, gap: 10,
     shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
@@ -276,23 +325,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, borderWidth: 1,
   },
   catTagText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
-  breakTag: {
+  breakAvailTag: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
     backgroundColor: Colors.grassGreen + "20",
   },
-  breakTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.grassGreen },
+  breakAvailText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.grassGreen },
+  cardTime: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight, marginLeft: "auto" },
   buildingName: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal },
   address: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, marginTop: -4 },
-  priceRow: { flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap" },
+  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 2 },
   price: { fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: Colors.ocean },
   priceSub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
   dateBadge: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    marginLeft: 6, backgroundColor: Colors.sandDark,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+    marginLeft: 8, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, alignSelf: "center",
   },
-  dateBadgeText: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.textMuted },
+  dateBadgeText: { fontFamily: "Nunito_600SemiBold", fontSize: 11 },
+  description: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, lineHeight: 19 },
   metaRow: { flexDirection: "row", gap: 16 },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   metaText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
@@ -300,12 +349,15 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 10,
     paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.borderSoft,
   },
-  posterAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  posterInitials: { fontFamily: "Nunito_700Bold", fontSize: 11, color: Colors.white },
+  posterAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  posterInitials: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.white },
   posterInfo: { flex: 1 },
   posterName: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.charcoal },
-  emptyState: { alignItems: "center", paddingTop: 60, gap: 12 },
-  emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 18, color: Colors.charcoal },
-  postFirstBtn: { backgroundColor: Colors.orange, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
+  posterEmail: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
+  trustBadges: { flexDirection: "column", gap: 4, alignItems: "flex-end" },
+  emptyState: { alignItems: "center", paddingTop: 60, gap: 10 },
+  emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 20, color: Colors.charcoal },
+  emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center", paddingHorizontal: 20 },
+  postFirstBtn: { backgroundColor: Colors.orange, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
   postFirstBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
 });

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LangCode, t as translate, TranslationKeys } from "@/lib/translations";
 
 export type LeaseType = "full_year" | "fall_sublease" | "spring_sublease" | "summer_sublease";
 export type GenderPref = "girls_only" | "boys_only" | "mixed";
@@ -56,8 +57,6 @@ export interface SubleasePost {
   avatarColor: string;
   timestamp: number;
   category?: string;
-  moveInDate?: string;
-  moveOutDate?: string;
 }
 
 export interface BreakPost {
@@ -82,10 +81,10 @@ export interface MatchRecord {
 }
 
 export interface TrustInfo {
-  isFriend: boolean;
-  mutualFriendNames: string[];
+  degree: 1 | 2 | null;
   vouchedByFriend: string | null;
   sharedOrg: string | null;
+  isFriend: boolean;
 }
 
 const DEMO_POSTS: SubleasePost[] = [
@@ -94,54 +93,48 @@ const DEMO_POSTS: SubleasePost[] = [
     buildingName: "Hub Champaign", address: "210 E Green St", leaseType: "fall_sublease",
     pricePerMonth: 950, landlord: "american", zone: "campustown",
     availableDuringBreaks: false, breakTypes: [],
-    description: "Cozy 1BR/1BA, fully furnished. Floor-to-ceiling windows.",
-    avatarColor: "#1A7AAF", timestamp: Date.now() - 86400000, category: "semester_takeover",
-    moveInDate: "Aug 20, 2025", moveOutDate: "Dec 15, 2025",
+    description: "Cozy 1BR/1BA in Hub, fully furnished. Floor-to-ceiling windows, great view.",
+    avatarColor: "#1A7AAF", timestamp: Date.now() - 86400000, category: "semester_takeover"
   },
   {
     id: "sp2", userId: "u3", userName: "Jake Torres", userEmail: "jtorres6@illinois.edu",
     buildingName: "707 S Mathews", address: "707 S Mathews Ave", leaseType: "spring_sublease",
     pricePerMonth: 750, landlord: "jsm", zone: "north",
     availableDuringBreaks: true, breakTypes: ["spring_break"],
-    description: "Studio near Siebel. Laundry in unit.",
-    avatarColor: "#5A8A5A", timestamp: Date.now() - 172800000, category: "semester_takeover",
-    moveInDate: "Jan 13, 2026", moveOutDate: "May 8, 2026",
+    description: "Studio apartment near Siebel. Quiet building, laundry in unit.",
+    avatarColor: "#5A8A5A", timestamp: Date.now() - 172800000, category: "semester_takeover"
   },
   {
     id: "sp3", userId: "u5", userName: "Marcus Webb", userEmail: "mwebb3@illinois.edu",
     buildingName: "Fairview Apts", address: "505 E Fairview", leaseType: "summer_sublease",
     pricePerMonth: 620, landlord: "ugroup", zone: "urbana",
     availableDuringBreaks: true, breakTypes: ["thanksgiving", "spring_break"],
-    description: "1BR in quiet Urbana. Great for grad students.",
-    avatarColor: "#9B59B6", timestamp: Date.now() - 259200000, category: "summer_only",
-    moveInDate: "May 15, 2025", moveOutDate: "Aug 10, 2025",
+    description: "1BR in quiet Urbana neighborhood. Perfect for grad students or summer research.",
+    avatarColor: "#9B59B6", timestamp: Date.now() - 259200000, category: "summer_only"
   },
   {
     id: "sp4", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
     buildingName: "The Orchard", address: "301 S Race St", leaseType: "summer_sublease",
     pricePerMonth: 540, landlord: "other", zone: "urbana",
     availableDuringBreaks: false, breakTypes: [],
-    description: "Sunny studio near MTD bus stop. Furnished.",
-    avatarColor: "#5A8A5A", timestamp: Date.now() - 345600000, category: "summer_only",
-    moveInDate: "May 15, 2025", moveOutDate: "Aug 10, 2025",
+    description: "Sunny studio, available May 15 – Aug 10. Furnished, near MTD bus stop.",
+    avatarColor: "#5A8A5A", timestamp: Date.now() - 345600000, category: "summer_only"
   },
   {
     id: "sp5", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
     buildingName: "Campustown Flats", address: "512 E Green St", leaseType: "fall_sublease",
     pricePerMonth: 890, landlord: "bailey", zone: "campustown",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
-    description: "1–2 weeks early August. Great location.",
-    avatarColor: "#E0BC00", timestamp: Date.now() - 432000000, category: "august_gap",
-    moveInDate: "Aug 1, 2025", moveOutDate: "Aug 18, 2025",
+    description: "1-2 weeks available in early August before fall lease starts. Great location.",
+    avatarColor: "#E0BC00", timestamp: Date.now() - 432000000, category: "august_gap"
   },
   {
     id: "sp6", userId: "u8", userName: "Zoe Mitchell", userEmail: "zmitchell@illinois.edu",
     buildingName: "Stadium Terrace", address: "1001 S Cottage Grove", leaseType: "full_year",
     pricePerMonth: 760, landlord: "smile", zone: "south",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
-    description: "Moms Weekend & graduation stays welcome.",
-    avatarColor: "#CC5500", timestamp: Date.now() - 518400000, category: "short_term",
-    moveInDate: "Apr 25, 2025", moveOutDate: "Apr 27, 2025",
+    description: "Moms Weekend & graduation weekend stay available. Great for families visiting!",
+    avatarColor: "#CC5500", timestamp: Date.now() - 518400000, category: "short_term"
   },
 ];
 
@@ -149,19 +142,19 @@ const DEMO_BREAKS: BreakPost[] = [
   {
     id: "bp1", userId: "u4", userName: "Aisha Okonkwo", userEmail: "aokonkwo@illinois.edu",
     breakType: "thanksgiving", role: "seeking", pricePerWeek: 150, zone: "campustown",
-    description: "Need a room for Thanksgiving week. Clean, quiet.",
+    description: "Flying back late, need a couch or spare room for Thanksgiving week. Very clean, quiet.",
     avatarColor: "#1A7AAF", timestamp: Date.now() - 43200000
   },
   {
     id: "bp2", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
     breakType: "spring_break", role: "offering", pricePerWeek: 200, zone: "north",
-    description: "Offering studio for Spring Break. Utilities included.",
+    description: "Offering my studio for Spring Break week. North campus, near Siebel. All utilities included.",
     avatarColor: "#5A8A5A", timestamp: Date.now() - 86400000
   },
   {
     id: "bp3", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
     breakType: "winter", role: "seeking", pricePerWeek: 175, zone: "urbana",
-    description: "Seeking 1–2 weeks over winter break. Can pay upfront.",
+    description: "International student looking for 1–2 weeks over winter break. Can pay upfront.",
     avatarColor: "#CC5500", timestamp: Date.now() - 120000000
   },
 ];
@@ -172,6 +165,10 @@ interface AppContextValue {
   isOnboarded: boolean;
   setIsOnboarded: (v: boolean) => void;
   isLoaded: boolean;
+  language: LangCode;
+  languageSelected: boolean;
+  setLanguage: (lang: LangCode) => Promise<void>;
+  tr: (key: string, vars?: Record<string, string>) => string;
   mockUsers: UserProfile[];
   matches: MatchRecord[];
   addMatch: (record: MatchRecord) => void;
@@ -198,7 +195,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 export const MOCK_USERS: UserProfile[] = [
   {
     id: "u1", name: "Mei Lin", email: "meilin2@illinois.edu", major: "Computer Science",
-    bio: "Early riser, love cooking. Looking for a quiet study buddy!",
+    bio: "Early riser, love cooking Asian food. Looking for a quiet study buddy!",
     budget: 850, gender: "female", genderPref: "girls_only", cleanliness: 5, noise: 2,
     leaseType: "fall_sublease", zone: "north", landlord: "jsm",
     staysThanksgiving: false, staysSpringBreak: true, avatarColor: "#1A7AAF",
@@ -213,8 +210,8 @@ export const MOCK_USERS: UserProfile[] = [
     college: "Gies", organizations: ["Illini Finance Club", "DECA"],
   },
   {
-    id: "u3", name: "Jake Torres", email: "jtorres6@illinois.edu", major: "Mech. Engineering",
-    bio: "Night owl, gaming, pizza. Very chill.",
+    id: "u3", name: "Jake Torres", email: "jtorres6@illinois.edu", major: "Mechanical Engineering",
+    bio: "Night owl who loves gaming and pizza runs at 2am. Very chill.",
     budget: 750, gender: "male", genderPref: "mixed", cleanliness: 3, noise: 4,
     leaseType: "full_year", zone: "north", landlord: "ugroup",
     staysThanksgiving: true, staysSpringBreak: false, avatarColor: "#5A8A5A",
@@ -222,7 +219,7 @@ export const MOCK_USERS: UserProfile[] = [
   },
   {
     id: "u4", name: "Aisha Okonkwo", email: "aokonkwo@illinois.edu", major: "Psychology",
-    bio: "Plant mom, podcast listener. Clean and organized.",
+    bio: "Plant mom, sunset chaser, and podcast listener. Clean and organized.",
     budget: 800, gender: "female", genderPref: "girls_only", cleanliness: 5, noise: 2,
     leaseType: "full_year", zone: "urbana", landlord: "other",
     staysThanksgiving: false, staysSpringBreak: false, avatarColor: "#E07B00",
@@ -230,7 +227,7 @@ export const MOCK_USERS: UserProfile[] = [
   },
   {
     id: "u5", name: "Marcus Webb", email: "mwebb3@illinois.edu", major: "Architecture",
-    bio: "Studio life, spotless space, love jazz.",
+    bio: "Studio hours are late but I keep my space spotless. Love jazz.",
     budget: 900, gender: "male", genderPref: "boys_only", cleanliness: 4, noise: 2,
     leaseType: "fall_sublease", zone: "downtown", landlord: "american",
     staysThanksgiving: false, staysSpringBreak: false, avatarColor: "#9B59B6",
@@ -238,7 +235,7 @@ export const MOCK_USERS: UserProfile[] = [
   },
   {
     id: "u6", name: "Sofia Reyes", email: "sreyes2@illinois.edu", major: "Biology",
-    bio: "Pre-med, makes time for friends. Quiet during finals.",
+    bio: "Pre-med grind, but I make time for friends. Quiet during finals week!",
     budget: 700, gender: "female", genderPref: "girls_only", cleanliness: 4, noise: 2,
     leaseType: "spring_sublease", zone: "south", landlord: "jsm",
     staysThanksgiving: true, staysSpringBreak: true, avatarColor: "#5A8A5A",
@@ -246,7 +243,7 @@ export const MOCK_USERS: UserProfile[] = [
   },
   {
     id: "u7", name: "Liam Park", email: "lpark9@illinois.edu", major: "Statistics",
-    bio: "Data nerd by day, chef by night.",
+    bio: "Data nerd by day, chef by night. My bibimbap will change your life.",
     budget: 850, gender: "male", genderPref: "mixed", cleanliness: 3, noise: 3,
     leaseType: "full_year", zone: "campustown", landlord: "ugroup",
     staysThanksgiving: false, staysSpringBreak: true, avatarColor: "#E0BC00",
@@ -254,7 +251,7 @@ export const MOCK_USERS: UserProfile[] = [
   },
   {
     id: "u8", name: "Zoe Mitchell", email: "zmitchell@illinois.edu", major: "Journalism",
-    bio: "Always writing, always reading. Cat owner.",
+    bio: "Always writing, always reading. I have a cat (hypoallergenic!).",
     budget: 780, gender: "female", genderPref: "girls_only", cleanliness: 4, noise: 1,
     leaseType: "spring_sublease", zone: "urbana", landlord: "other",
     staysThanksgiving: true, staysSpringBreak: false, avatarColor: "#CC5500",
@@ -262,7 +259,7 @@ export const MOCK_USERS: UserProfile[] = [
   },
 ];
 
-export function computeScore(a: UserProfile, b: UserProfile): number {
+function computeScore(a: UserProfile, b: UserProfile): number {
   const budgetDiff = (a.budget - b.budget) / 500;
   const cleanDiff = (a.cleanliness - b.cleanliness) / 4;
   const noiseDiff = (a.noise - b.noise) / 4;
@@ -280,6 +277,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
   const [isOnboarded, setIsOnboardedState] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [language, setLanguageState] = useState<LangCode>("en");
+  const [languageSelected, setLanguageSelectedState] = useState(false);
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [scamBannerDismissed, setScamBannerDismissed] = useState(false);
   const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
@@ -293,6 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const stored = await AsyncStorage.getItem("@popmatch_user");
         const onboarded = await AsyncStorage.getItem("@popmatch_onboarded");
+        const storedLang = await AsyncStorage.getItem("@popmatch_language");
         const storedMatches = await AsyncStorage.getItem("@popmatch_matches");
         const storedLiked = await AsyncStorage.getItem("@popmatch_liked");
         const storedPassed = await AsyncStorage.getItem("@popmatch_passed");
@@ -303,6 +303,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (stored) setCurrentUserState(JSON.parse(stored));
         if (onboarded === "true") setIsOnboardedState(true);
+        if (storedLang) {
+          setLanguageState(storedLang as LangCode);
+          setLanguageSelectedState(true);
+        }
         if (storedMatches) setMatches(JSON.parse(storedMatches));
         if (storedLiked) setLikedUserIds(JSON.parse(storedLiked));
         if (storedPassed) setPassedUserIds(JSON.parse(storedPassed));
@@ -314,6 +318,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIsLoaded(true);
     })();
   }, []);
+
+  const setLanguage = async (lang: LangCode) => {
+    setLanguageState(lang);
+    setLanguageSelectedState(true);
+    await AsyncStorage.setItem("@popmatch_language", lang);
+  };
+
+  const tr = (key: string, vars?: Record<string, string>) => translate(language, key, vars);
 
   const setCurrentUser = async (user: UserProfile | null) => {
     setCurrentUserState(user);
@@ -388,56 +400,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const directFriend = friends.find(f => f.email === userEmail);
     if (directFriend) {
       return {
+        degree: 1,
         isFriend: true,
-        mutualFriendNames: [],
-        vouchedByFriend: directFriend.vouchedByMe ? "You vouched" : null,
+        vouchedByFriend: directFriend.vouchedByMe ? "You vouched for them" : null,
         sharedOrg: null,
       };
     }
 
     const targetMockUser = MOCK_USERS.find(u => u.email === userEmail);
     if (!targetMockUser) {
-      return { isFriend: false, mutualFriendNames: [], vouchedByFriend: null, sharedOrg: null };
+      return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg: null };
     }
-
-    const mutualFriendNames: string[] = [];
-    let vouchedByFriendName: string | null = null;
 
     for (const friend of friends) {
       const friendMockUser = MOCK_USERS.find(u => u.email === friend.email);
       if (!friendMockUser) continue;
-      const friendKnowsTarget = (friendMockUser.organizations || []).some(
+
+      const sharedOrgs = (currentUser?.organizations || []).filter(
         org => (targetMockUser.organizations || []).includes(org)
       );
-      if (friendKnowsTarget) {
-        mutualFriendNames.push(friend.name.split(" ")[0]);
-        if (friend.vouchedByMe && !vouchedByFriendName) {
-          vouchedByFriendName = friend.name.split(" ")[0];
-        }
+
+      if (sharedOrgs.length > 0) {
+        return {
+          degree: 2,
+          isFriend: false,
+          vouchedByFriend: friend.vouchedByMe ? friend.name : null,
+          sharedOrg: sharedOrgs[0],
+        };
+      }
+
+      if (
+        (friendMockUser.organizations || []).some(
+          org => (targetMockUser.organizations || []).includes(org)
+        )
+      ) {
+        return {
+          degree: 2,
+          isFriend: false,
+          vouchedByFriend: friend.vouchedByMe ? friend.name : null,
+          sharedOrg: null,
+        };
       }
     }
 
     const sharedOrg = (currentUser?.organizations || []).find(
       org => (targetMockUser.organizations || []).includes(org)
     );
+    if (sharedOrg) {
+      return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg };
+    }
 
-    return {
-      isFriend: false,
-      mutualFriendNames,
-      vouchedByFriend: vouchedByFriendName,
-      sharedOrg: sharedOrg || null,
-    };
+    return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg: null };
   };
 
   const value = useMemo(() => ({
     currentUser, setCurrentUser, isOnboarded, setIsOnboarded,
-    isLoaded,
+    isLoaded, language, languageSelected, setLanguage, tr,
     mockUsers: MOCK_USERS, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
     subleases, addSublease, breakPosts, addBreakPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
   }), [
-    currentUser, isOnboarded, isLoaded,
+    currentUser, isOnboarded, isLoaded, language, languageSelected,
     matches, scamBannerDismissed, likedUserIds, passedUserIds, subleases, breakPosts, friends
   ]);
 
