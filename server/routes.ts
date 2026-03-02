@@ -121,6 +121,50 @@ async function initDb() {
     ON CONFLICT (key) DO NOTHING
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id VARCHAR PRIMARY KEY,
+      type VARCHAR DEFAULT 'match',
+      listing_id VARCHAR DEFAULT '',
+      listing_title VARCHAR DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      last_message_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS conversation_participants (
+      conversation_id VARCHAR,
+      user_email VARCHAR NOT NULL,
+      PRIMARY KEY (conversation_id, user_email)
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id SERIAL PRIMARY KEY,
+      conversation_id VARCHAR NOT NULL,
+      sender_email VARCHAR NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS group_profiles (
+      id VARCHAR PRIMARY KEY,
+      creator_email VARCHAR NOT NULL,
+      building_name VARCHAR NOT NULL,
+      address VARCHAR DEFAULT '',
+      zone VARCHAR DEFAULT 'campustown',
+      rent_per_person INT DEFAULT 0,
+      rooms_available INT DEFAULT 1,
+      description TEXT DEFAULT '',
+      avatar_color VARCHAR DEFAULT '#005F73',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   console.log("Database initialized");
 }
 
@@ -602,6 +646,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("GET /api/admin/stats", err);
       return res.status(500).json({ error: "Failed to fetch admin stats" });
+    }
+  });
+
+  // ─── CONVERSATIONS ──────────────────────────────────────────────────────────
+
+  app.post("/api/conversations/find-or-create", async (req: Request, res: Response) => {
+    try {
+      const { emails, type = "match", listingId = "", listingTitle = "", systemMessage = "" } = req.body;
+      if (!Array.isArray(emails) || emails.length !== 2) {
+        return res.status(400).json({ error: "Provide exactly 2 emails." });
+      }
+      const [e1, e2] = emails;
+      const existing = await query<{ conversation_id: string }>(
+        `SELECT cp1.conversation_id FROM conversation_participants cp1
+         JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+         JOIN conversations c ON c.id = cp1.conversation_id
+         WHERE cp1.user_email = $1 AND cp2.user_email = $2
+           AND c.type = $3 AND c.listing_id = $4 LIMIT 1`,
+        [e1, e2, type, listingId]
+      );
+      if (existing.length > 0) {
+        return res.json({ conversationId: existing[0].conversation_id, created: false });
+      }
+      const convId = "conv_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+      await query(
+        `INSERT INTO conversations (id, type, listing_id, listing_title) VALUES ($1, $2, $3, $4)`,
+        [convId, type, listingId, listingTitle]
+      );
+      await query(`INSERT INTO conversation_participants (conversation_id, user_email) VALUES ($1, $2)`, [convId, e1]);
+      await query(`INSERT INTO conversation_participants (conversation_id, user_email) VALUES ($1, $2)`, [convId, e2]);
+      if (systemMessage) {
+        await query(
+          `INSERT INTO messages (conversation_id, sender_email, content) VALUES ($1, 'system', $2)`,
+          [convId, systemMessage]
+        );
+        await query(`UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, [convId]);
+      }
+      return res.json({ conversationId: convId, created: true });
+    } catch (err) {
+      console.error("POST /api/conversations/find-or-create", err);
+      return res.status(500).json({ error: "Failed to create conversation" });
+    }
+  });
+
+  app.get("/api/conversations", async (req: Request, res: Response) => {
+    try {
+      const email = req.query.userEmail as string;
+      if (!email) return res.status(400).json({ error: "userEmail query param required" });
+      const rows = await query<{
+        id: string; type: string; listing_id: string; listing_title: string;
+        last_message_at: string; last_message: string | null; last_sender: string | null;
+      }>(
+        `SELECT c.id, c.type, c.listing_id, c.listing_title, c.last_message_at,
+           (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
+           (SELECT sender_email FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_sender
+         FROM conversations c
+         WHERE c.id IN (SELECT conversation_id FROM conversation_participants WHERE user_email = $1)
+         ORDER BY c.last_message_at DESC`,
+        [email]
+      );
+      const result = await Promise.all(rows.map(async row => {
+        const participants = await query<{ user_email: string }>(
+          `SELECT user_email FROM conversation_participants WHERE conversation_id = $1`,
+          [row.id]
+        );
+        return { ...row, participants: participants.map(p => p.user_email) };
+      }));
+      return res.json(result);
+    } catch (err) {
+      console.error("GET /api/conversations/user/:email", err);
+      return res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  app.get("/api/conversations/:id/messages", async (req: Request, res: Response) => {
+    try {
+      const rows = await query<{
+        id: number; conversation_id: string; sender_email: string; content: string; created_at: string;
+      }>(
+        `SELECT id, conversation_id, sender_email, content, created_at
+         FROM messages WHERE conversation_id = $1 ORDER BY created_at DESC`,
+        [req.params.id]
+      );
+      const camel = rows.map(r => ({
+        id: r.id, conversationId: r.conversation_id,
+        senderEmail: r.sender_email, content: r.content, createdAt: r.created_at,
+      }));
+      return res.json(camel);
+    } catch (err) {
+      console.error("GET /api/conversations/:id/messages", err);
+      return res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
+    try {
+      const { senderEmail, content } = req.body;
+      if (!senderEmail || !content) return res.status(400).json({ error: "Missing fields" });
+      const [msg] = await query<{ id: number; created_at: string }>(
+        `INSERT INTO messages (conversation_id, sender_email, content) VALUES ($1, $2, $3)
+         RETURNING id, created_at`,
+        [req.params.id, senderEmail, content]
+      );
+      await query(`UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, [req.params.id]);
+      return res.json({
+        id: msg.id, conversationId: req.params.id,
+        senderEmail, content, createdAt: msg.created_at,
+      });
+    } catch (err) {
+      console.error("POST /api/conversations/:id/messages", err);
+      return res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // ─── GROUP PROFILES ───────────────────────────────────────────────────────────
+
+  app.get("/api/group-profiles", async (_req: Request, res: Response) => {
+    try {
+      const rows = await query(
+        `SELECT * FROM group_profiles ORDER BY created_at DESC`
+      );
+      return res.json(rows);
+    } catch (err) {
+      console.error("GET /api/group-profiles", err);
+      return res.status(500).json({ error: "Failed to fetch group profiles" });
+    }
+  });
+
+  app.post("/api/group-profiles", async (req: Request, res: Response) => {
+    try {
+      const { id, creatorEmail, buildingName, address, zone, rentPerPerson, roomsAvailable, description, avatarColor } = req.body;
+      await query(
+        `INSERT INTO group_profiles (id, creator_email, building_name, address, zone, rent_per_person, rooms_available, description, avatar_color)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [id, creatorEmail, buildingName, address || "", zone || "campustown",
+         rentPerPerson || 0, roomsAvailable || 1, description || "", avatarColor || "#005F73"]
+      );
+      return res.json({ success: true, id });
+    } catch (err) {
+      console.error("POST /api/group-profiles", err);
+      return res.status(500).json({ error: "Failed to create group profile" });
+    }
+  });
+
+  app.delete("/api/group-profiles/:id", async (req: Request, res: Response) => {
+    try {
+      const { creatorEmail } = req.body;
+      await query(
+        `DELETE FROM group_profiles WHERE id = $1 AND creator_email = $2`,
+        [req.params.id, creatorEmail]
+      );
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("DELETE /api/group-profiles/:id", err);
+      return res.status(500).json({ error: "Failed to delete group profile" });
     }
   });
 

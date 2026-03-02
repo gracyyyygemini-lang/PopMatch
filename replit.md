@@ -29,12 +29,15 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 ### Tabs (app/(tabs)/)
 - `index.tsx` — Browse: 4 UIUC housing category cards + Matchmaker/Breaks shortcuts
 - `matches.tsx` — My Circle: social trust graph (sub-tab) + roommate matches (sub-tab)
+- `chats.tsx` — In-app chat list: all conversations sorted by most recent message
 - `map.tsx` — PopMap: zone guide grid + listing pins
 - `profile.tsx` — User profile, stats, Sign Out, Reset All Data; 5-tap version label → /admin
 
 ### Stack Screens
-- `app/matchmaker.tsx` — Year-Long swipe discovery (PanResponder, weighted score)
-- `app/marketplace.tsx` — Sublease listings with FacePile trust + Mark as Leased button
+- `app/matchmaker.tsx` — Path A/B selection; Path A: swipe deck (auto-creates chat on like + match overlay); Path B: group profiles + Request to Join
+- `app/marketplace.tsx` — Sublease listings with FacePile trust + Mark as Leased + Message Subleaser button
+- `app/chat/[id].tsx` — Individual chat screen: inverted FlatList, 3s polling, listing context banner
+- `app/create-group.tsx` — Create group profile (building, zone, rent, rooms, description)
 - `app/post-sublease.tsx` — Post a sublease form with landlord warnings
 - `app/breaks.tsx` — Break Stay bulletin board (sticky-note grid)
 - `app/admin.tsx` — Hidden admin dashboard (accessed via 5-tap on profile version label)

@@ -127,9 +127,10 @@ const cg = StyleSheet.create({
   btnText: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.white },
 });
 
-function SubleaseCard({ post, onMarkLeased }: {
+function SubleaseCard({ post, onMarkLeased, onMessage }: {
   post: SubleasePost;
   onMarkLeased: (post: SubleasePost) => void;
+  onMessage: (post: SubleasePost) => void;
 }) {
   const { getTrustInfo, currentUser } = useApp();
   const trust = getTrustInfo(post.userEmail);
@@ -225,15 +226,26 @@ function SubleaseCard({ post, onMarkLeased }: {
         </View>
       </View>
 
-      {isOwner && (
-        <TouchableOpacity
-          style={styles.leasedBtn}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onMarkLeased(post); }}
-        >
-          <Ionicons name="checkmark-circle" size={16} color={Colors.white} />
-          <Text style={styles.leasedBtnText}>Mark as Leased</Text>
-        </TouchableOpacity>
-      )}
+      <View style={styles.cardActions}>
+        {!isOwner && (
+          <TouchableOpacity
+            style={styles.messageBtn}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onMessage(post); }}
+          >
+            <Ionicons name="chatbubble-outline" size={15} color={Colors.ocean} />
+            <Text style={styles.messageBtnText}>Message Subleaser</Text>
+          </TouchableOpacity>
+        )}
+        {isOwner && (
+          <TouchableOpacity
+            style={styles.leasedBtn}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onMarkLeased(post); }}
+          >
+            <Ionicons name="checkmark-circle" size={16} color={Colors.white} />
+            <Text style={styles.leasedBtnText}>Mark as Leased</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -280,6 +292,35 @@ export default function MarketplaceScreen() {
   const handleCongratsClose = () => {
     setShowCongrats(false);
     setTimeout(() => setShowFeedback(true), 400);
+  };
+
+  const handleMessage = async (post: SubleasePost) => {
+    if (!currentUser) return;
+    try {
+      const url = new URL("/api/conversations/find-or-create", getApiUrl()).toString();
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emails: [currentUser.email, post.userEmail],
+          type: "sublease",
+          listingId: post.id,
+          listingTitle: post.buildingName,
+        }),
+      });
+      if (res.ok) {
+        const { conversationId } = await res.json();
+        router.push({
+          pathname: "/chat/[id]",
+          params: {
+            id: conversationId,
+            otherEmail: post.userEmail,
+            otherName: post.userName,
+            listingTitle: post.buildingName,
+          },
+        });
+      }
+    } catch {}
   };
 
   return (
@@ -359,7 +400,7 @@ export default function MarketplaceScreen() {
           </View>
         ) : (
           filtered.map(post => (
-            <SubleaseCard key={post.id} post={post} onMarkLeased={handleMarkLeased} />
+            <SubleaseCard key={post.id} post={post} onMarkLeased={handleMarkLeased} onMessage={handleMessage} />
           ))
         )}
       </ScrollView>
@@ -455,9 +496,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8,
   },
   trustChipText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
+  cardActions: { marginTop: 2 },
+  messageBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7,
+    backgroundColor: Colors.ocean + "12", borderRadius: 12, paddingVertical: 11,
+    borderWidth: 1.5, borderColor: Colors.ocean + "30",
+  },
+  messageBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
   leasedBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.ponyo, borderRadius: 12, paddingVertical: 12, marginTop: 2,
+    backgroundColor: Colors.ponyo, borderRadius: 12, paddingVertical: 12,
   },
   leasedBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
   emptyState: { alignItems: "center", paddingTop: 60, gap: 10 },
