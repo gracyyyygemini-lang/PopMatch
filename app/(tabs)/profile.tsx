@@ -9,7 +9,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
-import { LANGUAGES } from "@/lib/translations";
 
 const LEASE_LABELS: Record<string, string> = {
   full_year: "Full Year (Aug – Jul)",
@@ -57,24 +56,18 @@ function InfoRow({ icon, label, value, color }: { icon: keyof typeof Ionicons.gl
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, matches, likedUserIds, subleases, friends, setCurrentUser, setIsOnboarded, tr, language } = useApp();
+  const { currentUser, matches, likedUserIds, subleases, friends, setCurrentUser, setIsOnboarded } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const mySubleases = subleases.filter(s => s.userId === currentUser?.id);
 
-  const currentLang = LANGUAGES.find(l => l.code === language);
-
-  const handleChangeLang = () => {
-    router.push("/language-select" as any);
-  };
-
   const handleSignOut = () => {
     Alert.alert(
-      tr("profile.signOut"),
-      tr("profile.signOutConfirm"),
+      "Sign Out",
+      "You'll need to verify your @illinois.edu email to sign back in.",
       [
-        { text: tr("common.cancel"), style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         {
-          text: tr("profile.signOut"),
+          text: "Sign Out",
           style: "destructive",
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -90,10 +83,10 @@ export default function ProfileScreen() {
 
   const handleReset = () => {
     Alert.alert(
-      tr("profile.resetAll"),
-      tr("profile.resetConfirm"),
+      "Reset All Data",
+      "This clears your profile, matches, listings, and connections — everything starts fresh.",
       [
-        { text: tr("common.cancel"), style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Reset Everything",
           style: "destructive",
@@ -102,12 +95,11 @@ export default function ProfileScreen() {
             await AsyncStorage.multiRemove([
               "@popmatch_user", "@popmatch_onboarded", "@popmatch_matches",
               "@popmatch_liked", "@popmatch_passed", "@popmatch_scam",
-              "@popmatch_subleases", "@popmatch_breaks", "@popmatch_friends",
-              "@popmatch_language"
+              "@popmatch_subleases", "@popmatch_breaks", "@popmatch_friends"
             ]);
             await setCurrentUser(null);
             await setIsOnboarded(false);
-            router.replace("/language-select");
+            router.replace("/onboarding");
           }
         }
       ]
@@ -264,25 +256,14 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.langBtn} onPress={handleChangeLang}>
-          <Ionicons name="language-outline" size={17} color={Colors.ocean} />
-          <View style={styles.langBtnText}>
-            <Text style={styles.langBtnTitle}>Language</Text>
-            <Text style={styles.langBtnValue}>
-              {currentLang ? `${currentLang.englishName} · ${currentLang.nativeName}` : "English"}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={15} color={Colors.textLight} />
-        </TouchableOpacity>
-
         <TouchableOpacity style={styles.signOutFullBtn} onPress={handleSignOut}>
-          <Ionicons name="log-out-outline" size={17} color={Colors.ocean} />
-          <Text style={styles.signOutFullBtnText}>{tr("profile.signOut")}</Text>
+          <Ionicons name="log-out-outline" size={15} color={Colors.ocean} />
+          <Text style={styles.signOutFullBtnText}>Sign Out</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.resetFullBtn} onPress={handleReset}>
-          <Ionicons name="trash-outline" size={17} color={Colors.errorRed} />
-          <Text style={styles.resetFullBtnText}>{tr("profile.resetAll")}</Text>
+          <Ionicons name="trash-outline" size={15} color={Colors.errorRed} />
+          <Text style={styles.resetFullBtnText}>Reset All Data</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -295,7 +276,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
     paddingHorizontal: 20, paddingBottom: 12,
   },
-  headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 30, color: Colors.ocean },
+  headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
   signOutBtn: {
     width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.cardBg,
     alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.borderSoft,
@@ -308,64 +289,56 @@ const styles = StyleSheet.create({
   },
   avatar: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center" },
   avatarText: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.white },
-  profileName: { fontFamily: "Nunito_800ExtraBold", fontSize: 24, color: Colors.charcoal },
-  profileEmail: { fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.textMuted },
+  profileName: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.charcoal },
+  profileEmail: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
   majorTag: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: Colors.ocean + "18", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+    backgroundColor: Colors.ocean + "18", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
   },
-  majorTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.ocean },
-  bio: { fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.textMuted, textAlign: "center", lineHeight: 21 },
+  majorTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.ocean },
+  bio: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center", lineHeight: 19 },
   statsRow: { flexDirection: "row", width: "100%", gap: 8, marginTop: 4 },
   statBox: { flex: 1, backgroundColor: Colors.sandDark, borderRadius: 12, padding: 12, alignItems: "center", gap: 2 },
   statBoxMid: { backgroundColor: Colors.ocean + "15" },
-  statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.charcoal },
-  statLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal },
+  statLabel: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
   section: { gap: 8 },
-  sectionTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.charcoal, paddingHorizontal: 2 },
+  sectionTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal, paddingHorizontal: 2 },
   detailCard: { backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5, borderColor: Colors.borderSoft, overflow: "hidden" },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
-  infoIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  infoIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   infoContent: { flex: 1 },
-  infoLabel: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
-  infoValue: { fontFamily: "Nunito_600SemiBold", fontSize: 15, color: Colors.charcoal },
+  infoLabel: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
+  infoValue: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
   divider: { height: 1, backgroundColor: Colors.sandDark, marginLeft: 60 },
   ratingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14 },
-  ratingLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 15, color: Colors.charcoal },
-  ratingValue: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.textMuted },
+  ratingLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
+  ratingValue: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
   dots: { flexDirection: "row", gap: 5 },
   dot: { width: 12, height: 12, borderRadius: 6 },
   breakRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14 },
   breakLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  breakLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 15, color: Colors.charcoal },
+  breakLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
   breakBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  breakBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 13 },
+  breakBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 12 },
   algoCard: { backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 16, gap: 10 },
-  algoDesc: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, lineHeight: 19 },
+  algoDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, lineHeight: 18 },
   algoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   algoDot: { width: 9, height: 9, borderRadius: 5 },
-  algoLabel: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.charcoal, flex: 1 },
-  algoWeight: { fontFamily: "Nunito_700Bold", fontSize: 14 },
-  langBtn: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
-    borderColor: Colors.borderSoft, padding: 14,
-  },
-  langBtnText: { flex: 1 },
-  langBtnTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  langBtnValue: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, marginTop: 1 },
+  algoLabel: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, flex: 1 },
+  algoWeight: { fontFamily: "Nunito_700Bold", fontSize: 13 },
   signOutFullBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.ocean + "12", borderRadius: 12, borderWidth: 1.5,
-    borderColor: Colors.ocean + "30", paddingVertical: 15,
+    borderColor: Colors.ocean + "30", paddingVertical: 13,
   },
-  signOutFullBtnText: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.ocean },
+  signOutFullBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
   resetFullBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.errorRed + "10", borderRadius: 12, borderWidth: 1.5,
-    borderColor: Colors.errorRed + "30", paddingVertical: 15,
+    borderColor: Colors.errorRed + "30", paddingVertical: 13,
   },
-  resetFullBtnText: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.errorRed },
+  resetFullBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.errorRed },
   noProfile: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  noProfileText: { fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.textMuted },
+  noProfileText: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted },
 });

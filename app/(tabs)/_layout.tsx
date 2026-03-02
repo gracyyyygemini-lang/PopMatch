@@ -6,27 +6,25 @@ import { Platform, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import Colors from "@/constants/colors";
-import { useApp } from "@/context/AppContext";
 
 function NativeTabLayout() {
-  const { tr } = useApp();
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>{tr("nav.browse")}</Label>
+        <Label>Browse</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="matches">
         <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
-        <Label>{tr("nav.myCircle")}</Label>
+        <Label>My Circle</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="map">
         <Icon sf={{ default: "map", selected: "map.fill" }} />
-        <Label>{tr("nav.map")}</Label>
+        <Label>Map</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>{tr("nav.profile")}</Label>
+        <Label>Profile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -35,7 +33,6 @@ function NativeTabLayout() {
 function ClassicTabLayout() {
   const isWeb = Platform.OS === "web";
   const isIOS = Platform.OS === "ios";
-  const { tr } = useApp();
 
   return (
     <Tabs
@@ -58,37 +55,37 @@ function ClassicTabLayout() {
             <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.sand }]} />
           ) : null,
         tabBarLabelStyle: {
-          fontFamily: "Nunito_700Bold",
-          fontSize: 12,
+          fontFamily: "Nunito_600SemiBold",
+          fontSize: 11,
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: tr("nav.browse"),
-          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={color} />,
+          title: "Browse",
+          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="matches"
         options={{
-          title: tr("nav.myCircle"),
-          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={24} color={color} />,
+          title: "My Circle",
+          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="map"
         options={{
-          title: tr("nav.map"),
-          tabBarIcon: ({ color }) => <Ionicons name="map-outline" size={24} color={color} />,
+          title: "PopMap",
+          tabBarIcon: ({ color }) => <Ionicons name="map-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: tr("nav.profile"),
-          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} />,
+          title: "Profile",
+          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={22} color={color} />,
         }}
       />
     </Tabs>
