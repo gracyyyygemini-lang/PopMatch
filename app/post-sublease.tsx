@@ -9,6 +9,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType } from "@/context/AppContext";
+import DateTimePicker, { formatDateRange } from "@/components/DateTimePicker";
 
 const LEASE_OPTIONS: { key: LeaseType; label: string; desc: string }[] = [
   { key: "full_year", label: "Full Year", desc: "Aug – Jul (12 months)" },
@@ -16,6 +17,13 @@ const LEASE_OPTIONS: { key: LeaseType; label: string; desc: string }[] = [
   { key: "spring_sublease", label: "Spring Sublease", desc: "Jan – May" },
   { key: "summer_sublease", label: "Summer Sublease", desc: "May – Aug" },
 ];
+
+const FLOOR_PLANS = [
+  "Studio", "1 Bed / 1 Bath", "2 Bed / 1 Bath", "2 Bed / 2 Bath",
+  "3 Bed / 2 Bath", "4 Bed / 4 Bath", "Other",
+];
+
+const ROOM_LETTERS = ["Room A", "Room B", "Room C", "Room D", "Room E", "None"];
 
 const LANDLORD_OPTIONS: { key: Landlord; label: string; color: string }[] = [
   { key: "jsm", label: "JSM", color: Colors.landlords.jsm },
@@ -59,6 +67,8 @@ export default function PostSubleaseScreen() {
 
   const [buildingName, setBuildingName] = useState("");
   const [address, setAddress] = useState("");
+  const [floorPlan, setFloorPlan] = useState("1 Bed / 1 Bath");
+  const [roomLetter, setRoomLetter] = useState("None");
   const [leaseType, setLeaseType] = useState<LeaseType>("fall_sublease");
   const [price, setPrice] = useState("");
   const [landlord, setLandlord] = useState<Landlord>("other");
@@ -67,6 +77,11 @@ export default function PostSubleaseScreen() {
   const [selectedBreaks, setSelectedBreaks] = useState<BreakType[]>([]);
   const [description, setDescription] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [moveInDate, setMoveInDate] = useState<Date | null>(null);
+  const [moveOutDate, setMoveOutDate] = useState<Date | null>(null);
+  const [showMoveIn, setShowMoveIn] = useState(false);
+  const [showMoveOut, setShowMoveOut] = useState(false);
 
   const warning = LANDLORD_WARNINGS[landlord];
 
@@ -87,6 +102,8 @@ export default function PostSubleaseScreen() {
     if (!validate()) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+    const publicDesc = roomLetter !== "None" ? `${roomLetter} — ${description.trim()}` : description.trim();
+
     const post: SubleasePost = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
       userId: currentUser?.id || "guest",
@@ -94,15 +111,18 @@ export default function PostSubleaseScreen() {
       userEmail: currentUser?.email || "student@illinois.edu",
       buildingName: buildingName.trim(),
       address: address.trim(),
+      floorPlan,
       leaseType,
       pricePerMonth: Number(price),
       landlord,
       zone,
       availableDuringBreaks,
       breakTypes: selectedBreaks,
-      description: description.trim(),
+      description: publicDesc,
       avatarColor: currentUser?.avatarColor || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
       timestamp: Date.now(),
+      moveInAt: moveInDate?.toISOString() ?? null,
+      moveOutAt: moveOutDate?.toISOString() ?? null,
     };
 
     await addSublease(post);
@@ -110,6 +130,8 @@ export default function PostSubleaseScreen() {
   };
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+
+  const dateRangeDisplay = formatDateRange(moveInDate?.toISOString(), moveOutDate?.toISOString());
 
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: Colors.sand }]}
@@ -126,11 +148,19 @@ export default function PostSubleaseScreen() {
         paddingBottom: insets.bottom + 80
       }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
+        {/* Safety notice */}
+        <View style={styles.safetyBox}>
+          <Ionicons name="shield-checkmark" size={15} color={Colors.grassGreen} />
+          <Text style={styles.safetyText}>
+            <Text style={{ fontFamily: "Nunito_700Bold" }}>Privacy protected:</Text> Only building name and floor plan are shown publicly. Share your exact apartment number privately in chat after matching.
+          </Text>
+        </View>
+
         <View style={styles.field}>
           <Text style={styles.label}>Building Name *</Text>
           <TextInput style={[styles.input, errors.buildingName && styles.inputError]}
             value={buildingName} onChangeText={v => { setBuildingName(v); setErrors(e => ({ ...e, buildingName: "" })); }}
-            placeholder="e.g. Hub Champaign, 707, Fairview"
+            placeholder="e.g. Hub Champaign, Octave, 707"
             placeholderTextColor={Colors.textLight} />
           {errors.buildingName ? <Text style={styles.errorText}>{errors.buildingName}</Text> : null}
         </View>
@@ -138,8 +168,63 @@ export default function PostSubleaseScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Street Address</Text>
           <TextInput style={styles.input} value={address} onChangeText={setAddress}
-            placeholder="e.g. 210 E Green St, Champaign"
+            placeholder="e.g. 210 E Green St (no apartment number)"
             placeholderTextColor={Colors.textLight} />
+          <Text style={styles.hintText}>Street only — no apartment or unit numbers</Text>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Floor Plan *</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+            {FLOOR_PLANS.map(fp => (
+              <TouchableOpacity key={fp} style={[styles.pill, floorPlan === fp && styles.pillActive]}
+                onPress={() => { setFloorPlan(fp); Haptics.selectionAsync(); }}>
+                <Text style={[styles.pillText, floorPlan === fp && styles.pillTextActive]}>{fp}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <Text style={styles.hintText}>Shown publicly as "{buildingName || "Building"} — {floorPlan}"</Text>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Your Room Letter <Text style={styles.optionalLabel}>(optional)</Text></Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+            {ROOM_LETTERS.map(r => (
+              <TouchableOpacity key={r} style={[styles.pill, roomLetter === r && styles.pillActive]}
+                onPress={() => { setRoomLetter(r); Haptics.selectionAsync(); }}>
+                <Text style={[styles.pillText, roomLetter === r && styles.pillTextActive]}>{r}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <Text style={styles.hintText}>Room letter is safe to share — exact apt # stays private in chat</Text>
+        </View>
+
+        {/* Move-In / Move-Out Pickers */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Move-In Date & Time</Text>
+          <TouchableOpacity style={styles.datePicker} onPress={() => setShowMoveIn(true)}>
+            <Ionicons name="calendar-outline" size={18} color={Colors.ocean} />
+            <Text style={[styles.datePickerText, !moveInDate && styles.datePickerPlaceholder]}>
+              {moveInDate ? formatDateRange(moveInDate.toISOString(), null) : "Select move-in date & time"}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Move-Out Date & Time</Text>
+          <TouchableOpacity style={styles.datePicker} onPress={() => setShowMoveOut(true)}>
+            <Ionicons name="calendar-outline" size={18} color={Colors.ocean} />
+            <Text style={[styles.datePickerText, !moveOutDate && styles.datePickerPlaceholder]}>
+              {moveOutDate ? formatDateRange(null, moveOutDate.toISOString()) : "Select move-out date & time"}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
+          </TouchableOpacity>
+          {dateRangeDisplay && (
+            <View style={styles.datePreview}>
+              <Text style={styles.datePreviewText}>🗓️ {dateRangeDisplay}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.field}>
@@ -251,6 +336,23 @@ export default function PostSubleaseScreen() {
           <Text style={styles.submitBtnText}>Post Sublease</Text>
         </TouchableOpacity>
       </View>
+
+      <DateTimePicker
+        visible={showMoveIn}
+        value={moveInDate}
+        title="Move-In Date & Time"
+        minimumDate={new Date()}
+        onConfirm={d => { setMoveInDate(d); setShowMoveIn(false); }}
+        onCancel={() => setShowMoveIn(false)}
+      />
+      <DateTimePicker
+        visible={showMoveOut}
+        value={moveOutDate}
+        title="Move-Out Date & Time"
+        minimumDate={moveInDate ?? new Date()}
+        onConfirm={d => { setMoveOutDate(d); setShowMoveOut(false); }}
+        onCancel={() => setShowMoveOut(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -268,8 +370,20 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.ocean },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 16 },
+
+  safetyBox: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    backgroundColor: Colors.grassGreen + "15", borderRadius: 12,
+    borderWidth: 1.5, borderColor: Colors.grassGreen + "40",
+    padding: 12,
+  },
+  safetyText: {
+    fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.charcoal, flex: 1, lineHeight: 18,
+  },
+
   field: { gap: 8 },
   label: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
+  optionalLabel: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
   input: {
     backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.borderSoft,
     paddingHorizontal: 14, paddingVertical: 12, fontFamily: "Nunito_400Regular",
@@ -278,6 +392,34 @@ const styles = StyleSheet.create({
   inputError: { borderColor: Colors.errorRed },
   textArea: { height: 90, paddingTop: 12 },
   errorText: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.errorRed },
+  hintText: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted, marginTop: -4 },
+
+  pillRow: { gap: 8, paddingBottom: 2 },
+  pill: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
+  },
+  pillActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
+  pillText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  pillTextActive: { color: Colors.white },
+
+  datePicker: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
+    borderColor: Colors.borderSoft, paddingHorizontal: 14, paddingVertical: 13,
+  },
+  datePickerText: {
+    flex: 1, fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal,
+  },
+  datePickerPlaceholder: { color: Colors.textLight },
+  datePreview: {
+    backgroundColor: Colors.ocean + "12", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1, borderColor: Colors.ocean + "30",
+  },
+  datePreviewText: {
+    fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.charcoal,
+  },
+
   priceRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   priceDollar: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.ocean },
   priceInput: {

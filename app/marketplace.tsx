@@ -11,6 +11,7 @@ import { useApp, SubleasePost, Landlord } from "@/context/AppContext";
 import FacePile from "@/components/FacePile";
 import MicroFeedback from "@/components/MicroFeedback";
 import { getApiUrl } from "@/lib/query-client";
+import { formatDateRange } from "@/components/DateTimePicker";
 
 const CATEGORY_LABELS: Record<string, string> = {
   all: "All",
@@ -186,7 +187,15 @@ function SubleaseCard({ post, onMarkLeased, onMessage }: {
 
       {/* ── Card Body ── */}
       <View style={styles.cardBody}>
-        <Text style={styles.buildingName} numberOfLines={1}>{post.buildingName}</Text>
+        <Text style={styles.buildingName} numberOfLines={1}>
+          {post.buildingName}{post.floorPlan ? ` — ${post.floorPlan}` : ""}
+        </Text>
+        {(post.moveInAt || post.moveOutAt) ? (
+          <View style={styles.dateRow}>
+            <Ionicons name="calendar-outline" size={13} color={Colors.charcoal} />
+            <Text style={styles.dateText}>{formatDateRange(post.moveInAt, post.moveOutAt)}</Text>
+          </View>
+        ) : null}
 
         {/* 3 icon chips */}
         <View style={styles.chipRow}>
@@ -502,7 +511,11 @@ const styles = StyleSheet.create({
 
   // Card body
   cardBody: { padding: 14, gap: 10 },
-  buildingName: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: Colors.charcoal },
+  buildingName: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.charcoal },
+  dateRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 },
+  dateText: {
+    fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.charcoal,
+  },
   chipRow: {
     flexDirection: "row", alignItems: "center",
     backgroundColor: Colors.sand + "80",

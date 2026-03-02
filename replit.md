@@ -4,6 +4,15 @@
 PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Expo/React Native).
 @illinois.edu email gate enforced via real OTP verification. PostgreSQL backend for social trust graph (friendships, vouches), OTP codes, feedback, and stats.
 
+## Recent Updates
+- **DateTimePicker component** (`components/DateTimePicker.tsx`): Custom visual calendar + time picker modal. Month grid with day selection, hour/minute steppers, AM/PM toggle. Exports `formatDateRange()` and `calcDays()`. Used in post-sublease and break board.
+- **Sublease form safety**: No exact apartment numbers — building name + floor plan shown publicly. Room letter OK. Address is street only. Green privacy notice at top.
+- **Floor Plan selector**: Pill-based selection (Studio, 1B/1Ba, 2B/2Ba, etc.) in post-sublease form.
+- **Move-In/Move-Out dates**: Saved as ISO timestamps on SubleasePost and BreakPost. DB columns `move_in_at`, `move_out_at`, `floor_plan` added to `listings` and `break_posts` tables.
+- **Marketplace card**: Shows `Building — Floor Plan` and date range `🗓️ Aug 1 (12 PM) – Dec 15 (5 PM)` below price.
+- **Chat inbox pills**: Each conversation row has a colored pill badge: Sublease (#278B9A), New Roommates (#E8C4A2), Open Room (#5A6F80). Legend row shown at top. Auto-names conversations by listing title or participant first names.
+- **Break board**: Date pickers in post modal with auto-calculated day count. Sticky cards show dates + "N Days" badge. "Request Stay" button opens pre-filled chat with the poster.
+
 ## Architecture
 
 ### Stack

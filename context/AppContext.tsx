@@ -52,6 +52,7 @@ export interface SubleasePost {
   userEmail: string;
   buildingName: string;
   address: string;
+  floorPlan?: string;
   leaseType: LeaseType;
   pricePerMonth: number;
   landlord: Landlord;
@@ -62,6 +63,8 @@ export interface SubleasePost {
   avatarColor: string;
   timestamp: number;
   category?: string;
+  moveInAt?: string | null;
+  moveOutAt?: string | null;
 }
 
 export interface BreakPost {
@@ -76,6 +79,8 @@ export interface BreakPost {
   description: string;
   avatarColor: string;
   timestamp: number;
+  moveInAt?: string | null;
+  moveOutAt?: string | null;
 }
 
 export interface MatchRecord {

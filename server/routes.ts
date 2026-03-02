@@ -86,6 +86,26 @@ async function initDb() {
   `).catch(() => {});
 
   await query(`
+    ALTER TABLE listings ADD COLUMN IF NOT EXISTS move_in_at TIMESTAMPTZ
+  `).catch(() => {});
+
+  await query(`
+    ALTER TABLE listings ADD COLUMN IF NOT EXISTS move_out_at TIMESTAMPTZ
+  `).catch(() => {});
+
+  await query(`
+    ALTER TABLE listings ADD COLUMN IF NOT EXISTS floor_plan VARCHAR DEFAULT ''
+  `).catch(() => {});
+
+  await query(`
+    ALTER TABLE break_posts ADD COLUMN IF NOT EXISTS move_in_at TIMESTAMPTZ
+  `).catch(() => {});
+
+  await query(`
+    ALTER TABLE break_posts ADD COLUMN IF NOT EXISTS move_out_at TIMESTAMPTZ
+  `).catch(() => {});
+
+  await query(`
     CREATE TABLE IF NOT EXISTS otp_codes (
       email VARCHAR PRIMARY KEY,
       code VARCHAR(6) NOT NULL,

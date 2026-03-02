@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
-  Platform, Modal, KeyboardAvoidingView
+  Platform, Modal, KeyboardAvoidingView, ActivityIndicator
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,6 +9,8 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, BreakPost, BreakType, Zone } from "@/context/AppContext";
+import DateTimePicker, { formatDateRange, calcDays } from "@/components/DateTimePicker";
+import { getApiUrl } from "@/lib/query-client";
 
 const BREAK_CONFIG: Record<BreakType, { label: string; dates: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
   thanksgiving: { label: "Thanksgiving", dates: "Nov 27 – Dec 1", color: Colors.orange, icon: "home" },
@@ -36,10 +38,19 @@ function timeAgo(ts: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function StickyNote({ post, index }: { post: BreakPost; index: number }) {
+interface StickyNoteProps {
+  post: BreakPost;
+  index: number;
+  onRequestStay: (post: BreakPost) => void;
+  isCurrentUser: boolean;
+}
+
+function StickyNote({ post, index, onRequestStay, isCurrentUser }: StickyNoteProps) {
   const bg = STICKY_COLORS[index % STICKY_COLORS.length];
   const breakInfo = BREAK_CONFIG[post.breakType];
   const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
+  const days = calcDays(post.moveInAt, post.moveOutAt);
+  const dateRange = formatDateRange(post.moveInAt, post.moveOutAt);
 
   return (
     <View style={[styles.sticky, { backgroundColor: bg }]}>
@@ -70,7 +81,18 @@ function StickyNote({ post, index }: { post: BreakPost; index: number }) {
 
       <Text style={styles.stickyPrice}>${post.pricePerWeek}<Text style={styles.stickyPriceSub}>/week</Text></Text>
 
-      <Text style={styles.stickyDesc} numberOfLines={4}>{post.description}</Text>
+      {dateRange ? (
+        <View style={styles.dateBlock}>
+          <Text style={styles.dateBlockText}>🗓️ {dateRange}</Text>
+          {days !== null && (
+            <View style={styles.daysBadge}>
+              <Text style={styles.daysBadgeText}>{days} Day{days !== 1 ? "s" : ""}</Text>
+            </View>
+          )}
+        </View>
+      ) : null}
+
+      <Text style={styles.stickyDesc} numberOfLines={3}>{post.description}</Text>
 
       <View style={styles.stickyFooter}>
         <View style={[styles.stickyAvatar, { backgroundColor: post.avatarColor }]}>
@@ -81,6 +103,17 @@ function StickyNote({ post, index }: { post: BreakPost; index: number }) {
           <Text style={styles.stickyTime}>{timeAgo(post.timestamp)}</Text>
         </View>
       </View>
+
+      {!isCurrentUser && (
+        <TouchableOpacity
+          style={styles.requestBtn}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onRequestStay(post); }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="chatbubble-ellipses" size={13} color={Colors.white} />
+          <Text style={styles.requestBtnText}>Request Stay</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -93,6 +126,12 @@ function PostBreakModal({ onClose }: { onClose: () => void }) {
   const [price, setPrice] = useState("");
   const [zone, setZone] = useState<Zone>("campustown");
   const [description, setDescription] = useState("");
+  const [moveInDate, setMoveInDate] = useState<Date | null>(null);
+  const [moveOutDate, setMoveOutDate] = useState<Date | null>(null);
+  const [showMoveIn, setShowMoveIn] = useState(false);
+  const [showMoveOut, setShowMoveOut] = useState(false);
+
+  const days = calcDays(moveInDate?.toISOString(), moveOutDate?.toISOString());
 
   const handlePost = async () => {
     if (!price.trim() || !description.trim()) return;
@@ -109,6 +148,8 @@ function PostBreakModal({ onClose }: { onClose: () => void }) {
       description: description.trim(),
       avatarColor: currentUser?.avatarColor || Colors.ocean,
       timestamp: Date.now(),
+      moveInAt: moveInDate?.toISOString() ?? null,
+      moveOutAt: moveOutDate?.toISOString() ?? null,
     };
     await addBreakPost(post);
     onClose();
@@ -157,6 +198,37 @@ function PostBreakModal({ onClose }: { onClose: () => void }) {
                   ))}
                 </View>
 
+                <Text style={styles.modalLabel}>Move-In Date & Time</Text>
+                <TouchableOpacity style={styles.datePicker} onPress={() => setShowMoveIn(true)}>
+                  <Ionicons name="calendar-outline" size={17} color={Colors.ocean} />
+                  <Text style={[styles.datePickerText, !moveInDate && styles.datePickerPlaceholder]}>
+                    {moveInDate
+                      ? moveInDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+                        " at " + moveInDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                      : "Select move-in"}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={Colors.textLight} />
+                </TouchableOpacity>
+
+                <Text style={styles.modalLabel}>Move-Out Date & Time</Text>
+                <TouchableOpacity style={styles.datePicker} onPress={() => setShowMoveOut(true)}>
+                  <Ionicons name="calendar-outline" size={17} color={Colors.ocean} />
+                  <Text style={[styles.datePickerText, !moveOutDate && styles.datePickerPlaceholder]}>
+                    {moveOutDate
+                      ? moveOutDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+                        " at " + moveOutDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                      : "Select move-out"}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={Colors.textLight} />
+                </TouchableOpacity>
+
+                {days !== null && (
+                  <View style={styles.daysPreview}>
+                    <Ionicons name="time-outline" size={14} color={Colors.ocean} />
+                    <Text style={styles.daysPreviewText}>{days} Day{days !== 1 ? "s" : ""} total stay</Text>
+                  </View>
+                )}
+
                 <Text style={styles.modalLabel}>Price per Week ($)</Text>
                 <View style={styles.priceInputRow}>
                   <Text style={styles.priceDollar}>$</Text>
@@ -178,7 +250,7 @@ function PostBreakModal({ onClose }: { onClose: () => void }) {
 
                 <Text style={styles.modalLabel}>Details</Text>
                 <TextInput style={styles.textArea} value={description} onChangeText={setDescription}
-                  placeholder="Tell students about your situation, space, or what you're looking for..."
+                  placeholder="Describe your space or what you're looking for..."
                   placeholderTextColor={Colors.textLight} multiline numberOfLines={3} textAlignVertical="top" />
 
                 <TouchableOpacity style={[styles.postBtn, (!price || !description) && styles.postBtnDisabled]}
@@ -191,20 +263,71 @@ function PostBreakModal({ onClose }: { onClose: () => void }) {
           </View>
         </KeyboardAvoidingView>
       </View>
+
+      <DateTimePicker
+        visible={showMoveIn}
+        value={moveInDate}
+        title="Move-In Date & Time"
+        minimumDate={new Date()}
+        onConfirm={d => { setMoveInDate(d); setShowMoveIn(false); }}
+        onCancel={() => setShowMoveIn(false)}
+      />
+      <DateTimePicker
+        visible={showMoveOut}
+        value={moveOutDate}
+        title="Move-Out Date & Time"
+        minimumDate={moveInDate ?? new Date()}
+        onConfirm={d => { setMoveOutDate(d); setShowMoveOut(false); }}
+        onCancel={() => setShowMoveOut(false)}
+      />
     </Modal>
   );
 }
 
 export default function BreaksScreen() {
   const insets = useSafeAreaInsets();
-  const { breakPosts } = useApp();
+  const { breakPosts, currentUser } = useApp();
   const [activeBreak, setActiveBreak] = useState<BreakType | "all">("all");
   const [showPostModal, setShowPostModal] = useState(false);
+  const [requesting, setRequesting] = useState(false);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const filtered = activeBreak === "all"
     ? breakPosts
     : breakPosts.filter(p => p.breakType === activeBreak);
+
+  const handleRequestStay = async (post: BreakPost) => {
+    if (!currentUser) return;
+    setRequesting(true);
+    try {
+      const url = new URL("/api/conversations/find-or-create", getApiUrl()).toString();
+      const listingTitle = `Break Stay · ${BREAK_CONFIG[post.breakType].label}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emails: [currentUser.email, post.userEmail],
+          type: "sublease",
+          listingId: post.id,
+          listingTitle,
+        }),
+      });
+      if (res.ok) {
+        const { conversationId } = await res.json();
+        router.push({
+          pathname: "/chat/[id]",
+          params: {
+            id: conversationId,
+            otherEmail: post.userEmail,
+            otherName: post.userName,
+            listingTitle,
+            prefillMessage: `Hi! I saw your Break Stay post for ${BREAK_CONFIG[post.breakType].label} at $${post.pricePerWeek}/week. I'm interested — is it still available?`,
+          },
+        });
+      }
+    } catch {}
+    setRequesting(false);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.sandLight }]}>
@@ -237,6 +360,13 @@ export default function BreaksScreen() {
         ))}
       </View>
 
+      {requesting && (
+        <View style={styles.requestingOverlay}>
+          <ActivityIndicator color={Colors.ocean} />
+          <Text style={styles.requestingText}>Opening chat...</Text>
+        </View>
+      )}
+
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.boardContent, {
         paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 30
       }]} showsVerticalScrollIndicator={false}>
@@ -252,7 +382,13 @@ export default function BreaksScreen() {
         ) : (
           <View style={styles.grid}>
             {filtered.map((post, i) => (
-              <StickyNote key={post.id} post={post} index={i} />
+              <StickyNote
+                key={post.id}
+                post={post}
+                index={i}
+                onRequestStay={handleRequestStay}
+                isCurrentUser={post.userEmail === currentUser?.email}
+              />
             ))}
           </View>
         )}
@@ -262,8 +398,6 @@ export default function BreaksScreen() {
     </View>
   );
 }
-
-const CARD_WIDTH = (Platform.OS === "web" ? 320 : undefined);
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -291,11 +425,16 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
   filterChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
   filterChipTextActive: { color: Colors.white },
+  requestingOverlay: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingVertical: 8, backgroundColor: Colors.ocean + "15",
+  },
+  requestingText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.ocean },
   scroll: { flex: 1 },
   boardContent: { padding: 12 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   sticky: {
-    width: "47.5%", borderRadius: 4, padding: 14, gap: 8,
+    width: "47.5%", borderRadius: 4, padding: 12, gap: 7,
     shadowColor: "#8B7355", shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.18, shadowRadius: 4, elevation: 3, position: "relative",
   },
@@ -306,32 +445,47 @@ const styles = StyleSheet.create({
   roleText: { fontFamily: "Nunito_600SemiBold", fontSize: 10 },
   breakBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
   breakBadgeText: { fontFamily: "Nunito_600SemiBold", fontSize: 10 },
-  stickyPrice: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal },
-  stickyPriceSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
-  stickyDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.charcoal, lineHeight: 17 },
-  stickyFooter: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 4 },
-  stickyAvatar: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  stickyAvatarText: { fontFamily: "Nunito_700Bold", fontSize: 9, color: Colors.white },
-  stickyName: { fontFamily: "Nunito_700Bold", fontSize: 11, color: Colors.charcoal },
+  stickyPrice: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: Colors.charcoal },
+  stickyPriceSub: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
+  dateBlock: { gap: 4 },
+  dateBlockText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.charcoal, lineHeight: 14 },
+  daysBadge: {
+    alignSelf: "flex-start", backgroundColor: Colors.ocean + "20",
+    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6,
+  },
+  daysBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.ocean },
+  stickyDesc: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.charcoal, lineHeight: 16 },
+  stickyFooter: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 2 },
+  stickyAvatar: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  stickyAvatarText: { fontFamily: "Nunito_700Bold", fontSize: 8, color: Colors.white },
+  stickyName: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.charcoal },
   stickyMeta: {},
-  stickyTime: { fontFamily: "Nunito_400Regular", fontSize: 10, color: Colors.textMuted },
+  stickyTime: { fontFamily: "Nunito_400Regular", fontSize: 9, color: Colors.textMuted },
+  requestBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+    backgroundColor: Colors.ocean, borderRadius: 8,
+    paddingVertical: 7, marginTop: 4,
+  },
+  requestBtnText: { fontFamily: "Nunito_700Bold", fontSize: 11, color: Colors.white },
+
   emptyBoard: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 20, color: Colors.charcoal },
   emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
   pinFirstBtn: { backgroundColor: Colors.grassGreen, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
   pinFirstBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
+
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalWrap: { justifyContent: "flex-end" },
   modalContainer: {
     backgroundColor: Colors.sand, borderTopLeftRadius: 22, borderTopRightRadius: 22,
-    maxHeight: "92%",
+    maxHeight: "94%",
   },
   modalHeader: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.borderSoft,
   },
   modalTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: Colors.charcoal },
-  modalContent: { padding: 16, gap: 14, paddingBottom: 24 },
+  modalContent: { padding: 16, gap: 12, paddingBottom: 24 },
   modalLabel: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
   roleRow: { flexDirection: "row", gap: 10 },
   roleBtn: {
@@ -351,6 +505,21 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
   chipTextActive: { color: Colors.white },
   chipDates: { fontFamily: "Nunito_400Regular", fontSize: 10, color: Colors.textLight },
+
+  datePicker: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
+    borderColor: Colors.borderSoft, paddingHorizontal: 14, paddingVertical: 12,
+  },
+  datePickerText: { flex: 1, fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.charcoal },
+  datePickerPlaceholder: { color: Colors.textLight },
+  daysPreview: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: Colors.ocean + "15", borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 7,
+  },
+  daysPreviewText: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.ocean },
+
   priceInputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   priceDollar: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.ocean },
   priceInput: {

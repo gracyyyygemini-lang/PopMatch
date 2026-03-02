@@ -29,6 +29,29 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400000)}d`;
 }
 
+function getConvName(conv: Conversation, currentEmail: string): string {
+  if (conv.listing_title) return conv.listing_title;
+  const others = conv.participants.filter(e => e !== currentEmail);
+  if (others.length === 0) return "Chat";
+  const names = others.map(e => {
+    const mock = MOCK_USERS.find(u => u.email === e);
+    return mock ? mock.name.split(" ")[0] : e.split("@")[0];
+  });
+  return names.join(" & ");
+}
+
+interface PillConfig { label: string; bg: string; textColor: string; }
+
+function getConvPill(conv: Conversation): PillConfig {
+  if (conv.type === "sublease") {
+    return { label: "Sublease", bg: "#278B9A", textColor: "#fff" };
+  }
+  if (conv.type === "group_request") {
+    return { label: "Open Room", bg: "#5A6F80", textColor: "#fff" };
+  }
+  return { label: "New Roommates", bg: "#E8C4A2", textColor: Colors.charcoal };
+}
+
 export default function ChatsScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser } = useApp();
@@ -44,27 +67,21 @@ export default function ChatsScreen() {
       const url = new URL("/api/conversations", getApiUrl());
       url.searchParams.set("userEmail", currentUser.email);
       const res = await fetch(url.toString());
-      if (res.ok) {
-        const data = await res.json();
-        setConversations(data);
-      }
+      if (res.ok) setConversations(await res.json());
     } catch {}
     setLoading(false);
     setRefreshing(false);
   }, [currentUser?.email]);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchConversations();
-    }, [fetchConversations])
-  );
+  useFocusEffect(useCallback(() => { fetchConversations(); }, [fetchConversations]));
 
   const getOtherEmail = (conv: Conversation) =>
     conv.participants.find(e => e !== currentUser?.email) ?? "";
 
   const getOtherUser = (email: string) => {
     const mock = MOCK_USERS.find(u => u.email === email);
-    return mock ? { name: mock.name, avatarColor: mock.avatarColor } : { name: email.split("@")[0], avatarColor: Colors.ocean };
+    return mock ? { name: mock.name, avatarColor: mock.avatarColor }
+      : { name: email.split("@")[0], avatarColor: Colors.ocean };
   };
 
   const handleOpen = (conv: Conversation) => {
@@ -84,27 +101,32 @@ export default function ChatsScreen() {
   const renderItem = ({ item }: { item: Conversation }) => {
     const otherEmail = getOtherEmail(item);
     const other = getOtherUser(otherEmail);
-    const initials = other.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+    const convName = getConvName(item, currentUser?.email ?? "");
+    const initials = convName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+    const avatarInitials = other.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+    const pill = getConvPill(item);
     const preview = item.last_message
       ? (item.last_sender === currentUser?.email ? `You: ${item.last_message}` : item.last_message)
-      : (item.listing_title ? `About: ${item.listing_title}` : "Say hello!");
+      : "Say hello!";
 
     return (
       <TouchableOpacity style={ch.row} onPress={() => handleOpen(item)} activeOpacity={0.75}>
         <View style={[ch.avatar, { backgroundColor: other.avatarColor }]}>
-          <Text style={ch.avatarText}>{initials}</Text>
+          <Text style={ch.avatarText}>{avatarInitials}</Text>
         </View>
         <View style={ch.rowInfo}>
           <View style={ch.rowTop}>
-            <Text style={ch.rowName} numberOfLines={1}>{other.name}</Text>
+            <Text style={ch.rowName} numberOfLines={1}>{convName}</Text>
             <Text style={ch.rowTime}>{timeAgo(item.last_message_at)}</Text>
           </View>
-          {item.listing_title ? (
-            <View style={ch.listingTag}>
-              <Ionicons name="home-outline" size={10} color={Colors.ocean} />
-              <Text style={ch.listingTagText} numberOfLines={1}>{item.listing_title}</Text>
+          <View style={ch.rowMid}>
+            <View style={[ch.pill, { backgroundColor: pill.bg }]}>
+              <Text style={[ch.pillText, { color: pill.textColor }]}>{pill.label}</Text>
             </View>
-          ) : null}
+            {item.type === "sublease" && item.listing_title ? (
+              <Text style={ch.pillBuilding} numberOfLines={1}>{item.listing_title}</Text>
+            ) : null}
+          </View>
           <Text style={ch.preview} numberOfLines={1}>{preview}</Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={Colors.borderSoft} />
@@ -116,6 +138,23 @@ export default function ChatsScreen() {
     <View style={[ch.container, { backgroundColor: Colors.sand }]}>
       <View style={[ch.header, { paddingTop: topPadding + 12 }]}>
         <Text style={ch.title}>Chats</Text>
+        <View style={ch.headerRight}>
+          <View style={ch.onlineDot} />
+          <Text style={ch.onlineText}>{conversations.length} active</Text>
+        </View>
+      </View>
+
+      {/* Legend */}
+      <View style={ch.legend}>
+        {[
+          { label: "Sublease", bg: "#278B9A", textColor: "#fff" },
+          { label: "New Roommates", bg: "#E8C4A2", textColor: Colors.charcoal },
+          { label: "Open Room", bg: "#5A6F80", textColor: "#fff" },
+        ].map(p => (
+          <View key={p.label} style={[ch.legendPill, { backgroundColor: p.bg }]}>
+            <Text style={[ch.legendText, { color: p.textColor }]}>{p.label}</Text>
+          </View>
+        ))}
       </View>
 
       {loading ? (
@@ -144,7 +183,7 @@ export default function ChatsScreen() {
               <Ionicons name="chatbubbles-outline" size={52} color={Colors.textLight} />
               <Text style={ch.emptyTitle}>No chats yet</Text>
               <Text style={ch.emptySub}>
-                Connect with someone in the Matchmaker, or message a subleaser to get started.
+                Connect in the Matchmaker or message a subleaser to get started.
               </Text>
             </View>
           }
@@ -157,16 +196,29 @@ export default function ChatsScreen() {
 const ch = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    paddingHorizontal: 20, paddingBottom: 12,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingBottom: 10,
     backgroundColor: Colors.cardBg,
     borderBottomWidth: 1, borderBottomColor: Colors.borderSoft,
   },
-  title: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
+  title: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.charcoal },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 5 },
+  onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.grassGreen },
+  onlineText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
+  legend: {
+    flexDirection: "row", gap: 6, paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: Colors.cardBg,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderSoft,
+  },
+  legendPill: {
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+  },
+  legendText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   list: { paddingTop: 4 },
   row: {
     flexDirection: "row", alignItems: "center", gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
+    paddingHorizontal: 16, paddingVertical: 13,
     backgroundColor: Colors.cardBg,
     borderBottomWidth: 1, borderBottomColor: Colors.borderSoft,
   },
@@ -174,14 +226,19 @@ const ch = StyleSheet.create({
     width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center",
   },
   avatarText: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.white },
-  rowInfo: { flex: 1, gap: 2 },
+  rowInfo: { flex: 1, gap: 3 },
   rowTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   rowName: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal, flex: 1 },
   rowTime: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight },
-  listingTag: {
-    flexDirection: "row", alignItems: "center", gap: 3, alignSelf: "flex-start",
+  rowMid: { flexDirection: "row", alignItems: "center", gap: 6 },
+  pill: {
+    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, alignSelf: "flex-start",
   },
-  listingTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.ocean },
+  pillText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
+  pillBuilding: {
+    fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.textMuted,
+    flexShrink: 1,
+  },
   preview: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
   empty: { alignItems: "center", paddingTop: 80, paddingHorizontal: 40, gap: 10 },
   emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 20, color: Colors.charcoal },
