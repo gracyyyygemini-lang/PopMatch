@@ -51,45 +51,54 @@ const WAVE_COUNT = 22;
 
 function PonyoProgress({ step, total }: { step: number; total: number }) {
   const progress = step / (total - 1);
-  const fishX = useRef(new Animated.Value(0)).current;
+  // fishPx is a direct pixel-value Animated.Value — no interpolation needed.
+  // This avoids creating a new Interpolation object on every render when
+  // trackWidth changes, which can confuse the animated node reconciliation.
+  const fishPx = useRef(new Animated.Value(0)).current;
+  // bobY is a completely separate Animated.Value on its own Animated.View.
+  // Keeping it on a different view node ensures the JS driver is never mixed
+  // with any other driver on the same node — the root cause of the crash.
   const bobY = useRef(new Animated.Value(0)).current;
   const [trackWidth, setTrackWidth] = useState(260);
 
   const FISH_SIZE = 28;
   const BUCKET_SIZE = 28;
 
+  // Animate fish to new pixel position whenever step or trackWidth changes.
+  // useNativeDriver: false is required because we're animating a layout value
+  // (pixel position), which cannot be handled by the native driver.
   useEffect(() => {
-    Animated.spring(fishX, {
-      toValue: progress,
+    const target = progress * Math.max(0, trackWidth - BUCKET_SIZE - FISH_SIZE - 4);
+    Animated.spring(fishPx, {
+      toValue: target,
       tension: 55,
       friction: 10,
       useNativeDriver: false,
     }).start();
-  }, [step]);
+  }, [step, trackWidth]);
 
+  // Bobbing loop. useNativeDriver: false matches fishPx and ensures no mixing.
+  // Even though translateY could theoretically use native driver, we keep it
+  // false so that if both values ever end up on the same node in the future,
+  // there is no driver conflict.
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(bobY, {
           toValue: -4, duration: 850,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(bobY, {
           toValue: 4, duration: 850,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     );
     anim.start();
     return () => anim.stop();
   }, []);
-
-  const fishTranslateX = fishX.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, Math.max(0, trackWidth - BUCKET_SIZE - FISH_SIZE - 4)],
-  });
 
   const atHome = step === total - 1;
 
@@ -111,18 +120,25 @@ function PonyoProgress({ step, total }: { step: number; total: number }) {
           ))}
         </View>
 
+        {/*
+          TWO NESTED Animated.Views — one per transform axis.
+          Each view node is driven by exactly one Animated.Value with one
+          consistent driver (JS). This is the canonical fix: the crash occurs
+          when a single Animated.View node has transforms from values that
+          were ever animated with different drivers, even across HMR reloads.
+          Separating them makes driver mixing physically impossible.
+        */}
         <Animated.View
-          style={[
-            pStyles.fishWrap,
-            { transform: [{ translateX: fishTranslateX }, { translateY: bobY }] }
-          ]}
+          style={[pStyles.fishWrap, { transform: [{ translateX: fishPx }] }]}
         >
-          <Ionicons
-            name="fish"
-            size={FISH_SIZE}
-            color={Colors.ponyo}
-            style={{ transform: [{ scaleX: -1 }] }}
-          />
+          <Animated.View style={{ transform: [{ translateY: bobY }] }}>
+            <Ionicons
+              name="fish"
+              size={FISH_SIZE}
+              color={Colors.ponyo}
+              style={{ transform: [{ scaleX: -1 }] }}
+            />
+          </Animated.View>
         </Animated.View>
       </View>
 
