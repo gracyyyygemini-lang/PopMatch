@@ -649,6 +649,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── PUBLIC STATS ────────────────────────────────────────────────────────────
+
+  app.get("/api/public-stats", async (_req: Request, res: Response) => {
+    try {
+      const [userCount] = await query<{ count: string }>("SELECT COUNT(*) as count FROM users");
+      const [matchConvs] = await query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM conversations WHERE type = 'match'`
+      );
+      const [leasedCount] = await query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM listings WHERE leased = TRUE`
+      );
+      const statsRows = await query<{ key: string; value: number }>("SELECT * FROM stats");
+      const stats = Object.fromEntries(statsRows.map(r => [r.key, r.value]));
+      return res.json({
+        studentsOnline: parseInt(userCount?.count ?? "0"),
+        groupsFormed: parseInt(matchConvs?.count ?? "0") + (stats.total_matches ?? 0),
+        leasesTotal: parseInt(leasedCount?.count ?? "0") + (stats.successful_subleases ?? 0),
+      });
+    } catch (err) {
+      console.error("GET /api/public-stats", err);
+      return res.status(500).json({ error: "Failed to fetch public stats" });
+    }
+  });
+
   // ─── CONVERSATIONS ──────────────────────────────────────────────────────────
 
   app.post("/api/conversations/find-or-create", async (req: Request, res: Response) => {

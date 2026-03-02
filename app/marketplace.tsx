@@ -135,116 +135,125 @@ function SubleaseCard({ post, onMarkLeased, onMessage }: {
   const { getTrustInfo, currentUser } = useApp();
   const trust = getTrustInfo(post.userEmail);
   const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
+  const buildingInitial = post.buildingName[0]?.toUpperCase() ?? "?";
   const cat = post.category || "semester_takeover";
   const catColor = CATEGORY_COLORS[cat] || Colors.ocean;
   const isOwner = currentUser?.email === post.userEmail;
+  const daysAgo = Math.floor((Date.now() - post.timestamp) / 86400000);
+
+  const chipLabel = cat === "semester_takeover"
+    ? LEASE_LABELS[post.leaseType]
+    : CATEGORY_LABELS[cat];
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        {cat !== "semester_takeover" && (
-          <View style={[styles.catTag, { backgroundColor: catColor + "18", borderColor: catColor + "40" }]}>
-            <Ionicons name={CATEGORY_ICONS[cat] || "home-outline"} size={11} color={catColor} />
-            <Text style={[styles.catTagText, { color: catColor }]}>{CATEGORY_LABELS[cat] ?? cat}</Text>
-          </View>
-        )}
-        {cat === "semester_takeover" && (
-          <View style={[styles.catTag, { backgroundColor: Colors.grassGreen + "18", borderColor: Colors.grassGreen + "40" }]}>
-            <Text style={[styles.catTagText, { color: Colors.grassGreen }]}>{LEASE_LABELS[post.leaseType]}</Text>
-          </View>
-        )}
-        {post.availableDuringBreaks && (
-          <View style={styles.breakAvailTag}>
-            <Ionicons name="home" size={10} color={Colors.grassGreen} />
-            <Text style={styles.breakAvailText}>Break-Friendly</Text>
-          </View>
-        )}
-        {isOwner && (
-          <View style={styles.ownerTag}>
-            <Ionicons name="person" size={10} color={Colors.ocean} />
-            <Text style={styles.ownerTagText}>Your Post</Text>
-          </View>
-        )}
-        <Text style={styles.cardTime}>
-          {Math.floor((Date.now() - post.timestamp) / 86400000)}d ago
-        </Text>
-      </View>
+      {/* ── Hero Image Block ── */}
+      <View style={[styles.hero, { backgroundColor: catColor }]}>
+        <View style={styles.heroOverlay} />
 
-      <Text style={styles.buildingName}>{post.buildingName}</Text>
-      <Text style={styles.address}>{post.address}</Text>
-
-      <View style={styles.priceRow}>
-        <Text style={styles.price}>${post.pricePerMonth}</Text>
-        <Text style={styles.priceSub}>/month</Text>
-        {cat === "august_gap" || cat === "short_term" ? (
-          <View style={[styles.dateBadge, { backgroundColor: catColor + "15" }]}>
-            <Text style={[styles.dateBadgeText, { color: catColor }]}>
-              {CATEGORY_DATES[cat]}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-
-      {post.description ? (
-        <Text style={styles.description} numberOfLines={2}>{post.description}</Text>
-      ) : null}
-
-      <View style={styles.metaRow}>
-        <View style={styles.metaItem}>
-          <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.metaText}>{ZONE_LABELS[post.zone]}</Text>
+        {/* Top-left: category chip */}
+        <View style={[styles.heroCatChip, { backgroundColor: "rgba(0,0,0,0.32)" }]}>
+          <Ionicons name={CATEGORY_ICONS[cat] || "home-outline"} size={11} color="#fff" />
+          <Text style={styles.heroCatText}>{chipLabel}</Text>
         </View>
-        <View style={styles.metaItem}>
-          <Ionicons name="business-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.metaText}>{LANDLORD_LABELS[post.landlord]}</Text>
-        </View>
-      </View>
 
-      <View style={styles.posterRow}>
-        <View style={[styles.posterAvatar, { backgroundColor: post.avatarColor }]}>
-          <Text style={styles.posterInitials}>{initials}</Text>
-        </View>
-        <View style={styles.posterInfo}>
-          <Text style={styles.posterName}>{post.userName}</Text>
-          <Text style={styles.posterEmail}>{post.userEmail}</Text>
-        </View>
-        <View style={{ alignItems: "flex-end", gap: 4 }}>
-          {trust.degree === 1 && (
-            <View style={[styles.trustChip, { backgroundColor: Colors.grassGreen + "20" }]}>
-              <Ionicons name="people" size={10} color={Colors.grassGreen} />
-              <Text style={[styles.trustChipText, { color: Colors.grassGreen }]}>1st Degree</Text>
+        {/* Top-right: time + owner */}
+        <View style={styles.heroTopRight}>
+          {isOwner && (
+            <View style={styles.heroOwnerBadge}>
+              <Ionicons name="person" size={10} color={catColor} />
+              <Text style={[styles.heroOwnerText, { color: catColor }]}>Your Post</Text>
             </View>
           )}
-          {trust.degree === 2 && trust.mutualFriends.length > 0 ? (
-            <FacePile mutuals={trust.mutualFriends} maxVisible={3} />
-          ) : trust.sharedOrg && !trust.degree ? (
-            <View style={[styles.trustChip, { backgroundColor: Colors.goldDark + "20" }]}>
-              <Ionicons name="school-outline" size={10} color={Colors.goldDark} />
-              <Text style={[styles.trustChipText, { color: Colors.goldDark }]}>{trust.sharedOrg}</Text>
+          <Text style={styles.heroTime}>{daysAgo === 0 ? "Today" : `${daysAgo}d ago`}</Text>
+        </View>
+
+        {/* Center: building initial */}
+        <Text style={styles.heroBuildingInitial}>{buildingInitial}</Text>
+
+        {/* Bottom overlay: price */}
+        <View style={styles.heroPriceBar}>
+          <Text style={styles.heroPrice}>${post.pricePerMonth.toLocaleString()}</Text>
+          <Text style={styles.heroPriceSub}>/mo</Text>
+          {post.availableDuringBreaks && (
+            <View style={styles.heroBreakBadge}>
+              <Ionicons name="home" size={10} color={Colors.grassGreen} />
+              <Text style={styles.heroBreakText}>Break-Friendly</Text>
             </View>
-          ) : null}
+          )}
         </View>
       </View>
 
-      <View style={styles.cardActions}>
-        {!isOwner && (
-          <TouchableOpacity
-            style={styles.messageBtn}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onMessage(post); }}
-          >
-            <Ionicons name="chatbubble-outline" size={15} color={Colors.ocean} />
-            <Text style={styles.messageBtnText}>Message Subleaser</Text>
-          </TouchableOpacity>
-        )}
-        {isOwner && (
-          <TouchableOpacity
-            style={styles.leasedBtn}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onMarkLeased(post); }}
-          >
-            <Ionicons name="checkmark-circle" size={16} color={Colors.white} />
-            <Text style={styles.leasedBtnText}>Mark as Leased</Text>
-          </TouchableOpacity>
-        )}
+      {/* ── Card Body ── */}
+      <View style={styles.cardBody}>
+        <Text style={styles.buildingName} numberOfLines={1}>{post.buildingName}</Text>
+
+        {/* 3 icon chips */}
+        <View style={styles.chipRow}>
+          <View style={styles.iconChip}>
+            <Ionicons name="location-outline" size={13} color={Colors.ocean} />
+            <Text style={styles.iconChipText}>{ZONE_LABELS[post.zone]}</Text>
+          </View>
+          <View style={styles.chipDivider} />
+          <View style={styles.iconChip}>
+            <Ionicons name="business-outline" size={13} color={Colors.ocean} />
+            <Text style={styles.iconChipText}>{LANDLORD_LABELS[post.landlord]}</Text>
+          </View>
+          {cat === "august_gap" || cat === "short_term" ? (
+            <>
+              <View style={styles.chipDivider} />
+              <View style={styles.iconChip}>
+                <Ionicons name="calendar-outline" size={13} color={Colors.ocean} />
+                <Text style={styles.iconChipText}>{CATEGORY_DATES[cat]}</Text>
+              </View>
+            </>
+          ) : null}
+        </View>
+
+        {post.description ? (
+          <Text style={styles.description} numberOfLines={2}>{post.description}</Text>
+        ) : null}
+
+        {/* Poster + trust + action */}
+        <View style={styles.posterRow}>
+          <View style={[styles.posterAvatar, { backgroundColor: post.avatarColor }]}>
+            <Text style={styles.posterInitials}>{initials}</Text>
+          </View>
+          <View style={styles.posterInfo}>
+            <Text style={styles.posterName}>{post.userName}</Text>
+            {trust.degree === 1 ? (
+              <View style={styles.trustChipInline}>
+                <Ionicons name="people" size={10} color={Colors.grassGreen} />
+                <Text style={[styles.trustInlineText, { color: Colors.grassGreen }]}>1st Degree</Text>
+              </View>
+            ) : trust.degree === 2 && trust.mutualFriends.length > 0 ? (
+              <FacePile mutuals={trust.mutualFriends} maxVisible={3} />
+            ) : trust.sharedOrg ? (
+              <View style={styles.trustChipInline}>
+                <Ionicons name="school-outline" size={10} color={Colors.goldDark} />
+                <Text style={[styles.trustInlineText, { color: Colors.goldDark }]}>{trust.sharedOrg}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {!isOwner ? (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: Colors.ocean }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onMessage(post); }}
+            >
+              <Ionicons name="chatbubble" size={14} color={Colors.white} />
+              <Text style={styles.actionBtnText}>Message</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: Colors.ponyo }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onMarkLeased(post); }}
+            >
+              <Ionicons name="checkmark-circle" size={14} color={Colors.white} />
+              <Text style={styles.actionBtnText}>Leased</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -445,69 +454,79 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 12 },
   card: {
-    backgroundColor: Colors.cardBg, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.borderSoft,
-    padding: 16, gap: 10,
-    shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    backgroundColor: Colors.cardBg, borderRadius: 20, overflow: "hidden",
+    shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10, shadowRadius: 12, elevation: 4,
   },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
-  catTag: {
+
+  // Hero block
+  hero: {
+    height: 155, justifyContent: "center", alignItems: "center",
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  heroCatChip: {
+    position: "absolute", top: 12, left: 12,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+  },
+  heroCatText: { fontFamily: "Nunito_700Bold", fontSize: 11, color: "#fff" },
+  heroTopRight: {
+    position: "absolute", top: 10, right: 12,
+    flexDirection: "row", alignItems: "center", gap: 6,
+  },
+  heroOwnerBadge: {
     flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, borderWidth: 1,
+    backgroundColor: "#fff", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4,
   },
-  catTagText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
-  breakAvailTag: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
-    backgroundColor: Colors.grassGreen + "20",
+  heroOwnerText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
+  heroTime: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: "rgba(255,255,255,0.85)" },
+  heroBuildingInitial: {
+    fontFamily: "Nunito_800ExtraBold", fontSize: 52, color: "rgba(255,255,255,0.35)",
   },
-  breakAvailText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.grassGreen },
-  ownerTag: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
-    backgroundColor: Colors.ocean + "15",
+  heroPriceBar: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: "rgba(0,0,0,0.40)",
   },
-  ownerTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.ocean },
-  cardTime: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight, marginLeft: "auto" },
-  buildingName: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal },
-  address: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, marginTop: -4 },
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 2 },
-  price: { fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: Colors.ocean },
-  priceSub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
-  dateBadge: {
-    marginLeft: 8, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, alignSelf: "center",
+  heroPrice: { fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: "#fff" },
+  heroPriceSub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: "rgba(255,255,255,0.80)", marginTop: 2 },
+  heroBreakBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4, marginLeft: "auto" as any,
+    backgroundColor: Colors.grassGreen + "CC", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3,
   },
-  dateBadgeText: { fontFamily: "Nunito_600SemiBold", fontSize: 11 },
-  description: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, lineHeight: 19 },
-  metaRow: { flexDirection: "row", gap: 16 },
-  metaItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  metaText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
-  posterRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.borderSoft,
+  heroBreakText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: "#fff" },
+
+  // Card body
+  cardBody: { padding: 14, gap: 10 },
+  buildingName: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: Colors.charcoal },
+  chipRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: Colors.sand + "80",
+    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8,
   },
+  iconChip: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1 },
+  iconChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.charcoal },
+  chipDivider: { width: 1, height: 14, backgroundColor: Colors.borderSoft, marginHorizontal: 4 },
+  description: {
+    fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, lineHeight: 19,
+  },
+  posterRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   posterAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   posterInitials: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.white },
-  posterInfo: { flex: 1 },
+  posterInfo: { flex: 1, gap: 2 },
   posterName: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.charcoal },
-  posterEmail: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
-  trustChip: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8,
+  trustChipInline: { flexDirection: "row", alignItems: "center", gap: 4 },
+  trustInlineText: { fontFamily: "Nunito_600SemiBold", fontSize: 10 },
+  actionBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
   },
-  trustChipText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
-  cardActions: { marginTop: 2 },
-  messageBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7,
-    backgroundColor: Colors.ocean + "12", borderRadius: 12, paddingVertical: 11,
-    borderWidth: 1.5, borderColor: Colors.ocean + "30",
-  },
-  messageBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
-  leasedBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.ponyo, borderRadius: 12, paddingVertical: 12,
-  },
-  leasedBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
+  actionBtnText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.white },
+
   emptyState: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 20, color: Colors.charcoal },
   emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center", paddingHorizontal: 20 },
