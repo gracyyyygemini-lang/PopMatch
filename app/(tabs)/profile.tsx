@@ -56,25 +56,46 @@ function InfoRow({ icon, label, value, color }: { icon: keyof typeof Ionicons.gl
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, matches, likedUserIds, subleases, setCurrentUser, setIsOnboarded } = useApp();
+  const { currentUser, matches, likedUserIds, subleases, friends, setCurrentUser, setIsOnboarded } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const mySubleases = subleases.filter(s => s.userId === currentUser?.id);
 
-  const handleReset = () => {
+  const handleSignOut = () => {
     Alert.alert(
-      "Reset PopMatch",
-      "This will clear all your data and restart onboarding.",
+      "Sign Out",
+      "You'll need to verify your @illinois.edu email to sign back in.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Reset",
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            await AsyncStorage.multiRemove(["@popmatch_user", "@popmatch_onboarded"]);
+            await setCurrentUser(null);
+            await setIsOnboarded(false);
+            router.replace("/onboarding");
+          }
+        }
+      ]
+    );
+  };
+
+  const handleReset = () => {
+    Alert.alert(
+      "Reset All Data",
+      "This clears your profile, matches, listings, and connections — everything starts fresh.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset Everything",
           style: "destructive",
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             await AsyncStorage.multiRemove([
               "@popmatch_user", "@popmatch_onboarded", "@popmatch_matches",
               "@popmatch_liked", "@popmatch_passed", "@popmatch_scam",
-              "@popmatch_subleases", "@popmatch_breaks"
+              "@popmatch_subleases", "@popmatch_breaks", "@popmatch_friends"
             ]);
             await setCurrentUser(null);
             await setIsOnboarded(false);
@@ -103,8 +124,8 @@ export default function ProfileScreen() {
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
         <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity onPress={handleReset} style={styles.resetBtn}>
-          <Ionicons name="refresh-outline" size={17} color={Colors.textMuted} />
+        <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn}>
+          <Ionicons name="log-out-outline" size={17} color={Colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -130,8 +151,8 @@ export default function ProfileScreen() {
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statNum}>{likedUserIds.length}</Text>
-              <Text style={styles.statLabel}>Liked</Text>
+              <Text style={styles.statNum}>{friends.length}</Text>
+              <Text style={styles.statLabel}>Circle</Text>
             </View>
             <View style={[styles.statBox, styles.statBoxMid]}>
               <Text style={[styles.statNum, { color: Colors.ocean }]}>${currentUser.budget}</Text>
@@ -235,9 +256,14 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <TouchableOpacity style={styles.signOutFullBtn} onPress={handleSignOut}>
+          <Ionicons name="log-out-outline" size={15} color={Colors.ocean} />
+          <Text style={styles.signOutFullBtnText}>Sign Out</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.resetFullBtn} onPress={handleReset}>
-          <Ionicons name="refresh-outline" size={15} color={Colors.errorRed} />
-          <Text style={styles.resetFullBtnText}>Reset & Start Over</Text>
+          <Ionicons name="trash-outline" size={15} color={Colors.errorRed} />
+          <Text style={styles.resetFullBtnText}>Reset All Data</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -251,7 +277,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingBottom: 12,
   },
   headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
-  resetBtn: {
+  signOutBtn: {
     width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.cardBg,
     alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.borderSoft,
   },
@@ -301,10 +327,16 @@ const styles = StyleSheet.create({
   algoDot: { width: 9, height: 9, borderRadius: 5 },
   algoLabel: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, flex: 1 },
   algoWeight: { fontFamily: "Nunito_700Bold", fontSize: 13 },
+  signOutFullBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.ocean + "12", borderRadius: 12, borderWidth: 1.5,
+    borderColor: Colors.ocean + "30", paddingVertical: 13,
+  },
+  signOutFullBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
   resetFullBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.errorRed + "12", borderRadius: 12, borderWidth: 1.5,
-    borderColor: Colors.errorRed + "35", paddingVertical: 13,
+    backgroundColor: Colors.errorRed + "10", borderRadius: 12, borderWidth: 1.5,
+    borderColor: Colors.errorRed + "30", paddingVertical: 13,
   },
   resetFullBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.errorRed },
   noProfile: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },

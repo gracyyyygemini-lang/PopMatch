@@ -12,11 +12,11 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>Home</Label>
+        <Label>Browse</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="matches">
-        <Icon sf={{ default: "heart", selected: "heart.fill" }} />
-        <Label>Matches</Label>
+        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
+        <Label>My Circle</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="map">
         <Icon sf={{ default: "map", selected: "map.fill" }} />
@@ -63,15 +63,15 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: "Browse",
           tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="matches"
         options={{
-          title: "Matches",
-          tabBarIcon: ({ color }) => <Ionicons name="heart-outline" size={22} color={color} />,
+          title: "My Circle",
+          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
