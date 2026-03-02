@@ -39,6 +39,12 @@ export interface FriendRecord {
   timestamp: number;
 }
 
+export interface MutualFriend {
+  name: string;
+  email: string;
+  avatarColor: string;
+}
+
 export interface SubleasePost {
   id: string;
   userId: string;
@@ -84,6 +90,7 @@ export interface TrustInfo {
   vouchedByFriend: string | null;
   sharedOrg: string | null;
   isFriend: boolean;
+  mutualFriends: MutualFriend[];
 }
 
 const DEMO_POSTS: SubleasePost[] = [
@@ -163,6 +170,8 @@ interface AppContextValue {
   setCurrentUser: (user: UserProfile | null) => void;
   isOnboarded: boolean;
   setIsOnboarded: (v: boolean) => void;
+  otpVerifiedEmail: string;
+  setOtpVerifiedEmail: (email: string) => void;
   mockUsers: UserProfile[];
   matches: MatchRecord[];
   addMatch: (record: MatchRecord) => void;
@@ -175,6 +184,7 @@ interface AppContextValue {
   computeScore: (a: UserProfile, b: UserProfile) => number;
   subleases: SubleasePost[];
   addSublease: (post: SubleasePost) => void;
+  removeSublease: (id: string) => void;
   breakPosts: BreakPost[];
   addBreakPost: (post: BreakPost) => void;
   friends: FriendRecord[];
@@ -270,6 +280,7 @@ function computeScore(a: UserProfile, b: UserProfile): number {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
   const [isOnboarded, setIsOnboardedState] = useState(false);
+  const [otpVerifiedEmail, setOtpVerifiedEmailState] = useState("");
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [scamBannerDismissed, setScamBannerDismissed] = useState(false);
   const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
@@ -315,6 +326,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_onboarded", v ? "true" : "false");
   };
 
+  const setOtpVerifiedEmail = (email: string) => {
+    setOtpVerifiedEmailState(email);
+  };
+
   const addMatch = async (record: MatchRecord) => {
     const updated = [...matches, record];
     setMatches(updated);
@@ -340,6 +355,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addSublease = async (post: SubleasePost) => {
     const updated = [post, ...subleases];
+    setSubleases(updated);
+    await AsyncStorage.setItem("@popmatch_subleases", JSON.stringify(updated));
+  };
+
+  const removeSublease = async (id: string) => {
+    const updated = subleases.filter(s => s.id !== id);
     setSubleases(updated);
     await AsyncStorage.setItem("@popmatch_subleases", JSON.stringify(updated));
   };
@@ -381,63 +402,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isFriend: true,
         vouchedByFriend: directFriend.vouchedByMe ? "You vouched for them" : null,
         sharedOrg: null,
+        mutualFriends: [],
       };
     }
 
     const targetMockUser = MOCK_USERS.find(u => u.email === userEmail);
     if (!targetMockUser) {
-      return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg: null };
+      return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg: null, mutualFriends: [] };
     }
+
+    const mutuals: MutualFriend[] = [];
 
     for (const friend of friends) {
       const friendMockUser = MOCK_USERS.find(u => u.email === friend.email);
       if (!friendMockUser) continue;
 
-      const sharedOrgs = (currentUser?.organizations || []).filter(
+      const friendKnowsTarget = (friendMockUser.organizations || []).some(
         org => (targetMockUser.organizations || []).includes(org)
       );
 
-      if (sharedOrgs.length > 0) {
-        return {
-          degree: 2,
-          isFriend: false,
-          vouchedByFriend: friend.vouchedByMe ? friend.name : null,
-          sharedOrg: sharedOrgs[0],
-        };
+      if (friendKnowsTarget) {
+        mutuals.push({
+          name: friend.name,
+          email: friend.email,
+          avatarColor: friend.avatarColor,
+        });
       }
+    }
 
-      if (
-        (friendMockUser.organizations || []).some(
-          org => (targetMockUser.organizations || []).includes(org)
-        )
-      ) {
-        return {
-          degree: 2,
-          isFriend: false,
-          vouchedByFriend: friend.vouchedByMe ? friend.name : null,
-          sharedOrg: null,
-        };
-      }
+    if (mutuals.length > 0) {
+      const vouchedFriend = friends.find(f => f.vouchedByMe && mutuals.some(m => m.email === f.email));
+      const sharedOrg = (currentUser?.organizations || []).find(
+        org => (targetMockUser.organizations || []).includes(org)
+      ) ?? null;
+      return {
+        degree: 2,
+        isFriend: false,
+        vouchedByFriend: vouchedFriend ? vouchedFriend.name : null,
+        sharedOrg,
+        mutualFriends: mutuals,
+      };
     }
 
     const sharedOrg = (currentUser?.organizations || []).find(
       org => (targetMockUser.organizations || []).includes(org)
-    );
+    ) ?? null;
+
     if (sharedOrg) {
-      return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg };
+      return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg, mutualFriends: [] };
     }
 
-    return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg: null };
+    return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg: null, mutualFriends: [] };
   };
 
   const value = useMemo(() => ({
     currentUser, setCurrentUser, isOnboarded, setIsOnboarded,
+    otpVerifiedEmail, setOtpVerifiedEmail,
     mockUsers: MOCK_USERS, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
-    subleases, addSublease, breakPosts, addBreakPost,
+    subleases, addSublease, removeSublease, breakPosts, addBreakPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
   }), [
-    currentUser, isOnboarded, matches, scamBannerDismissed,
+    currentUser, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, breakPosts, friends
   ]);
 

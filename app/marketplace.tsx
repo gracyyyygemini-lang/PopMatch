@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Modal, Animated
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,6 +8,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, SubleasePost, Landlord } from "@/context/AppContext";
+import FacePile from "@/components/FacePile";
+import MicroFeedback from "@/components/MicroFeedback";
+import { getApiUrl } from "@/lib/query-client";
 
 const CATEGORY_LABELS: Record<string, string> = {
   all: "All",
@@ -66,45 +69,74 @@ const LEASE_LABELS: Record<string, string> = {
 
 type CategoryFilter = "all" | "summer_only" | "august_gap" | "semester_takeover" | "short_term";
 
-function TrustBadge({ label, type }: { label: string; type: "friend" | "mutual" | "vouched" | "org" }) {
-  const bg =
-    type === "friend" ? Colors.grassGreen + "20" :
-    type === "vouched" ? Colors.orange + "20" :
-    type === "mutual" ? Colors.ocean + "18" :
-    Colors.goldDark + "18";
-  const color =
-    type === "friend" ? Colors.grassGreen :
-    type === "vouched" ? Colors.orange :
-    type === "mutual" ? Colors.ocean :
-    Colors.goldDark;
-  const icon: keyof typeof Ionicons.glyphMap =
-    type === "friend" ? "people" :
-    type === "vouched" ? "star" :
-    type === "mutual" ? "link" :
-    "school-outline";
+function CongratsSheet({ visible, onDone }: { visible: boolean; onDone: () => void }) {
+  const insets = useSafeAreaInsets();
+  const waveScale = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      waveScale.setValue(0.7);
+      opacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(waveScale, { toValue: 1, tension: 60, friction: 10, useNativeDriver: false }),
+        Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: false }),
+      ]).start();
+    }
+  }, [visible]);
 
   return (
-    <View style={[badge.wrap, { backgroundColor: bg, borderColor: color + "40" }]}>
-      <Ionicons name={icon} size={10} color={color} />
-      <Text style={[badge.text, { color }]}>{label}</Text>
-    </View>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onDone}>
+      <View style={cg.overlay}>
+        <Animated.View style={[cg.sheet, { opacity, paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 16) }]}>
+          <View style={cg.handle} />
+          <Animated.View style={[cg.waveCircle, { transform: [{ scale: waveScale }] }]} />
+          <Text style={cg.emoji}>🏠</Text>
+          <Text style={cg.title}>Your place found a home!</Text>
+          <Text style={cg.sub}>Congrats on the successful sublease!</Text>
+          <TouchableOpacity style={cg.btn} onPress={onDone}>
+            <Text style={cg.btnText}>Done</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
-const badge = StyleSheet.create({
-  wrap: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, borderWidth: 1,
+const cg = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  sheet: {
+    backgroundColor: Colors.cardBg, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 24, paddingTop: 16, alignItems: "center", gap: 10,
   },
-  text: { fontFamily: "Nunito_700Bold", fontSize: 10 },
+  handle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.borderSoft,
+    marginBottom: 12,
+  },
+  waveCircle: {
+    position: "absolute", top: 40, width: 120, height: 120, borderRadius: 60,
+    backgroundColor: Colors.ocean + "20",
+  },
+  emoji: { fontSize: 56, marginVertical: 8 },
+  title: { fontFamily: "Nunito_800ExtraBold", fontSize: 24, color: Colors.ocean, textAlign: "center" },
+  sub: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted, textAlign: "center" },
+  btn: {
+    backgroundColor: Colors.ocean, borderRadius: 14, paddingVertical: 14,
+    paddingHorizontal: 40, marginTop: 12,
+  },
+  btnText: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.white },
 });
 
-function SubleaseCard({ post }: { post: SubleasePost }) {
-  const { getTrustInfo } = useApp();
+function SubleaseCard({ post, onMarkLeased }: {
+  post: SubleasePost;
+  onMarkLeased: (post: SubleasePost) => void;
+}) {
+  const { getTrustInfo, currentUser } = useApp();
   const trust = getTrustInfo(post.userEmail);
   const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
   const cat = post.category || "semester_takeover";
   const catColor = CATEGORY_COLORS[cat] || Colors.ocean;
+  const isOwner = currentUser?.email === post.userEmail;
 
   return (
     <View style={styles.card}>
@@ -124,6 +156,12 @@ function SubleaseCard({ post }: { post: SubleasePost }) {
           <View style={styles.breakAvailTag}>
             <Ionicons name="home" size={10} color={Colors.grassGreen} />
             <Text style={styles.breakAvailText}>Break-Friendly</Text>
+          </View>
+        )}
+        {isOwner && (
+          <View style={styles.ownerTag}>
+            <Ionicons name="person" size={10} color={Colors.ocean} />
+            <Text style={styles.ownerTagText}>Your Post</Text>
           </View>
         )}
         <Text style={styles.cardTime}>
@@ -169,15 +207,33 @@ function SubleaseCard({ post }: { post: SubleasePost }) {
           <Text style={styles.posterName}>{post.userName}</Text>
           <Text style={styles.posterEmail}>{post.userEmail}</Text>
         </View>
-        {(trust.degree !== null || trust.sharedOrg) && (
-          <View style={styles.trustBadges}>
-            {trust.degree === 1 && <TrustBadge label="1st Degree" type="friend" />}
-            {trust.degree === 2 && <TrustBadge label="2nd Degree" type="mutual" />}
-            {trust.vouchedByFriend && <TrustBadge label="Vouched" type="vouched" />}
-            {trust.sharedOrg && !trust.degree && <TrustBadge label={trust.sharedOrg} type="org" />}
-          </View>
-        )}
+        <View style={{ alignItems: "flex-end", gap: 4 }}>
+          {trust.degree === 1 && (
+            <View style={[styles.trustChip, { backgroundColor: Colors.grassGreen + "20" }]}>
+              <Ionicons name="people" size={10} color={Colors.grassGreen} />
+              <Text style={[styles.trustChipText, { color: Colors.grassGreen }]}>1st Degree</Text>
+            </View>
+          )}
+          {trust.degree === 2 && trust.mutualFriends.length > 0 ? (
+            <FacePile mutuals={trust.mutualFriends} maxVisible={3} />
+          ) : trust.sharedOrg && !trust.degree ? (
+            <View style={[styles.trustChip, { backgroundColor: Colors.goldDark + "20" }]}>
+              <Ionicons name="school-outline" size={10} color={Colors.goldDark} />
+              <Text style={[styles.trustChipText, { color: Colors.goldDark }]}>{trust.sharedOrg}</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
+
+      {isOwner && (
+        <TouchableOpacity
+          style={styles.leasedBtn}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onMarkLeased(post); }}
+        >
+          <Ionicons name="checkmark-circle" size={16} color={Colors.white} />
+          <Text style={styles.leasedBtnText}>Mark as Leased</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -185,10 +241,13 @@ function SubleaseCard({ post }: { post: SubleasePost }) {
 export default function MarketplaceScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category?: string }>();
-  const { subleases } = useApp();
+  const { subleases, removeSublease, currentUser } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
+  const [showCongrats, setShowCongrats] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [leasedPost, setLeasedPost] = useState<SubleasePost | null>(null);
 
   useEffect(() => {
     if (params.category && Object.keys(CATEGORY_LABELS).includes(params.category)) {
@@ -201,6 +260,27 @@ export default function MarketplaceScreen() {
     : subleases.filter(s => (s.category || "semester_takeover") === activeFilter);
 
   const headerCatColor = activeFilter !== "all" ? CATEGORY_COLORS[activeFilter] : Colors.ocean;
+
+  const handleMarkLeased = async (post: SubleasePost) => {
+    setLeasedPost(post);
+    await removeSublease(post.id);
+    try {
+      const delUrl = new URL(`/api/listings/${post.id}`, getApiUrl()).toString();
+      await fetch(delUrl, { method: "DELETE" });
+      const incUrl = new URL("/api/stats/increment", getApiUrl()).toString();
+      await fetch(incUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "successful_subleases" }),
+      });
+    } catch {}
+    setShowCongrats(true);
+  };
+
+  const handleCongratsClose = () => {
+    setShowCongrats(false);
+    setTimeout(() => setShowFeedback(true), 400);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
@@ -278,9 +358,19 @@ export default function MarketplaceScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          filtered.map(post => <SubleaseCard key={post.id} post={post} />)
+          filtered.map(post => (
+            <SubleaseCard key={post.id} post={post} onMarkLeased={handleMarkLeased} />
+          ))
         )}
       </ScrollView>
+
+      <CongratsSheet visible={showCongrats} onDone={handleCongratsClose} />
+
+      <MicroFeedback
+        visible={showFeedback}
+        userEmail={currentUser?.email ?? ""}
+        onClose={() => setShowFeedback(false)}
+      />
     </View>
   );
 }
@@ -319,7 +409,7 @@ const styles = StyleSheet.create({
     shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 7 },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
   catTag: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, borderWidth: 1,
@@ -331,6 +421,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.grassGreen + "20",
   },
   breakAvailText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.grassGreen },
+  ownerTag: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+    backgroundColor: Colors.ocean + "15",
+  },
+  ownerTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.ocean },
   cardTime: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight, marginLeft: "auto" },
   buildingName: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal },
   address: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, marginTop: -4 },
@@ -354,7 +450,16 @@ const styles = StyleSheet.create({
   posterInfo: { flex: 1 },
   posterName: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.charcoal },
   posterEmail: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
-  trustBadges: { flexDirection: "column", gap: 4, alignItems: "flex-end" },
+  trustChip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8,
+  },
+  trustChipText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
+  leasedBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.ponyo, borderRadius: 12, paddingVertical: 12, marginTop: 2,
+  },
+  leasedBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
   emptyState: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 20, color: Colors.charcoal },
   emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center", paddingHorizontal: 20 },

@@ -1,8 +1,204 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import { query } from "./db";
+import { sendOtp } from "./email";
+
+async function initDb() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id VARCHAR PRIMARY KEY,
+      name VARCHAR NOT NULL,
+      email VARCHAR UNIQUE NOT NULL,
+      major VARCHAR DEFAULT '',
+      bio VARCHAR DEFAULT '',
+      budget INT DEFAULT 800,
+      gender VARCHAR DEFAULT 'nonbinary',
+      gender_pref VARCHAR DEFAULT 'mixed',
+      cleanliness INT DEFAULT 3,
+      noise INT DEFAULT 3,
+      lease_type VARCHAR DEFAULT 'full_year',
+      zone VARCHAR DEFAULT 'campustown',
+      landlord VARCHAR DEFAULT 'other',
+      stays_thanksgiving BOOLEAN DEFAULT FALSE,
+      stays_spring_break BOOLEAN DEFAULT FALSE,
+      avatar_color VARCHAR DEFAULT '#005F73',
+      college VARCHAR DEFAULT '',
+      organizations TEXT[] DEFAULT '{}'
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS friendships (
+      id SERIAL PRIMARY KEY,
+      user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+      friend_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, friend_id)
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS vouches (
+      id SERIAL PRIMARY KEY,
+      voucher_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+      vouchee_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+      message TEXT DEFAULT '',
+      UNIQUE(voucher_id, vouchee_id)
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS listings (
+      id VARCHAR PRIMARY KEY,
+      user_id VARCHAR NOT NULL,
+      building_name VARCHAR NOT NULL,
+      address VARCHAR DEFAULT '',
+      category VARCHAR DEFAULT 'semester_takeover',
+      lease_type VARCHAR DEFAULT 'full_year',
+      price_per_month INT DEFAULT 0,
+      landlord VARCHAR DEFAULT 'other',
+      zone VARCHAR DEFAULT 'campustown',
+      available_during_breaks BOOLEAN DEFAULT FALSE,
+      break_types TEXT[] DEFAULT '{}',
+      description TEXT DEFAULT '',
+      event_name VARCHAR DEFAULT '',
+      start_date VARCHAR DEFAULT '',
+      end_date VARCHAR DEFAULT '',
+      leased BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS break_posts (
+      id VARCHAR PRIMARY KEY,
+      user_id VARCHAR NOT NULL,
+      break_type VARCHAR NOT NULL,
+      role VARCHAR NOT NULL,
+      price_per_week INT DEFAULT 0,
+      zone VARCHAR DEFAULT 'campustown',
+      description TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    ALTER TABLE listings ADD COLUMN IF NOT EXISTS leased BOOLEAN DEFAULT FALSE
+  `).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS otp_codes (
+      email VARCHAR PRIMARY KEY,
+      code VARCHAR(6) NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      attempts INT DEFAULT 0
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS feedback (
+      id SERIAL PRIMARY KEY,
+      user_email VARCHAR NOT NULL,
+      rating VARCHAR NOT NULL,
+      issue_category VARCHAR DEFAULT '',
+      issue_detail TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS stats (
+      key VARCHAR PRIMARY KEY,
+      value INT DEFAULT 0
+    )
+  `);
+
+  await query(`
+    INSERT INTO stats (key, value) VALUES ('successful_subleases', 0)
+    ON CONFLICT (key) DO NOTHING
+  `);
+  await query(`
+    INSERT INTO stats (key, value) VALUES ('total_matches', 0)
+    ON CONFLICT (key) DO NOTHING
+  `);
+
+  console.log("Database initialized");
+}
+
+function randomCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  await initDb();
+
+  // ─── AUTH / OTP ───────────────────────────────────────────────────────────────
+
+  app.post("/api/auth/send-otp", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email || !email.endsWith("@illinois.edu")) {
+        return res.status(400).json({ error: "Must be a valid UIUC email." });
+      }
+
+      const code = randomCode();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+      await query(
+        `INSERT INTO otp_codes (email, code, expires_at, attempts)
+         VALUES ($1, $2, $3, 0)
+         ON CONFLICT (email) DO UPDATE SET
+           code = EXCLUDED.code,
+           expires_at = EXCLUDED.expires_at,
+           attempts = 0`,
+        [email, code, expiresAt]
+      );
+
+      await sendOtp(email, code);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("POST /api/auth/send-otp", err);
+      return res.status(500).json({ error: "Failed to send verification code" });
+    }
+  });
+
+  app.post("/api/auth/verify-otp", async (req: Request, res: Response) => {
+    try {
+      const { email, code } = req.body;
+      if (!email || !code) {
+        return res.status(400).json({ error: "email and code are required" });
+      }
+
+      const [row] = await query<{
+        code: string; expires_at: string; attempts: number
+      }>("SELECT * FROM otp_codes WHERE email = $1", [email]);
+
+      if (!row) {
+        return res.status(404).json({ error: "No verification code found. Please request a new one." });
+      }
+
+      if (row.attempts >= 5) {
+        await query("DELETE FROM otp_codes WHERE email = $1", [email]);
+        return res.status(429).json({ error: "Too many attempts. Please request a new code." });
+      }
+
+      if (new Date(row.expires_at) < new Date()) {
+        await query("DELETE FROM otp_codes WHERE email = $1", [email]);
+        return res.status(410).json({ error: "Code expired. Please request a new one." });
+      }
+
+      if (row.code !== code.trim()) {
+        await query("UPDATE otp_codes SET attempts = attempts + 1 WHERE email = $1", [email]);
+        const remaining = 5 - (row.attempts + 1);
+        return res.status(401).json({ error: `Incorrect code. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.` });
+      }
+
+      await query("DELETE FROM otp_codes WHERE email = $1", [email]);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("POST /api/auth/verify-otp", err);
+      return res.status(500).json({ error: "Failed to verify code" });
+    }
+  });
 
   // ─── USERS ───────────────────────────────────────────────────────────────────
 
@@ -100,13 +296,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!friend) return res.status(404).json({ error: "That @illinois.edu email is not registered on PopMatch yet" });
 
       await query(
-        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
+        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
         [user.id, friend.id]
       );
       await query(
-        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
+        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
         [friend.id, user.id]
       );
 
@@ -202,8 +396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isDirect.length > 0) {
         const vouchedBy = await query<{ name: string; email: string }>(
           `SELECT u.name, u.email FROM vouches v
-           JOIN users u ON v.voucher_id = u.id
-           WHERE v.vouchee_id = $1`,
+           JOIN users u ON v.voucher_id = u.id WHERE v.vouchee_id = $1`,
           [target.id]
         );
         const sharedOrgs = (viewer.organizations || []).filter(
@@ -225,9 +418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             `SELECT u.name, u.email FROM vouches v
              JOIN users u ON v.voucher_id = u.id
              WHERE v.vouchee_id = $1
-               AND v.voucher_id IN (
-                 SELECT friend_id FROM friendships WHERE user_id = $2
-               )`,
+               AND v.voucher_id IN (SELECT friend_id FROM friendships WHERE user_id = $2)`,
             [target.id, viewer.id]
           )
         : [];
@@ -252,10 +443,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sql = category
         ? `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
            FROM listings l LEFT JOIN users u ON l.user_id = u.id
-           WHERE l.category = $1 ORDER BY l.created_at DESC`
+           WHERE l.category = $1 AND l.leased = FALSE ORDER BY l.created_at DESC`
         : `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
            FROM listings l LEFT JOIN users u ON l.user_id = u.id
-           ORDER BY l.created_at DESC`;
+           WHERE l.leased = FALSE ORDER BY l.created_at DESC`;
       const params = category ? [category] : [];
       const rows = await query(sql, params);
       return res.json(rows);
@@ -292,6 +483,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("POST /api/listings", err);
       return res.status(500).json({ error: "Failed to save listing" });
+    }
+  });
+
+  app.delete("/api/listings/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      await query("UPDATE listings SET leased = TRUE WHERE id = $1", [id]);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("DELETE /api/listings/:id", err);
+      return res.status(500).json({ error: "Failed to mark listing as leased" });
+    }
+  });
+
+  // ─── STATS ───────────────────────────────────────────────────────────────────
+
+  app.post("/api/stats/increment", async (req: Request, res: Response) => {
+    try {
+      const { key } = req.body;
+      if (!key) return res.status(400).json({ error: "key is required" });
+      await query(
+        `INSERT INTO stats (key, value) VALUES ($1, 1)
+         ON CONFLICT (key) DO UPDATE SET value = stats.value + 1`,
+        [key]
+      );
+      const [row] = await query<{ value: number }>("SELECT value FROM stats WHERE key = $1", [key]);
+      return res.json({ key, value: row?.value ?? 1 });
+    } catch (err) {
+      console.error("POST /api/stats/increment", err);
+      return res.status(500).json({ error: "Failed to increment stat" });
+    }
+  });
+
+  // ─── FEEDBACK ────────────────────────────────────────────────────────────────
+
+  app.post("/api/feedback", async (req: Request, res: Response) => {
+    try {
+      const { userEmail, rating, issueCategory = "", issueDetail = "" } = req.body;
+      if (!userEmail || !rating) {
+        return res.status(400).json({ error: "userEmail and rating are required" });
+      }
+      await query(
+        `INSERT INTO feedback (user_email, rating, issue_category, issue_detail)
+         VALUES ($1, $2, $3, $4)`,
+        [userEmail, rating, issueCategory, issueDetail]
+      );
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("POST /api/feedback", err);
+      return res.status(500).json({ error: "Failed to save feedback" });
+    }
+  });
+
+  app.get("/api/feedback/summary", async (_req: Request, res: Response) => {
+    try {
+      const totals = await query<{ rating: string; count: string }>(
+        `SELECT rating, COUNT(*) as count FROM feedback GROUP BY rating ORDER BY count DESC`
+      );
+      const topIssues = await query<{ issue_category: string; count: string }>(
+        `SELECT issue_category, COUNT(*) as count
+         FROM feedback WHERE rating = 'rescue' AND issue_category != ''
+         GROUP BY issue_category ORDER BY count DESC LIMIT 5`
+      );
+      const recent = await query<{
+        user_email: string; rating: string; issue_category: string;
+        issue_detail: string; created_at: string
+      }>(
+        `SELECT user_email, rating, issue_category, issue_detail, created_at
+         FROM feedback ORDER BY created_at DESC LIMIT 10`
+      );
+      const totalCount = totals.reduce((acc, r) => acc + parseInt(r.count), 0);
+      return res.json({ totals, totalCount, topIssues, recent });
+    } catch (err) {
+      console.error("GET /api/feedback/summary", err);
+      return res.status(500).json({ error: "Failed to fetch feedback summary" });
+    }
+  });
+
+  // ─── ADMIN ───────────────────────────────────────────────────────────────────
+
+  app.get("/api/admin/stats", async (_req: Request, res: Response) => {
+    try {
+      const [userCount] = await query<{ count: string }>("SELECT COUNT(*) as count FROM users");
+      const [listingCount] = await query<{ count: string }>(
+        "SELECT COUNT(*) as count FROM listings WHERE leased = FALSE"
+      );
+      const [leasedCount] = await query<{ count: string }>(
+        "SELECT COUNT(*) as count FROM listings WHERE leased = TRUE"
+      );
+      const statsRows = await query<{ key: string; value: number }>("SELECT * FROM stats");
+      const feedbackSummary = await query<{ rating: string; count: string }>(
+        `SELECT rating, COUNT(*) as count FROM feedback GROUP BY rating`
+      );
+      const topIssues = await query<{ issue_category: string; count: string }>(
+        `SELECT issue_category, COUNT(*) as count
+         FROM feedback WHERE rating = 'rescue' AND issue_category != ''
+         GROUP BY issue_category ORDER BY count DESC LIMIT 5`
+      );
+      const recentFeedback = await query<{
+        user_email: string; rating: string; issue_category: string;
+        issue_detail: string; created_at: string
+      }>(
+        `SELECT user_email, rating, issue_category, issue_detail, created_at
+         FROM feedback ORDER BY created_at DESC LIMIT 10`
+      );
+
+      const stats = Object.fromEntries(statsRows.map(r => [r.key, r.value]));
+      const totalFeedback = feedbackSummary.reduce((acc, r) => acc + parseInt(r.count), 0);
+
+      return res.json({
+        users: parseInt(userCount?.count ?? "0"),
+        activeListings: parseInt(listingCount?.count ?? "0"),
+        leasedListings: parseInt(leasedCount?.count ?? "0"),
+        stats,
+        feedback: { totals: feedbackSummary, totalCount: totalFeedback, topIssues, recent: recentFeedback },
+      });
+    } catch (err) {
+      console.error("GET /api/admin/stats", err);
+      return res.status(500).json({ error: "Failed to fetch admin stats" });
     }
   });
 

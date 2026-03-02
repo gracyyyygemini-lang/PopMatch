@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform
 } from "react-native";
@@ -59,6 +59,21 @@ export default function ProfileScreen() {
   const { currentUser, matches, likedUserIds, subleases, friends, setCurrentUser, setIsOnboarded } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const mySubleases = subleases.filter(s => s.userId === currentUser?.id);
+  const [versionTaps, setVersionTaps] = useState(0);
+  const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleVersionTap = () => {
+    const next = versionTaps + 1;
+    setVersionTaps(next);
+    if (versionTapTimer.current) clearTimeout(versionTapTimer.current);
+    if (next >= 5) {
+      setVersionTaps(0);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.push("/admin");
+    } else {
+      versionTapTimer.current = setTimeout(() => setVersionTaps(0), 3000);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -265,6 +280,12 @@ export default function ProfileScreen() {
           <Ionicons name="trash-outline" size={15} color={Colors.errorRed} />
           <Text style={styles.resetFullBtnText}>Reset All Data</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleVersionTap} activeOpacity={1} style={styles.versionLabel}>
+          <Text style={styles.versionText}>
+            PopMatch v1.0.0{versionTaps > 0 ? ` (${5 - versionTaps} more)` : ""}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -341,4 +362,6 @@ const styles = StyleSheet.create({
   resetFullBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.errorRed },
   noProfile: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   noProfileText: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted },
+  versionLabel: { alignItems: "center", paddingVertical: 12 },
+  versionText: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight },
 });
