@@ -23,6 +23,10 @@ function RootLayoutNav() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="matchmaker" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="marketplace" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="post-sublease" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="breaks" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

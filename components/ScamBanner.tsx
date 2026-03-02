@@ -7,7 +7,6 @@ import { useApp } from "@/context/AppContext";
 
 export function ScamBanner() {
   const { scamBannerDismissed, dismissScamBanner } = useApp();
-
   if (scamBannerDismissed) return null;
 
   return (
@@ -16,9 +15,9 @@ export function ScamBanner() {
         <Ionicons name="shield-outline" size={18} color={Colors.alertOrange} />
       </View>
       <View style={styles.content}>
-        <Text style={styles.title}>Scam Alert</Text>
+        <Text style={styles.title}>Scam Alert — Stay Safe</Text>
         <Text style={styles.body}>
-          Never wire money for movers or extra rent. Fake check scams are real. Meet landlords in person.
+          Never wire money for movers or extra rent. Fake check scams target UIUC students. Always meet landlords in person and verify listings.
         </Text>
       </View>
       <TouchableOpacity onPress={() => { Haptics.selectionAsync(); dismissScamBanner(); }} style={styles.closeBtn}>
@@ -31,9 +30,9 @@ export function ScamBanner() {
 const styles = StyleSheet.create({
   banner: {
     flexDirection: "row", alignItems: "flex-start", gap: 10,
-    backgroundColor: "#FFF4E6",
+    backgroundColor: "#FFF4E0",
     borderLeftWidth: 3, borderLeftColor: Colors.alertOrange,
-    marginHorizontal: 16, marginBottom: 8, borderRadius: 10, padding: 12,
+    borderRadius: 12, padding: 12,
   },
   iconWrap: { paddingTop: 1 },
   content: { flex: 1 },

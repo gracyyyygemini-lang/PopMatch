@@ -2,7 +2,7 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import Colors from "@/constants/colors";
@@ -11,8 +11,8 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
-        <Label>Discover</Label>
+        <Icon sf={{ default: "house", selected: "house.fill" }} />
+        <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="matches">
         <Icon sf={{ default: "heart", selected: "heart.fill" }} />
@@ -38,11 +38,11 @@ function ClassicTabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.skyBlueDark,
+        tabBarActiveTintColor: Colors.ocean,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : Colors.parchment,
+          backgroundColor: isIOS ? "transparent" : Colors.sand,
           borderTopWidth: isWeb ? 1 : 0,
           borderTopColor: Colors.borderSoft,
           elevation: 0,
@@ -52,7 +52,7 @@ function ClassicTabLayout() {
           isIOS ? (
             <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
           ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.parchment }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.sand }]} />
           ) : null,
         tabBarLabelStyle: {
           fontFamily: "Nunito_600SemiBold",
@@ -63,8 +63,8 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Discover",
-          tabBarIcon: ({ color }) => <Ionicons name="sparkles-outline" size={22} color={color} />,
+          title: "Home",
+          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -77,7 +77,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="map"
         options={{
-          title: "Map",
+          title: "PopMap",
           tabBarIcon: ({ color }) => <Ionicons name="map-outline" size={22} color={color} />,
         }}
       />
