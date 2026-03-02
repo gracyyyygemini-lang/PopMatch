@@ -135,7 +135,7 @@ function AddFriendModal({ onClose, onAdd }: { onClose: () => void; onAdd: (email
     <Modal animationType="fade" transparent visible onRequestClose={onClose}>
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity
-          style={[styles.modalContainer, { height: "auto", padding: 24, borderRadius: 22 }]}
+          style={[styles.modalContainer, { height: undefined, padding: 24, borderRadius: 22 }]}
           activeOpacity={1}
         >
           <Text style={styles.modalTitle}>Add a friend</Text>
