@@ -64,7 +64,7 @@ const FEATURES = [
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, friends, subleases, breakPosts } = useApp();
+  const { currentUser, friends, subleases, breakPosts, tr } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const firstName = currentUser?.name.split(" ")[0] ?? "there";
@@ -73,8 +73,8 @@ export default function HomeScreen() {
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
         <View>
-          <Text style={styles.greeting}>Hey, {firstName}</Text>
-          <Text style={styles.tagline}>UIUC Housing — Find your match</Text>
+          <Text style={styles.greeting}>{tr("home.greeting", { name: firstName })}</Text>
+          <Text style={styles.tagline}>{tr("home.tagline")}</Text>
         </View>
         <View style={styles.logoMark}>
           <Ionicons name="home" size={22} color={Colors.ocean} />
@@ -90,7 +90,7 @@ export default function HomeScreen() {
       >
         <ScamBanner />
 
-        <Text style={styles.sectionLabel}>Browse by housing type</Text>
+        <Text style={styles.sectionLabel}>{tr("home.browseBy")}</Text>
 
         <View style={styles.grid}>
           {CATEGORIES.map((cat) => (
@@ -113,7 +113,7 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionLabel}>Other features</Text>
+        <Text style={styles.sectionLabel}>{tr("home.features")}</Text>
 
         {FEATURES.map((f) => (
           <TouchableOpacity
@@ -139,15 +139,15 @@ export default function HomeScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statNum}>{friends.length}</Text>
-            <Text style={styles.statLabel}>Circle</Text>
+            <Text style={styles.statLabel}>{tr("home.circle")}</Text>
           </View>
           <View style={[styles.statBox, styles.statBoxMid]}>
             <Text style={styles.statNum}>{subleases.length}</Text>
-            <Text style={styles.statLabel}>Listings</Text>
+            <Text style={styles.statLabel}>{tr("home.listings")}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statNum}>{breakPosts.length}</Text>
-            <Text style={styles.statLabel}>Break Posts</Text>
+            <Text style={styles.statLabel}>{tr("home.breakPosts")}</Text>
           </View>
         </View>
 
@@ -179,8 +179,8 @@ const styles = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
     paddingHorizontal: 20, paddingBottom: 16, backgroundColor: Colors.sand,
   },
-  greeting: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
-  tagline: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
+  greeting: { fontFamily: "Nunito_800ExtraBold", fontSize: 32, color: Colors.ocean },
+  tagline: { fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.textMuted },
   logoMark: {
     width: 44, height: 44, borderRadius: 14,
     backgroundColor: Colors.ocean + "18",
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 4, gap: 12 },
   sectionLabel: {
-    fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted,
+    fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.textMuted,
     textTransform: "uppercase", letterSpacing: 0.8, marginTop: 4,
   },
   grid: {
@@ -206,20 +206,20 @@ const styles = StyleSheet.create({
     width: 44, height: 44, borderRadius: 14,
     alignItems: "center", justifyContent: "center", marginBottom: 2,
   },
-  catTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  catDates: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.textMuted },
-  catDesc: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight, lineHeight: 16 },
+  catTitle: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.charcoal },
+  catDates: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  catDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textLight, lineHeight: 17 },
   featureCard: {
     flexDirection: "row", alignItems: "center", gap: 14,
     backgroundColor: Colors.cardBg, borderRadius: 18,
-    borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 14,
+    borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 16,
     shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05, shadowRadius: 6, elevation: 1,
   },
-  featureIcon: { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  featureIcon: { width: 50, height: 50, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   featureText: { flex: 1 },
-  featureTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal },
-  featureSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, lineHeight: 17, marginTop: 2 },
+  featureTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.charcoal },
+  featureSub: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted, lineHeight: 19, marginTop: 2 },
   statsRow: { flexDirection: "row", gap: 10 },
   statBox: {
     flex: 1, backgroundColor: Colors.cardBg, borderRadius: 14,
@@ -227,16 +227,16 @@ const styles = StyleSheet.create({
     padding: 14, alignItems: "center", gap: 2,
   },
   statBoxMid: { backgroundColor: Colors.ocean + "12", borderColor: Colors.ocean + "30" },
-  statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 24, color: Colors.ocean },
-  statLabel: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
+  statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: Colors.ocean },
+  statLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
   trustCard: {
     backgroundColor: Colors.ocean + "10",
     borderRadius: 16, borderWidth: 1.5, borderColor: Colors.ocean + "25",
     padding: 16, gap: 10,
   },
   trustHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  trustTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
+  trustTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.ocean },
   tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  tipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.ocean, marginTop: 6 },
-  tipText: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, flex: 1, lineHeight: 19 },
+  tipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.ocean, marginTop: 7 },
+  tipText: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.charcoal, flex: 1, lineHeight: 20 },
 });

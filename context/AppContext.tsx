@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LangCode, t as translate, TranslationKeys } from "@/lib/translations";
 
 export type LeaseType = "full_year" | "fall_sublease" | "spring_sublease" | "summer_sublease";
 export type GenderPref = "girls_only" | "boys_only" | "mixed";
@@ -163,6 +164,11 @@ interface AppContextValue {
   setCurrentUser: (user: UserProfile | null) => void;
   isOnboarded: boolean;
   setIsOnboarded: (v: boolean) => void;
+  isLoaded: boolean;
+  language: LangCode;
+  languageSelected: boolean;
+  setLanguage: (lang: LangCode) => Promise<void>;
+  tr: (key: string, vars?: Record<string, string>) => string;
   mockUsers: UserProfile[];
   matches: MatchRecord[];
   addMatch: (record: MatchRecord) => void;
@@ -270,6 +276,9 @@ function computeScore(a: UserProfile, b: UserProfile): number {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
   const [isOnboarded, setIsOnboardedState] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [language, setLanguageState] = useState<LangCode>("en");
+  const [languageSelected, setLanguageSelectedState] = useState(false);
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [scamBannerDismissed, setScamBannerDismissed] = useState(false);
   const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
@@ -283,6 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const stored = await AsyncStorage.getItem("@popmatch_user");
         const onboarded = await AsyncStorage.getItem("@popmatch_onboarded");
+        const storedLang = await AsyncStorage.getItem("@popmatch_language");
         const storedMatches = await AsyncStorage.getItem("@popmatch_matches");
         const storedLiked = await AsyncStorage.getItem("@popmatch_liked");
         const storedPassed = await AsyncStorage.getItem("@popmatch_passed");
@@ -293,6 +303,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (stored) setCurrentUserState(JSON.parse(stored));
         if (onboarded === "true") setIsOnboardedState(true);
+        if (storedLang) {
+          setLanguageState(storedLang as LangCode);
+          setLanguageSelectedState(true);
+        }
         if (storedMatches) setMatches(JSON.parse(storedMatches));
         if (storedLiked) setLikedUserIds(JSON.parse(storedLiked));
         if (storedPassed) setPassedUserIds(JSON.parse(storedPassed));
@@ -301,8 +315,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (storedBreaks) setBreakPosts(JSON.parse(storedBreaks));
         if (storedFriends) setFriends(JSON.parse(storedFriends));
       } catch {}
+      setIsLoaded(true);
     })();
   }, []);
+
+  const setLanguage = async (lang: LangCode) => {
+    setLanguageState(lang);
+    setLanguageSelectedState(true);
+    await AsyncStorage.setItem("@popmatch_language", lang);
+  };
+
+  const tr = (key: string, vars?: Record<string, string>) => translate(language, key, vars);
 
   const setCurrentUser = async (user: UserProfile | null) => {
     setCurrentUserState(user);
@@ -432,13 +455,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({
     currentUser, setCurrentUser, isOnboarded, setIsOnboarded,
+    isLoaded, language, languageSelected, setLanguage, tr,
     mockUsers: MOCK_USERS, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
     subleases, addSublease, breakPosts, addBreakPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
   }), [
-    currentUser, isOnboarded, matches, scamBannerDismissed,
-    likedUserIds, passedUserIds, subleases, breakPosts, friends
+    currentUser, isOnboarded, isLoaded, language, languageSelected,
+    matches, scamBannerDismissed, likedUserIds, passedUserIds, subleases, breakPosts, friends
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
