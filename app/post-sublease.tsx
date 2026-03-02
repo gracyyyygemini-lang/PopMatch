@@ -12,9 +12,9 @@ import { useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType } from "@/co
 
 const LEASE_OPTIONS: { key: LeaseType; label: string; desc: string }[] = [
   { key: "full_year", label: "Full Year", desc: "Aug – Jul (12 months)" },
-  { key: "fall_sublease", label: "Fall Sublease", desc: "Aug – Dec" },
-  { key: "spring_sublease", label: "Spring Sublease", desc: "Jan – May" },
-  { key: "summer_sublease", label: "Summer Sublease", desc: "May – Aug" },
+  { key: "fall_sublease", label: "Fall", desc: "Aug – Dec" },
+  { key: "spring_sublease", label: "Spring", desc: "Jan – May" },
+  { key: "summer_sublease", label: "Summer", desc: "May – Aug" },
 ];
 
 const LANDLORD_OPTIONS: { key: Landlord; label: string; color: string }[] = [
@@ -27,11 +27,11 @@ const LANDLORD_OPTIONS: { key: Landlord; label: string; color: string }[] = [
 ];
 
 const LANDLORD_WARNINGS: Record<Landlord, { level: "info" | "warn" | "danger"; message: string } | null> = {
-  jsm: { level: "info", message: "JSM charges a $50 sublease transfer fee and requires proof of Renter's Insurance from your replacement tenant." },
-  ugroup: { level: "warn", message: "UGroup charges $125 transfer fee + mandatory 72-hour Move-In Condition Report. Document ALL damage with photos within 72 hours!" },
-  bailey: { level: "warn", message: "Walk into the Bailey office TOGETHER with your replacement tenant — never separately. Landlord may try to cut you out." },
-  american: { level: "danger", message: "ALERT: American Campus (Latitude, 212, Tower) charges up to $600 in Relet fees. Get everything in writing first." },
-  smile: { level: "info", message: "Smile Properties: Verify sublease approval in writing before proceeding. Keep a copy of all agreements." },
+  jsm: { level: "info", message: "$50 sublease fee. Replacement tenant needs Renter's Insurance." },
+  ugroup: { level: "warn", message: "$125 transfer fee. Document ALL damage within 72 hours of move-in." },
+  bailey: { level: "warn", message: "Walk into office TOGETHER — never separately. Landlord may cut you out." },
+  american: { level: "danger", message: "Up to $600 Relet fee. Get everything in writing first." },
+  smile: { level: "info", message: "Confirm sublease approval in writing. Keep all signed copies." },
   other: null,
 };
 
@@ -40,7 +40,7 @@ const ZONE_OPTIONS: { key: Zone; label: string }[] = [
   { key: "north", label: "North Campus" },
   { key: "south", label: "South Campus" },
   { key: "urbana", label: "Urbana" },
-  { key: "downtown", label: "Downtown Champaign" },
+  { key: "downtown", label: "Downtown" },
 ];
 
 const BREAK_OPTIONS: { key: BreakType; label: string }[] = [
@@ -49,9 +49,7 @@ const BREAK_OPTIONS: { key: BreakType; label: string }[] = [
   { key: "winter", label: "Winter Break" },
 ];
 
-const AVATAR_COLORS = [
-  "#1A7AAF", "#CC5500", "#5A8A5A", "#9B59B6", "#E07B00", "#E0BC00"
-];
+const AVATAR_COLORS = ["#1A7AAF", "#CC5500", "#5A8A5A", "#9B59B6", "#E07B00", "#E0BC00"];
 
 export default function PostSubleaseScreen() {
   const insets = useSafeAreaInsets();
@@ -61,6 +59,8 @@ export default function PostSubleaseScreen() {
   const [address, setAddress] = useState("");
   const [leaseType, setLeaseType] = useState<LeaseType>("fall_sublease");
   const [price, setPrice] = useState("");
+  const [moveInDate, setMoveInDate] = useState("");
+  const [moveOutDate, setMoveOutDate] = useState("");
   const [landlord, setLandlord] = useState<Landlord>("other");
   const [zone, setZone] = useState<Zone>("campustown");
   const [availableDuringBreaks, setAvailableDuringBreaks] = useState(false);
@@ -79,6 +79,8 @@ export default function PostSubleaseScreen() {
     const e: Record<string, string> = {};
     if (!buildingName.trim()) e.buildingName = "Building name is required";
     if (!price.trim() || isNaN(Number(price)) || Number(price) <= 0) e.price = "Enter a valid price";
+    if (!moveInDate.trim()) e.moveInDate = "Move-in date is required";
+    if (!moveOutDate.trim()) e.moveOutDate = "Move-out date is required";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -103,6 +105,8 @@ export default function PostSubleaseScreen() {
       description: description.trim(),
       avatarColor: currentUser?.avatarColor || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
       timestamp: Date.now(),
+      moveInDate: moveInDate.trim(),
+      moveOutDate: moveOutDate.trim(),
     };
 
     await addSublease(post);
@@ -118,7 +122,7 @@ export default function PostSubleaseScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="close" size={20} color={Colors.ocean} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Post My Sublease</Text>
+        <Text style={styles.headerTitle}>Post a Sublease</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -127,37 +131,36 @@ export default function PostSubleaseScreen() {
       }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Building Name *</Text>
+          <Text style={styles.label}>Building *</Text>
           <TextInput style={[styles.input, errors.buildingName && styles.inputError]}
             value={buildingName} onChangeText={v => { setBuildingName(v); setErrors(e => ({ ...e, buildingName: "" })); }}
-            placeholder="e.g. Hub Champaign, 707, Fairview"
+            placeholder="e.g. Hub, 707, Fairview"
             placeholderTextColor={Colors.textLight} />
           {errors.buildingName ? <Text style={styles.errorText}>{errors.buildingName}</Text> : null}
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Street Address</Text>
+          <Text style={styles.label}>Street address</Text>
           <TextInput style={styles.input} value={address} onChangeText={setAddress}
-            placeholder="e.g. 210 E Green St, Champaign"
+            placeholder="e.g. 210 E Green St"
             placeholderTextColor={Colors.textLight} />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Lease Type *</Text>
-          {LEASE_OPTIONS.map(opt => (
-            <TouchableOpacity key={opt.key} style={[styles.optionCard, leaseType === opt.key && styles.optionCardActive]}
-              onPress={() => { setLeaseType(opt.key); Haptics.selectionAsync(); }}>
-              <View style={styles.optionLeft}>
-                <Text style={[styles.optionLabel, leaseType === opt.key && styles.optionLabelActive]}>{opt.label}</Text>
-                <Text style={styles.optionDesc}>{opt.desc}</Text>
-              </View>
-              {leaseType === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
-            </TouchableOpacity>
-          ))}
+          <Text style={styles.label}>Lease type *</Text>
+          <View style={styles.chipRow}>
+            {LEASE_OPTIONS.map(opt => (
+              <TouchableOpacity key={opt.key} style={[styles.chip, leaseType === opt.key && styles.chipActive]}
+                onPress={() => { setLeaseType(opt.key); Haptics.selectionAsync(); }}>
+                <Text style={[styles.chipText, leaseType === opt.key && styles.chipTextActive]}>{opt.label}</Text>
+                <Text style={[styles.chipDesc, leaseType === opt.key && styles.chipDescActive]}>{opt.desc}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Monthly Price ($/mo) *</Text>
+          <Text style={styles.label}>Monthly rent *</Text>
           <View style={styles.priceRow}>
             <Text style={styles.priceDollar}>$</Text>
             <TextInput style={[styles.priceInput, errors.price && styles.inputError]}
@@ -167,6 +170,25 @@ export default function PostSubleaseScreen() {
             <Text style={styles.priceMonth}>/mo</Text>
           </View>
           {errors.price ? <Text style={styles.errorText}>{errors.price}</Text> : null}
+        </View>
+
+        <View style={styles.dateRow}>
+          <View style={[styles.field, { flex: 1 }]}>
+            <Text style={styles.label}>Move-in date *</Text>
+            <TextInput style={[styles.input, errors.moveInDate && styles.inputError]}
+              value={moveInDate} onChangeText={v => { setMoveInDate(v); setErrors(e => ({ ...e, moveInDate: "" })); }}
+              placeholder="e.g. Aug 20, 2025"
+              placeholderTextColor={Colors.textLight} />
+            {errors.moveInDate ? <Text style={styles.errorText}>{errors.moveInDate}</Text> : null}
+          </View>
+          <View style={[styles.field, { flex: 1 }]}>
+            <Text style={styles.label}>Move-out date *</Text>
+            <TextInput style={[styles.input, errors.moveOutDate && styles.inputError]}
+              value={moveOutDate} onChangeText={v => { setMoveOutDate(v); setErrors(e => ({ ...e, moveOutDate: "" })); }}
+              placeholder="e.g. Dec 15, 2025"
+              placeholderTextColor={Colors.textLight} />
+            {errors.moveOutDate ? <Text style={styles.errorText}>{errors.moveOutDate}</Text> : null}
+          </View>
         </View>
 
         <View style={styles.field}>
@@ -186,7 +208,7 @@ export default function PostSubleaseScreen() {
             }]}>
               <Ionicons
                 name={warning.level === "danger" ? "alert-circle" : warning.level === "warn" ? "warning-outline" : "information-circle-outline"}
-                size={16}
+                size={15}
                 color={warning.level === "danger" ? Colors.alertRed : warning.level === "warn" ? Colors.alertOrange : Colors.ocean}
               />
               <Text style={styles.warningText}>{warning.message}</Text>
@@ -195,7 +217,7 @@ export default function PostSubleaseScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Zone / Area *</Text>
+          <Text style={styles.label}>Zone *</Text>
           <View style={styles.chipRow}>
             {ZONE_OPTIONS.map(opt => (
               <TouchableOpacity key={opt.key} style={[styles.chip, zone === opt.key && styles.chipActive]}
@@ -209,10 +231,7 @@ export default function PostSubleaseScreen() {
         <View style={styles.field}>
           <TouchableOpacity style={styles.toggleRow}
             onPress={() => { setAvailableDuringBreaks(!availableDuringBreaks); Haptics.selectionAsync(); }}>
-            <View>
-              <Text style={styles.toggleTitle}>Available During Breaks?</Text>
-              <Text style={styles.toggleDesc}>Unit can be used during university breaks</Text>
-            </View>
+            <Text style={styles.toggleTitle}>Available during breaks?</Text>
             <View style={[styles.toggle, availableDuringBreaks && styles.toggleOn]}>
               <Text style={[styles.toggleText, availableDuringBreaks && styles.toggleTextOn]}>
                 {availableDuringBreaks ? "Yes" : "No"}
@@ -220,19 +239,16 @@ export default function PostSubleaseScreen() {
             </View>
           </TouchableOpacity>
           {availableDuringBreaks && (
-            <View style={styles.breakOptions}>
-              <Text style={styles.breakOptionsLabel}>Which breaks?</Text>
-              <View style={styles.chipRow}>
-                {BREAK_OPTIONS.map(b => (
-                  <TouchableOpacity key={b.key}
-                    style={[styles.chip, selectedBreaks.includes(b.key) && styles.chipActive]}
-                    onPress={() => toggleBreak(b.key)}>
-                    <Text style={[styles.chipText, selectedBreaks.includes(b.key) && styles.chipTextActive]}>
-                      {b.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+            <View style={styles.chipRow}>
+              {BREAK_OPTIONS.map(b => (
+                <TouchableOpacity key={b.key}
+                  style={[styles.chip, selectedBreaks.includes(b.key) && styles.chipActive]}
+                  onPress={() => toggleBreak(b.key)}>
+                  <Text style={[styles.chipText, selectedBreaks.includes(b.key) && styles.chipTextActive]}>
+                    {b.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </View>
@@ -240,7 +256,7 @@ export default function PostSubleaseScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Description</Text>
           <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription}
-            placeholder="Describe the unit, amenities, furniture situation..."
+            placeholder="Unit details, furniture, amenities..."
             placeholderTextColor={Colors.textLight} multiline numberOfLines={3} textAlignVertical="top" />
         </View>
       </ScrollView>
@@ -278,6 +294,7 @@ const styles = StyleSheet.create({
   inputError: { borderColor: Colors.errorRed },
   textArea: { height: 90, paddingTop: 12 },
   errorText: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.errorRed },
+  dateRow: { flexDirection: "row", gap: 10 },
   priceRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   priceDollar: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.ocean },
   priceInput: {
@@ -286,37 +303,37 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.ocean,
   },
   priceMonth: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
+    alignItems: "center",
+  },
+  chipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
+  chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  chipTextActive: { color: Colors.white },
+  chipDesc: { fontFamily: "Nunito_400Regular", fontSize: 10, color: Colors.textLight, marginTop: 1 },
+  chipDescActive: { color: Colors.white + "CC" },
   optionCard: {
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
     borderColor: Colors.borderSoft, padding: 12,
   },
   optionCardActive: { borderColor: Colors.ocean, backgroundColor: Colors.ocean + "10" },
-  optionLeft: { flex: 1 },
-  optionLabel: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
+  optionLabel: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal, flex: 1 },
   optionLabelActive: { color: Colors.ocean },
-  optionDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
   landlordDot: { width: 12, height: 12, borderRadius: 6 },
   warningBox: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
     borderLeftWidth: 3, borderRadius: 10, padding: 12, marginTop: 4,
   },
   warningText: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.charcoal, flex: 1, lineHeight: 18 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
-  },
-  chipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
-  chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
-  chipTextActive: { color: Colors.white },
   toggleRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
     borderColor: Colors.borderSoft, padding: 14,
   },
   toggleTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  toggleDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
   toggle: {
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16,
     backgroundColor: Colors.sandDark, borderWidth: 1.5, borderColor: Colors.borderSoft,
@@ -324,8 +341,6 @@ const styles = StyleSheet.create({
   toggleOn: { backgroundColor: Colors.grassGreen, borderColor: Colors.grassGreen },
   toggleText: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted },
   toggleTextOn: { color: Colors.white },
-  breakOptions: { gap: 8 },
-  breakOptionsLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
   footer: {
     paddingHorizontal: 16, paddingTop: 12,
     backgroundColor: Colors.sand, borderTopWidth: 1, borderTopColor: Colors.borderSoft,

@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, TextInput
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,13 +9,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
-import { LANGUAGES } from "@/lib/translations";
+import { getApiUrl } from "@/lib/query-client";
 
 const LEASE_LABELS: Record<string, string> = {
   full_year: "Full Year (Aug – Jul)",
-  fall_sublease: "Fall Sublease (Aug – Dec)",
-  spring_sublease: "Spring Sublease (Jan – May)",
-  summer_sublease: "Summer Sublease (May – Aug)",
+  fall_sublease: "Fall (Aug – Dec)",
+  spring_sublease: "Spring (Jan – May)",
+  summer_sublease: "Summer (May – Aug)",
 };
 
 const GENDER_LABELS: Record<string, string> = {
@@ -55,63 +55,118 @@ function InfoRow({ icon, label, value, color }: { icon: keyof typeof Ionicons.gl
   );
 }
 
+function FeedbackSection({ userEmail }: { userEmail: string }) {
+  const [rating, setRating] = useState(0);
+  const [message, setMessage] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (rating === 0) return;
+    setSubmitting(true);
+    try {
+      await fetch(new URL("/api/feedback", getApiUrl()).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userEmail, rating, message: message.trim() }),
+      });
+    } catch {}
+    setSubmitted(true);
+    setSubmitting(false);
+    setTimeout(() => {
+      setSubmitted(false);
+      setRating(0);
+      setMessage("");
+    }, 3000);
+  };
+
+  if (submitted) {
+    return (
+      <View style={styles.feedbackCard}>
+        <Ionicons name="checkmark-circle" size={28} color={Colors.grassGreen} />
+        <Text style={styles.feedbackThanks}>Thanks! We read every message.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.feedbackCard}>
+      <View style={styles.feedbackHeader}>
+        <Ionicons name="chatbubble-outline" size={16} color={Colors.ocean} />
+        <Text style={styles.feedbackTitle}>Send Feedback</Text>
+      </View>
+      <View style={styles.starRow}>
+        {[1, 2, 3, 4, 5].map(n => (
+          <TouchableOpacity key={n} onPress={() => { setRating(n); Haptics.selectionAsync(); }}>
+            <Ionicons
+              name={n <= rating ? "star" : "star-outline"}
+              size={30}
+              color={n <= rating ? Colors.goldDark : Colors.textLight}
+            />
+          </TouchableOpacity>
+        ))}
+      </View>
+      <TextInput
+        style={styles.feedbackInput}
+        placeholder="Tell us what you think... (optional)"
+        placeholderTextColor={Colors.textLight}
+        value={message}
+        onChangeText={t => setMessage(t.slice(0, 300))}
+        multiline
+        numberOfLines={3}
+        textAlignVertical="top"
+      />
+      <TouchableOpacity
+        style={[styles.feedbackBtn, rating === 0 && styles.feedbackBtnDisabled]}
+        onPress={handleSubmit}
+        disabled={rating === 0 || submitting}
+      >
+        <Text style={styles.feedbackBtnText}>Submit</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, matches, likedUserIds, subleases, friends, setCurrentUser, setIsOnboarded, tr, language } = useApp();
+  const { currentUser, subleases, friends, setCurrentUser, setIsOnboarded } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const mySubleases = subleases.filter(s => s.userId === currentUser?.id);
 
-  const currentLang = LANGUAGES.find(l => l.code === language);
-
-  const handleChangeLang = () => {
-    router.push("/language-select" as any);
-  };
-
   const handleSignOut = () => {
-    Alert.alert(
-      tr("profile.signOut"),
-      tr("profile.signOutConfirm"),
-      [
-        { text: tr("common.cancel"), style: "cancel" },
-        {
-          text: tr("profile.signOut"),
-          style: "destructive",
-          onPress: async () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            await AsyncStorage.multiRemove(["@popmatch_user", "@popmatch_onboarded"]);
-            await setCurrentUser(null);
-            await setIsOnboarded(false);
-            router.replace("/onboarding");
-          }
+    Alert.alert("Sign Out", "Sign out of your account?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out", style: "destructive",
+        onPress: async () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          await AsyncStorage.multiRemove(["@popmatch_user", "@popmatch_onboarded"]);
+          await setCurrentUser(null);
+          await setIsOnboarded(false);
+          router.replace("/onboarding");
         }
-      ]
-    );
+      }
+    ]);
   };
 
   const handleReset = () => {
-    Alert.alert(
-      tr("profile.resetAll"),
-      tr("profile.resetConfirm"),
-      [
-        { text: tr("common.cancel"), style: "cancel" },
-        {
-          text: "Reset Everything",
-          style: "destructive",
-          onPress: async () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            await AsyncStorage.multiRemove([
-              "@popmatch_user", "@popmatch_onboarded", "@popmatch_matches",
-              "@popmatch_liked", "@popmatch_passed", "@popmatch_scam",
-              "@popmatch_subleases", "@popmatch_breaks", "@popmatch_friends",
-              "@popmatch_language"
-            ]);
-            await setCurrentUser(null);
-            await setIsOnboarded(false);
-            router.replace("/language-select");
-          }
+    Alert.alert("Reset Everything", "This clears all your data. Cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Reset Everything", style: "destructive",
+        onPress: async () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          await AsyncStorage.multiRemove([
+            "@popmatch_user", "@popmatch_onboarded", "@popmatch_matches",
+            "@popmatch_liked", "@popmatch_passed", "@popmatch_scam",
+            "@popmatch_subleases", "@popmatch_breaks", "@popmatch_friends",
+          ]);
+          await setCurrentUser(null);
+          await setIsOnboarded(false);
+          router.replace("/onboarding");
         }
-      ]
-    );
+      }
+    ]);
   };
 
   if (!currentUser) {
@@ -160,7 +215,7 @@ export default function ProfileScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statNum}>{friends.length}</Text>
-              <Text style={styles.statLabel}>Circle</Text>
+              <Text style={styles.statLabel}>Friends</Text>
             </View>
             <View style={[styles.statBox, styles.statBoxMid]}>
               <Text style={[styles.statNum, { color: Colors.ocean }]}>${currentUser.budget}</Text>
@@ -174,15 +229,15 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Housing Details</Text>
+          <Text style={styles.sectionTitle}>Housing</Text>
           <View style={styles.detailCard}>
-            <InfoRow icon="calendar-outline" label="Lease Type" value={LEASE_LABELS[currentUser.leaseType]} color={Colors.ocean} />
+            <InfoRow icon="calendar-outline" label="Lease" value={LEASE_LABELS[currentUser.leaseType]} color={Colors.ocean} />
             <View style={styles.divider} />
-            <InfoRow icon="location-outline" label="Preferred Zone" value={ZONE_LABELS[currentUser.zone]} color={Colors.grassGreen} />
+            <InfoRow icon="location-outline" label="Zone" value={ZONE_LABELS[currentUser.zone]} color={Colors.grassGreen} />
             <View style={styles.divider} />
             <InfoRow icon="business-outline" label="Landlord" value={LANDLORD_LABELS[currentUser.landlord]} color={Colors.orange} />
             <View style={styles.divider} />
-            <InfoRow icon="people-outline" label="Roommate Pref" value={GENDER_LABELS[currentUser.genderPref]} color={Colors.goldDark} />
+            <InfoRow icon="people-outline" label="Roommate" value={GENDER_LABELS[currentUser.genderPref]} color={Colors.goldDark} />
           </View>
         </View>
 
@@ -208,7 +263,7 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.divider} />
             <View style={styles.ratingRow}>
-              <Text style={styles.ratingLabel}>I identify as</Text>
+              <Text style={styles.ratingLabel}>Identifies as</Text>
               <Text style={styles.ratingValue}>
                 {currentUser.gender === "female" ? "Woman" : currentUser.gender === "male" ? "Man" : "Non-binary"}
               </Text>
@@ -217,12 +272,12 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Break Plans</Text>
+          <Text style={styles.sectionTitle}>Breaks</Text>
           <View style={styles.detailCard}>
             <View style={styles.breakRow}>
               <View style={styles.breakLeft}>
                 <Ionicons name="home-outline" size={15} color={currentUser.staysThanksgiving ? Colors.grassGreen : Colors.textLight} />
-                <Text style={styles.breakLabel}>Thanksgiving Break</Text>
+                <Text style={styles.breakLabel}>Thanksgiving</Text>
               </View>
               <View style={[styles.breakBadge, { backgroundColor: currentUser.staysThanksgiving ? Colors.grassGreen : Colors.borderSoft }]}>
                 <Text style={[styles.breakBadgeText, { color: currentUser.staysThanksgiving ? Colors.white : Colors.textMuted }]}>
@@ -246,43 +301,36 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How Matching Works</Text>
+          <Text style={styles.sectionTitle}>Matching</Text>
           <View style={styles.algoCard}>
-            <Text style={styles.algoDesc}>Weighted Euclidean Distance formula. Lower distance = higher compatibility.</Text>
-            {[
-              { label: "Budget compatibility", weight: "35%", color: Colors.ocean },
-              { label: "Cleanliness match", weight: "25%", color: Colors.grassGreen },
-              { label: "Noise & social level", weight: "20%", color: Colors.orange },
-              { label: "Zone proximity", weight: "20%", color: Colors.goldDark },
-            ].map(({ label, weight, color }) => (
-              <View key={label} style={styles.algoRow}>
-                <View style={[styles.algoDot, { backgroundColor: color }]} />
-                <Text style={styles.algoLabel}>{label}</Text>
-                <Text style={[styles.algoWeight, { color }]}>{weight}</Text>
-              </View>
-            ))}
+            <Text style={styles.algoDesc}>Compatibility score based on budget, cleanliness, noise level, and zone.</Text>
+            <View style={styles.algoWeights}>
+              {[
+                { label: "Budget", weight: "35%", color: Colors.ocean },
+                { label: "Cleanliness", weight: "25%", color: Colors.grassGreen },
+                { label: "Noise", weight: "20%", color: Colors.orange },
+                { label: "Zone", weight: "20%", color: Colors.goldDark },
+              ].map(({ label, weight, color }) => (
+                <View key={label} style={styles.algoRow}>
+                  <View style={[styles.algoDot, { backgroundColor: color }]} />
+                  <Text style={styles.algoLabel}>{label}</Text>
+                  <Text style={[styles.algoWeight, { color }]}>{weight}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
 
-        <TouchableOpacity style={styles.langBtn} onPress={handleChangeLang}>
-          <Ionicons name="language-outline" size={17} color={Colors.ocean} />
-          <View style={styles.langBtnText}>
-            <Text style={styles.langBtnTitle}>Language</Text>
-            <Text style={styles.langBtnValue}>
-              {currentLang ? `${currentLang.englishName} · ${currentLang.nativeName}` : "English"}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={15} color={Colors.textLight} />
-        </TouchableOpacity>
+        <FeedbackSection userEmail={currentUser.email} />
 
         <TouchableOpacity style={styles.signOutFullBtn} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={17} color={Colors.ocean} />
-          <Text style={styles.signOutFullBtnText}>{tr("profile.signOut")}</Text>
+          <Text style={styles.signOutFullBtnText}>Sign Out</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.resetFullBtn} onPress={handleReset}>
           <Ionicons name="trash-outline" size={17} color={Colors.errorRed} />
-          <Text style={styles.resetFullBtnText}>{tr("profile.resetAll")}</Text>
+          <Text style={styles.resetFullBtnText}>Reset All Data</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -315,19 +363,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ocean + "18", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
   },
   majorTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.ocean },
-  bio: { fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.textMuted, textAlign: "center", lineHeight: 21 },
+  bio: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 20 },
   statsRow: { flexDirection: "row", width: "100%", gap: 8, marginTop: 4 },
   statBox: { flex: 1, backgroundColor: Colors.sandDark, borderRadius: 12, padding: 12, alignItems: "center", gap: 2 },
   statBoxMid: { backgroundColor: Colors.ocean + "15" },
   statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.charcoal },
-  statLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  statLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
   section: { gap: 8 },
   sectionTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.charcoal, paddingHorizontal: 2 },
   detailCard: { backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5, borderColor: Colors.borderSoft, overflow: "hidden" },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   infoIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   infoContent: { flex: 1 },
-  infoLabel: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
+  infoLabel: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
   infoValue: { fontFamily: "Nunito_600SemiBold", fontSize: 15, color: Colors.charcoal },
   divider: { height: 1, backgroundColor: Colors.sandDark, marginLeft: 60 },
   ratingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14 },
@@ -341,19 +389,34 @@ const styles = StyleSheet.create({
   breakBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   breakBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 13 },
   algoCard: { backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 16, gap: 10 },
-  algoDesc: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, lineHeight: 19 },
+  algoDesc: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
+  algoWeights: { gap: 6 },
   algoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   algoDot: { width: 9, height: 9, borderRadius: 5 },
   algoLabel: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.charcoal, flex: 1 },
   algoWeight: { fontFamily: "Nunito_700Bold", fontSize: 14 },
-  langBtn: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
-    borderColor: Colors.borderSoft, padding: 14,
+  feedbackCard: {
+    backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5,
+    borderColor: Colors.borderSoft, padding: 16, gap: 12,
+    alignItems: "center",
   },
-  langBtnText: { flex: 1 },
-  langBtnTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  langBtnValue: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, marginTop: 1 },
+  feedbackHeader: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start" },
+  feedbackTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.charcoal },
+  feedbackThanks: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.grassGreen, textAlign: "center" },
+  starRow: { flexDirection: "row", gap: 10 },
+  feedbackInput: {
+    width: "100%", backgroundColor: Colors.sand, borderRadius: 12,
+    borderWidth: 1.5, borderColor: Colors.borderSoft,
+    paddingHorizontal: 14, paddingVertical: 10,
+    fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.charcoal,
+    minHeight: 80, textAlignVertical: "top",
+  },
+  feedbackBtn: {
+    width: "100%", backgroundColor: Colors.ocean, borderRadius: 12,
+    paddingVertical: 12, alignItems: "center",
+  },
+  feedbackBtnDisabled: { backgroundColor: Colors.textLight },
+  feedbackBtnText: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.white },
   signOutFullBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.ocean + "12", borderRadius: 12, borderWidth: 1.5,

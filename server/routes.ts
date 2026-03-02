@@ -2,7 +2,103 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import { query } from "./db";
 
+const pinStore = new Map<string, { pin: string; expiry: number }>();
+
+async function sendPinEmail(email: string, pin: string): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY;
+  if (!apiKey) {
+    console.log(`[PopMatch PIN] ${email} → ${pin} (set SENDGRID_API_KEY to send real emails)`);
+    return;
+  }
+
+  const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email }] }],
+      from: { email: "noreply@popmatch.app", name: "PopMatch" },
+      subject: "Your PopMatch verification code",
+      content: [
+        {
+          type: "text/plain",
+          value: `Your PopMatch verification code is: ${pin}\n\nThis code expires in 10 minutes. Do not share it with anyone.`,
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    console.error("SendGrid error:", res.status, body);
+    throw new Error("Failed to send email");
+  }
+}
+
+async function ensureFeedbackTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS feedback (
+      id SERIAL PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      rating INT NOT NULL,
+      message TEXT DEFAULT '',
+      created_at BIGINT NOT NULL
+    )
+  `);
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  await ensureFeedbackTable();
+
+  // ─── PIN VERIFICATION ────────────────────────────────────────────────────────
+
+  app.post("/api/send-pin", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email || !email.endsWith("@illinois.edu")) {
+        return res.status(400).json({ error: "Only @illinois.edu emails are accepted." });
+      }
+
+      const pin = Math.floor(100000 + Math.random() * 900000).toString();
+      pinStore.set(email.toLowerCase(), { pin, expiry: Date.now() + 10 * 60 * 1000 });
+
+      await sendPinEmail(email.toLowerCase(), pin);
+
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("POST /api/send-pin", err);
+      return res.status(500).json({ error: "Failed to send verification code." });
+    }
+  });
+
+  app.post("/api/verify-pin", async (req: Request, res: Response) => {
+    try {
+      const { email, pin } = req.body;
+      if (!email || !pin) {
+        return res.status(400).json({ error: "email and pin are required" });
+      }
+
+      const stored = pinStore.get(email.toLowerCase());
+      if (!stored) {
+        return res.json({ valid: false, reason: "No code sent to this email." });
+      }
+      if (Date.now() > stored.expiry) {
+        pinStore.delete(email.toLowerCase());
+        return res.json({ valid: false, reason: "Code expired. Request a new one." });
+      }
+      if (stored.pin !== pin.toString()) {
+        return res.json({ valid: false, reason: "Incorrect code. Try again." });
+      }
+
+      pinStore.delete(email.toLowerCase());
+      return res.json({ valid: true });
+    } catch (err) {
+      console.error("POST /api/verify-pin", err);
+      return res.status(500).json({ error: "Failed to verify code." });
+    }
+  });
 
   // ─── USERS ───────────────────────────────────────────────────────────────────
 
@@ -100,13 +196,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!friend) return res.status(404).json({ error: "That @illinois.edu email is not registered on PopMatch yet" });
 
       await query(
-        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
+        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
         [user.id, friend.id]
       );
       await query(
-        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
+        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
         [friend.id, user.id]
       );
 
@@ -180,7 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { viewerEmail, targetEmail } = req.params;
 
       if (viewerEmail === targetEmail) {
-        return res.json({ degree: 1, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
+        return res.json({ isFriend: true, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
       }
 
       const [viewer] = await query<{ id: string; organizations: string[] }>(
@@ -191,7 +285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (!viewer || !target) {
-        return res.json({ degree: null, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
+        return res.json({ isFriend: false, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
       }
 
       const isDirect = await query<{ id: string }>(
@@ -201,15 +295,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (isDirect.length > 0) {
         const vouchedBy = await query<{ name: string; email: string }>(
-          `SELECT u.name, u.email FROM vouches v
-           JOIN users u ON v.voucher_id = u.id
-           WHERE v.vouchee_id = $1`,
+          `SELECT u.name, u.email FROM vouches v JOIN users u ON v.voucher_id = u.id WHERE v.vouchee_id = $1`,
           [target.id]
         );
         const sharedOrgs = (viewer.organizations || []).filter(
           (org: string) => (target.organizations || []).includes(org)
         );
-        return res.json({ degree: 1, mutualFriends: [], vouchedBy, sharedOrgs });
+        return res.json({ isFriend: true, mutualFriends: [], vouchedBy, sharedOrgs });
       }
 
       const mutualFriends = await query<{ name: string; email: string; avatar_color: string }>(
@@ -222,12 +314,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const vouchedBy = mutualFriends.length > 0
         ? await query<{ name: string; email: string }>(
-            `SELECT u.name, u.email FROM vouches v
-             JOIN users u ON v.voucher_id = u.id
-             WHERE v.vouchee_id = $1
-               AND v.voucher_id IN (
-                 SELECT friend_id FROM friendships WHERE user_id = $2
-               )`,
+            `SELECT u.name, u.email FROM vouches v JOIN users u ON v.voucher_id = u.id
+             WHERE v.vouchee_id = $1 AND v.voucher_id IN (SELECT friend_id FROM friendships WHERE user_id = $2)`,
             [target.id, viewer.id]
           )
         : [];
@@ -236,8 +324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (org: string) => (target.organizations || []).includes(org)
       );
 
-      const degree = mutualFriends.length > 0 ? 2 : null;
-      return res.json({ degree, mutualFriends, vouchedBy, sharedOrgs });
+      return res.json({ isFriend: false, mutualFriends, vouchedBy, sharedOrgs });
     } catch (err) {
       console.error("GET /api/trust", err);
       return res.status(500).json({ error: "Failed to compute trust" });
@@ -272,6 +359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         leaseType = "full_year", pricePerMonth = 0, landlord = "other",
         zone = "campustown", availableDuringBreaks = false, breakTypes = [],
         description = "", eventName = "", startDate = "", endDate = "",
+        moveInDate = "", moveOutDate = "",
       } = req.body;
 
       if (!id || !userId || !buildingName) {
@@ -286,12 +374,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
          ON CONFLICT (id) DO NOTHING`,
         [id, userId, buildingName, address, category, leaseType, pricePerMonth,
           landlord, zone, availableDuringBreaks, breakTypes, description,
-          eventName, startDate, endDate]
+          eventName, startDate || moveInDate, endDate || moveOutDate]
       );
       return res.json({ success: true });
     } catch (err) {
       console.error("POST /api/listings", err);
       return res.status(500).json({ error: "Failed to save listing" });
+    }
+  });
+
+  // ─── FEEDBACK ────────────────────────────────────────────────────────────────
+
+  app.post("/api/feedback", async (req: Request, res: Response) => {
+    try {
+      const { userEmail, rating, message = "" } = req.body;
+      if (!userEmail || !rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: "userEmail and rating (1–5) are required" });
+      }
+
+      await query(
+        `INSERT INTO feedback (user_email, rating, message, created_at) VALUES ($1, $2, $3, $4)`,
+        [userEmail, rating, message.slice(0, 300), Date.now()]
+      );
+
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("POST /api/feedback", err);
+      return res.status(500).json({ error: "Failed to save feedback" });
     }
   });
 

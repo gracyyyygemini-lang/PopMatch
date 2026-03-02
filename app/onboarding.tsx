@@ -9,6 +9,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, UserProfile, LeaseType, GenderPref, Zone, Landlord } from "@/context/AppContext";
+import { getApiUrl } from "@/lib/query-client";
 
 const MAJORS = [
   "Computer Science", "Engineering", "Business", "Biology", "Psychology",
@@ -51,22 +52,13 @@ const WAVE_COUNT = 22;
 
 function PonyoProgress({ step, total }: { step: number; total: number }) {
   const progress = step / (total - 1);
-  // fishPx is a direct pixel-value Animated.Value — no interpolation needed.
-  // This avoids creating a new Interpolation object on every render when
-  // trackWidth changes, which can confuse the animated node reconciliation.
   const fishPx = useRef(new Animated.Value(0)).current;
-  // bobY is a completely separate Animated.Value on its own Animated.View.
-  // Keeping it on a different view node ensures the JS driver is never mixed
-  // with any other driver on the same node — the root cause of the crash.
   const bobY = useRef(new Animated.Value(0)).current;
   const [trackWidth, setTrackWidth] = useState(260);
 
   const FISH_SIZE = 28;
   const BUCKET_SIZE = 28;
 
-  // Animate fish to new pixel position whenever step or trackWidth changes.
-  // useNativeDriver: false is required because we're animating a layout value
-  // (pixel position), which cannot be handled by the native driver.
   useEffect(() => {
     const target = progress * Math.max(0, trackWidth - BUCKET_SIZE - FISH_SIZE - 4);
     Animated.spring(fishPx, {
@@ -77,23 +69,11 @@ function PonyoProgress({ step, total }: { step: number; total: number }) {
     }).start();
   }, [step, trackWidth]);
 
-  // Bobbing loop. useNativeDriver: false matches fishPx and ensures no mixing.
-  // Even though translateY could theoretically use native driver, we keep it
-  // false so that if both values ever end up on the same node in the future,
-  // there is no driver conflict.
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(bobY, {
-          toValue: -4, duration: 850,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
-        Animated.timing(bobY, {
-          toValue: 4, duration: 850,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
+        Animated.timing(bobY, { toValue: -4, duration: 850, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(bobY, { toValue: 4, duration: 850, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
       ])
     );
     anim.start();
@@ -104,44 +84,18 @@ function PonyoProgress({ step, total }: { step: number; total: number }) {
 
   return (
     <View style={pStyles.wrapper}>
-      <View
-        style={pStyles.trackContainer}
-        onLayout={e => setTrackWidth(e.nativeEvent.layout.width)}>
-
+      <View style={pStyles.trackContainer} onLayout={e => setTrackWidth(e.nativeEvent.layout.width)}>
         <View style={pStyles.waveRow}>
           {Array.from({ length: WAVE_COUNT }, (_, i) => (
-            <View
-              key={i}
-              style={[
-                pStyles.waveBump,
-                { marginTop: i % 2 === 0 ? 0 : 6 }
-              ]}
-            />
+            <View key={i} style={[pStyles.waveBump, { marginTop: i % 2 === 0 ? 0 : 6 }]} />
           ))}
         </View>
-
-        {/*
-          TWO NESTED Animated.Views — one per transform axis.
-          Each view node is driven by exactly one Animated.Value with one
-          consistent driver (JS). This is the canonical fix: the crash occurs
-          when a single Animated.View node has transforms from values that
-          were ever animated with different drivers, even across HMR reloads.
-          Separating them makes driver mixing physically impossible.
-        */}
-        <Animated.View
-          style={[pStyles.fishWrap, { transform: [{ translateX: fishPx }] }]}
-        >
+        <Animated.View style={[pStyles.fishWrap, { transform: [{ translateX: fishPx }] }]}>
           <Animated.View style={{ transform: [{ translateY: bobY }] }}>
-            <Ionicons
-              name="fish"
-              size={FISH_SIZE}
-              color={Colors.ponyo}
-              style={{ transform: [{ scaleX: -1 }] }}
-            />
+            <Ionicons name="fish" size={FISH_SIZE} color={Colors.ponyo} style={{ transform: [{ scaleX: -1 }] }} />
           </Animated.View>
         </Animated.View>
       </View>
-
       <View style={[pStyles.bucket, { opacity: atHome ? 1 : 0.32 }]}>
         <View style={[pStyles.bucketInner, { backgroundColor: atHome ? Colors.ponyo + "22" : Colors.teal + "14" }]}>
           <Ionicons name="home" size={18} color={atHome ? Colors.ponyo : Colors.teal} />
@@ -151,10 +105,57 @@ function PonyoProgress({ step, total }: { step: number; total: number }) {
   );
 }
 
+function PinInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<TextInput>(null);
+
+  return (
+    <TouchableOpacity style={pin_styles.container} activeOpacity={1} onPress={() => inputRef.current?.focus()}>
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={t => onChange(t.replace(/\D/g, "").slice(0, 6))}
+        keyboardType="number-pad"
+        maxLength={6}
+        style={pin_styles.hiddenInput}
+        autoFocus
+      />
+      {[0, 1, 2, 3, 4, 5].map(i => {
+        const char = value[i] || "";
+        const isFocused = i === value.length;
+        return (
+          <View key={i} style={[pin_styles.cell, isFocused && pin_styles.cellFocused]}>
+            <Text style={pin_styles.cellText}>{char}</Text>
+          </View>
+        );
+      })}
+    </TouchableOpacity>
+  );
+}
+
+const pin_styles = StyleSheet.create({
+  container: { flexDirection: "row", gap: 10, justifyContent: "center", marginVertical: 8 },
+  hiddenInput: {
+    position: "absolute", width: 1, height: 1, opacity: 0, top: 0, left: 0,
+  },
+  cell: {
+    width: 48, height: 60, borderRadius: 14, borderWidth: 2,
+    borderColor: Colors.borderSoft, backgroundColor: Colors.white,
+    alignItems: "center", justifyContent: "center",
+  },
+  cellFocused: { borderColor: Colors.teal, backgroundColor: Colors.teal + "08" },
+  cellText: { fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: Colors.teal },
+});
+
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { setCurrentUser, setIsOnboarded } = useApp();
   const [step, setStep] = useState(0);
+
+  const [pinPhase, setPinPhase] = useState<"email" | "pin">("email");
+  const [pinValue, setPinValue] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -175,17 +176,71 @@ export default function OnboardingScreen() {
 
   const STEPS = 5;
 
-  const validateEmail = () => {
-    if (!name.trim()) { setEmailError("Please enter your name."); return false; }
-    if (!email.endsWith("@illinois.edu")) { setEmailError("Only @illinois.edu emails are allowed."); return false; }
+  const handleSendCode = async () => {
+    if (!name.trim()) { setEmailError("Enter your full name first."); return; }
+    if (!email.endsWith("@illinois.edu")) { setEmailError("Only @illinois.edu emails accepted."); return; }
     setEmailError("");
-    return true;
+    setIsSendingCode(true);
+    try {
+      const res = await fetch(new URL("/api/send-pin", getApiUrl()).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.toLowerCase().trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailError(data.error || "Failed to send code. Try again.");
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPinPhase("pin");
+      setPinValue("");
+      setPinError("");
+    } catch {
+      setEmailError("Network error. Check your connection.");
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleVerifyPin = async () => {
+    if (pinValue.length !== 6) { setPinError("Enter the 6-digit code."); return; }
+    setIsVerifying(true);
+    try {
+      const res = await fetch(new URL("/api/verify-pin", getApiUrl()).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.toLowerCase().trim(), pin: pinValue }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setStep(1);
+        setPinPhase("email");
+      } else {
+        setPinError(data.reason || "Incorrect code. Try again.");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } catch {
+      setPinError("Network error. Check your connection.");
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleNext = () => {
-    if (step === 0 && !validateEmail()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setStep(s => Math.min(s + 1, STEPS - 1));
+  };
+
+  const handleBack = () => {
+    if (step === 0 && pinPhase === "pin") {
+      setPinPhase("email");
+      setPinError("");
+      return;
+    }
+    setStep(s => Math.max(0, s - 1));
+    Haptics.selectionAsync();
   };
 
   const handleFinish = async () => {
@@ -210,6 +265,7 @@ export default function OnboardingScreen() {
   };
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const showBackBtn = step > 0 || (step === 0 && pinPhase === "pin");
 
   return (
     <KeyboardAvoidingView
@@ -223,13 +279,13 @@ export default function OnboardingScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-        {step === 0 && (
+        {step === 0 && pinPhase === "email" && (
           <View style={styles.stepContainer}>
             <View style={styles.iconCircle}>
               <Ionicons name="school" size={38} color={Colors.teal} />
             </View>
             <Text style={styles.stepTitle}>Welcome to PopMatch</Text>
-            <Text style={styles.stepSubtitle}>UIUC's student-first housing matchmaker</Text>
+            <Text style={styles.stepSubtitle}>UIUC housing, for Illini only</Text>
 
             <Text style={styles.label}>Your Name</Text>
             <TextInput style={styles.input} value={name} onChangeText={setName}
@@ -241,6 +297,7 @@ export default function OnboardingScreen() {
               value={email} onChangeText={t => { setEmail(t); setEmailError(""); }}
               placeholder="yournetid@illinois.edu" placeholderTextColor={Colors.textLight}
               keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+
             {emailError ? (
               <View style={styles.errorRow}>
                 <Ionicons name="warning-outline" size={13} color={Colors.errorRed} />
@@ -250,7 +307,36 @@ export default function OnboardingScreen() {
 
             <View style={styles.gateBox}>
               <Ionicons name="shield-checkmark-outline" size={15} color={Colors.grassGreen} />
-              <Text style={styles.gateText}>Only @illinois.edu addresses accepted — no exceptions</Text>
+              <Text style={styles.gateText}>Only @illinois.edu addresses accepted</Text>
+            </View>
+          </View>
+        )}
+
+        {step === 0 && pinPhase === "pin" && (
+          <View style={styles.stepContainer}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="mail-open" size={38} color={Colors.teal} />
+            </View>
+            <Text style={styles.stepTitle}>Check your inbox</Text>
+            <Text style={styles.stepSubtitle}>Code sent to {email}</Text>
+
+            <Text style={styles.label}>6-digit code</Text>
+            <PinInput value={pinValue} onChange={v => { setPinValue(v); setPinError(""); }} />
+
+            {pinError ? (
+              <View style={styles.errorRow}>
+                <Ionicons name="warning-outline" size={13} color={Colors.errorRed} />
+                <Text style={styles.errorText}>{pinError}</Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity style={styles.resendBtn} onPress={() => { setPinPhase("email"); setPinError(""); }}>
+              <Text style={styles.resendText}>Wrong email? Go back</Text>
+            </TouchableOpacity>
+
+            <View style={styles.gateBox}>
+              <Ionicons name="time-outline" size={15} color={Colors.ocean} />
+              <Text style={[styles.gateText, { color: Colors.ocean }]}>Code expires in 10 minutes</Text>
             </View>
           </View>
         )}
@@ -261,7 +347,7 @@ export default function OnboardingScreen() {
               <Ionicons name="person" size={38} color={Colors.teal} />
             </View>
             <Text style={styles.stepTitle}>About You</Text>
-            <Text style={styles.stepSubtitle}>Help future roommates get to know you</Text>
+            <Text style={styles.stepSubtitle}>Help roommates get to know you</Text>
 
             <Text style={styles.label}>Major</Text>
             <TouchableOpacity style={styles.input} onPress={() => setShowMajorPicker(!showMajorPicker)}>
@@ -306,7 +392,7 @@ export default function OnboardingScreen() {
               <Ionicons name="home" size={38} color={Colors.teal} />
             </View>
             <Text style={styles.stepTitle}>Housing Preferences</Text>
-            <Text style={styles.stepSubtitle}>What kind of living situation do you want?</Text>
+            <Text style={styles.stepSubtitle}>Budget, roommate, lease type</Text>
 
             <Text style={styles.label}>Monthly Budget</Text>
             <View style={styles.budgetRow}>
@@ -322,7 +408,7 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Roommate Gender Preference</Text>
+            <Text style={styles.label}>Roommate Preference</Text>
             <View style={styles.chipRow}>
               {([
                 { k: "girls_only" as GenderPref, l: "Girls Only" },
@@ -361,7 +447,7 @@ export default function OnboardingScreen() {
               <Ionicons name="map" size={38} color={Colors.teal} />
             </View>
             <Text style={styles.stepTitle}>Location & Lifestyle</Text>
-            <Text style={styles.stepSubtitle}>Where in Champaign-Urbana do you want to live?</Text>
+            <Text style={styles.stepSubtitle}>Pick your zone, set your vibe</Text>
 
             {ZONES.map(z => (
               <TouchableOpacity key={z.key} style={[styles.optionCard, zone === z.key && styles.optionCardActive]}
@@ -377,14 +463,14 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
             ))}
 
-            <Text style={styles.label}>Cleanliness Level</Text>
+            <Text style={styles.label}>Cleanliness</Text>
             <View style={styles.scaleLabels}>
               <Text style={styles.scaleLabel}>Relaxed</Text>
               <Text style={styles.scaleLabel}>Spotless</Text>
             </View>
             <RatingSelector value={cleanliness} onChange={setCleanliness} color={Colors.grassGreen} />
 
-            <Text style={styles.label}>Noise & Social Level</Text>
+            <Text style={styles.label}>Noise & Social</Text>
             <View style={styles.scaleLabels}>
               <Text style={styles.scaleLabel}>Very Quiet</Text>
               <Text style={styles.scaleLabel}>Party Mode</Text>
@@ -399,30 +485,30 @@ export default function OnboardingScreen() {
               <Ionicons name="calendar" size={38} color={Colors.teal} />
             </View>
             <Text style={styles.stepTitle}>Breaks & Landlord</Text>
-            <Text style={styles.stepSubtitle}>Helps split utilities & coordinate with roommates</Text>
+            <Text style={styles.stepSubtitle}>Coordinate with roommates</Text>
 
             <Text style={styles.label}>Break Plans</Text>
             <View style={styles.toggleRow}>
               <View style={styles.toggleInfo}>
-                <Text style={styles.toggleTitle}>Staying Thanksgiving Break?</Text>
+                <Text style={styles.toggleTitle}>Thanksgiving Break?</Text>
                 <Text style={styles.toggleDesc}>Nov 27 – Dec 1</Text>
               </View>
               <TouchableOpacity style={[styles.toggle, staysThanksgiving && styles.toggleOn]}
                 onPress={() => { setStaysThanksgiving(!staysThanksgiving); Haptics.selectionAsync(); }}>
                 <Text style={[styles.toggleText, staysThanksgiving && styles.toggleTextOn]}>
-                  {staysThanksgiving ? "Yes" : "No"}
+                  {staysThanksgiving ? "Staying" : "Leaving"}
                 </Text>
               </TouchableOpacity>
             </View>
             <View style={styles.toggleRow}>
               <View style={styles.toggleInfo}>
-                <Text style={styles.toggleTitle}>Staying Spring Break?</Text>
+                <Text style={styles.toggleTitle}>Spring Break?</Text>
                 <Text style={styles.toggleDesc}>Mar 15 – 23</Text>
               </View>
               <TouchableOpacity style={[styles.toggle, staysSpringBreak && styles.toggleOn]}
                 onPress={() => { setStaysSpringBreak(!staysSpringBreak); Haptics.selectionAsync(); }}>
                 <Text style={[styles.toggleText, staysSpringBreak && styles.toggleTextOn]}>
-                  {staysSpringBreak ? "Yes" : "No"}
+                  {staysSpringBreak ? "Staying" : "Leaving"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -441,50 +527,61 @@ export default function OnboardingScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 12 }]}>
-        {step > 0 && (
-          <TouchableOpacity style={styles.backBtn} onPress={() => { setStep(s => s - 1); Haptics.selectionAsync(); }}>
+        {showBackBtn && (
+          <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
             <Ionicons name="arrow-back" size={20} color={Colors.charcoal} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity
-          style={[styles.nextBtn, step === 0 && { flex: 1 }]}
-          onPress={step === STEPS - 1 ? handleFinish : handleNext}>
-          <Text style={styles.nextBtnText}>{step === STEPS - 1 ? "Find My Match" : "Continue"}</Text>
-          <Ionicons name={step === STEPS - 1 ? "heart" : "arrow-forward"} size={17} color={Colors.white} />
-        </TouchableOpacity>
+
+        {step === 0 && pinPhase === "email" && (
+          <TouchableOpacity
+            style={[styles.nextBtn, { flex: 1, opacity: isSendingCode ? 0.7 : 1 }]}
+            onPress={handleSendCode}
+            disabled={isSendingCode}
+          >
+            <Text style={styles.nextBtnText}>{isSendingCode ? "Sending…" : "Send Code"}</Text>
+            <Ionicons name="send" size={17} color={Colors.white} />
+          </TouchableOpacity>
+        )}
+
+        {step === 0 && pinPhase === "pin" && (
+          <TouchableOpacity
+            style={[styles.nextBtn, { flex: 1, opacity: isVerifying ? 0.7 : 1 }]}
+            onPress={handleVerifyPin}
+            disabled={isVerifying || pinValue.length !== 6}
+          >
+            <Text style={styles.nextBtnText}>{isVerifying ? "Verifying…" : "Verify"}</Text>
+            <Ionicons name="checkmark" size={17} color={Colors.white} />
+          </TouchableOpacity>
+        )}
+
+        {step > 0 && (
+          <TouchableOpacity
+            style={styles.nextBtn}
+            onPress={step === STEPS - 1 ? handleFinish : handleNext}>
+            <Text style={styles.nextBtnText}>{step === STEPS - 1 ? "Find My Match" : "Continue"}</Text>
+            <Ionicons name={step === STEPS - 1 ? "heart" : "arrow-forward"} size={17} color={Colors.white} />
+          </TouchableOpacity>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const pStyles = StyleSheet.create({
-  wrapper: {
-    flexDirection: "row", alignItems: "center", gap: 8, paddingBottom: 4,
-  },
-  trackContainer: {
-    flex: 1, height: 48, position: "relative", justifyContent: "center",
-  },
+  wrapper: { flexDirection: "row", alignItems: "center", gap: 8, paddingBottom: 4 },
+  trackContainer: { flex: 1, height: 48, position: "relative", justifyContent: "center" },
   waveRow: {
     flexDirection: "row", alignItems: "center", gap: 4,
     position: "absolute", bottom: 8, left: 0, right: 0,
   },
   waveBump: {
-    width: 9, height: 5,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: Colors.tealLight + "55",
-    backgroundColor: "transparent",
+    width: 9, height: 5, borderRadius: 5, borderWidth: 1.5,
+    borderColor: Colors.tealLight + "55", backgroundColor: "transparent",
   },
-  fishWrap: {
-    position: "absolute", bottom: 12,
-  },
-  bucket: {
-    alignItems: "center", justifyContent: "center",
-  },
-  bucketInner: {
-    width: 36, height: 36, borderRadius: 12,
-    alignItems: "center", justifyContent: "center",
-  },
+  fishWrap: { position: "absolute", bottom: 12 },
+  bucket: { alignItems: "center", justifyContent: "center" },
+  bucketInner: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
 });
 
 const styles = StyleSheet.create({
@@ -494,8 +591,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 24, paddingBottom: 8 },
   stepContainer: { gap: 12 },
   iconCircle: {
-    width: 76, height: 76, borderRadius: 38,
-    backgroundColor: Colors.teal + "15",
+    width: 76, height: 76, borderRadius: 38, backgroundColor: Colors.teal + "15",
     alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 4,
     borderWidth: 2, borderColor: Colors.teal + "28",
   },
@@ -524,6 +620,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.grassGreen + "18", borderRadius: 12, padding: 11,
   },
   gateText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.grassGreen, flex: 1 },
+  resendBtn: { alignSelf: "center", paddingVertical: 4 },
+  resendText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.teal },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     paddingHorizontal: 16, paddingVertical: 9, borderRadius: 22,
@@ -572,14 +670,8 @@ const styles = StyleSheet.create({
   toggleText: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted },
   toggleTextOn: { color: Colors.white },
   landlordDot: { width: 12, height: 12, borderRadius: 6 },
-  majorList: {
-    backgroundColor: Colors.white, borderRadius: 12, borderWidth: 1.5,
-    borderColor: Colors.borderSoft, overflow: "hidden",
-  },
-  majorItem: {
-    paddingHorizontal: 14, paddingVertical: 11,
-    borderBottomWidth: 1, borderBottomColor: Colors.foamDark,
-  },
+  majorList: { backgroundColor: Colors.white, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.borderSoft, overflow: "hidden" },
+  majorItem: { paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: Colors.foamDark },
   majorSelected: { backgroundColor: Colors.teal + "14" },
   majorText: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.charcoal },
   majorTextSelected: { fontFamily: "Nunito_700Bold", color: Colors.teal },

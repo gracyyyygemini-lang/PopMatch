@@ -14,26 +14,23 @@ const CATEGORIES = [
   {
     id: "summer_only",
     title: "Summer Only",
-    dates: "Mid-May – Early August",
+    dates: "May 15 – Aug 10",
     icon: "sunny" as const,
     color: Colors.orange,
-    desc: "May 15 – Aug 10 subleases",
   },
   {
     id: "august_gap",
-    title: "The August Gap",
+    title: "August Gap",
     dates: "1–2 weeks in August",
     icon: "time-outline" as const,
     color: Colors.ocean,
-    desc: "Short handoff stays before fall lease starts",
   },
   {
     id: "semester_takeover",
     title: "Semester / Full Year",
-    dates: "Fall, Spring, or 12 months",
+    dates: "Fall, Spring, or 12 mo",
     icon: "calendar-outline" as const,
     color: Colors.grassGreen,
-    desc: "Full takeovers — Aug–Dec, Jan–May, or Aug–Jul",
   },
   {
     id: "short_term",
@@ -41,7 +38,6 @@ const CATEGORIES = [
     dates: "1–14 days",
     icon: "ticket-outline" as const,
     color: Colors.goldDark,
-    desc: "Moms Weekend, Thanksgiving, graduation stays",
   },
 ];
 
@@ -49,22 +45,29 @@ const FEATURES = [
   {
     route: "/matchmaker" as const,
     title: "Year-Long Matchmaker",
-    subtitle: "Swipe & match for a full 12-month lease",
+    subtitle: "Swipe to find a roommate",
     icon: "heart" as const,
     color: Colors.ocean,
   },
   {
     route: "/breaks" as const,
     title: "Break Stay Board",
-    subtitle: "Offer or seek housing over Thanksgiving, Spring & Winter breaks",
+    subtitle: "Thanksgiving, Spring & Winter",
     icon: "partly-sunny-outline" as const,
     color: Colors.grassGreen,
   },
 ];
 
+const TRUST_ICONS: { icon: keyof typeof Ionicons.glyphMap; label: string; color: string }[] = [
+  { icon: "shield-checkmark", label: "Verified", color: Colors.ocean },
+  { icon: "people", label: "Connections", color: Colors.grassGreen },
+  { icon: "star", label: "Vouched", color: Colors.orange },
+  { icon: "warning", label: "Landlord alerts", color: Colors.goldDark },
+];
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, friends, subleases, breakPosts, tr } = useApp();
+  const { currentUser, friends, subleases, breakPosts } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const firstName = currentUser?.name.split(" ")[0] ?? "there";
@@ -73,8 +76,8 @@ export default function HomeScreen() {
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
         <View>
-          <Text style={styles.greeting}>{tr("home.greeting", { name: firstName })}</Text>
-          <Text style={styles.tagline}>{tr("home.tagline")}</Text>
+          <Text style={styles.greeting}>Hey, {firstName}</Text>
+          <Text style={styles.tagline}>Find your place at UIUC</Text>
         </View>
         <View style={styles.logoMark}>
           <Ionicons name="home" size={22} color={Colors.ocean} />
@@ -90,7 +93,7 @@ export default function HomeScreen() {
       >
         <ScamBanner />
 
-        <Text style={styles.sectionLabel}>{tr("home.browseBy")}</Text>
+        <Text style={styles.sectionLabel}>Browse by type</Text>
 
         <View style={styles.grid}>
           {CATEGORIES.map((cat) => (
@@ -108,12 +111,11 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.catTitle}>{cat.title}</Text>
               <Text style={styles.catDates}>{cat.dates}</Text>
-              <Text style={styles.catDesc} numberOfLines={2}>{cat.desc}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.sectionLabel}>{tr("home.features")}</Text>
+        <Text style={styles.sectionLabel}>Features</Text>
 
         {FEATURES.map((f) => (
           <TouchableOpacity
@@ -139,34 +141,33 @@ export default function HomeScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statNum}>{friends.length}</Text>
-            <Text style={styles.statLabel}>{tr("home.circle")}</Text>
+            <Text style={styles.statLabel}>Friends</Text>
           </View>
           <View style={[styles.statBox, styles.statBoxMid]}>
             <Text style={styles.statNum}>{subleases.length}</Text>
-            <Text style={styles.statLabel}>{tr("home.listings")}</Text>
+            <Text style={styles.statLabel}>Listings</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statNum}>{breakPosts.length}</Text>
-            <Text style={styles.statLabel}>{tr("home.breakPosts")}</Text>
+            <Text style={styles.statLabel}>Break stays</Text>
           </View>
         </View>
 
         <View style={styles.trustCard}>
           <View style={styles.trustHeader}>
-            <Ionicons name="shield-checkmark" size={16} color={Colors.ocean} />
+            <Ionicons name="shield-checkmark" size={15} color={Colors.ocean} />
             <Text style={styles.trustTitle}>PopMatch Protection</Text>
           </View>
-          {[
-            "Only @illinois.edu verified students",
-            "Social Trust Graph — see mutual connections",
-            "Landlord-specific warnings (JSM, UGroup, Bailey, American)",
-            "Weighted Euclidean matching for compatibility",
-          ].map((tip) => (
-            <View key={tip} style={styles.tipRow}>
-              <View style={styles.tipDot} />
-              <Text style={styles.tipText}>{tip}</Text>
-            </View>
-          ))}
+          <View style={styles.trustIconRow}>
+            {TRUST_ICONS.map(({ icon, label, color }) => (
+              <View key={label} style={styles.trustIconItem}>
+                <View style={[styles.trustIconWrap, { backgroundColor: color + "18" }]}>
+                  <Ionicons name={icon} size={16} color={color} />
+                </View>
+                <Text style={styles.trustIconLabel}>{label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -190,12 +191,10 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 4, gap: 12 },
   sectionLabel: {
-    fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.textMuted,
+    fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted,
     textTransform: "uppercase", letterSpacing: 0.8, marginTop: 4,
   },
-  grid: {
-    flexDirection: "row", flexWrap: "wrap", gap: 10,
-  },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   categoryCard: {
     width: "48%", backgroundColor: Colors.cardBg, borderRadius: 18,
     borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 14, gap: 5,
@@ -206,9 +205,8 @@ const styles = StyleSheet.create({
     width: 44, height: 44, borderRadius: 14,
     alignItems: "center", justifyContent: "center", marginBottom: 2,
   },
-  catTitle: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.charcoal },
-  catDates: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
-  catDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textLight, lineHeight: 17 },
+  catTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal },
+  catDates: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
   featureCard: {
     flexDirection: "row", alignItems: "center", gap: 14,
     backgroundColor: Colors.cardBg, borderRadius: 18,
@@ -218,8 +216,8 @@ const styles = StyleSheet.create({
   },
   featureIcon: { width: 50, height: 50, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   featureText: { flex: 1 },
-  featureTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.charcoal },
-  featureSub: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted, lineHeight: 19, marginTop: 2 },
+  featureTitle: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.charcoal },
+  featureSub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, marginTop: 2 },
   statsRow: { flexDirection: "row", gap: 10 },
   statBox: {
     flex: 1, backgroundColor: Colors.cardBg, borderRadius: 14,
@@ -228,15 +226,16 @@ const styles = StyleSheet.create({
   },
   statBoxMid: { backgroundColor: Colors.ocean + "12", borderColor: Colors.ocean + "30" },
   statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: Colors.ocean },
-  statLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  statLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
   trustCard: {
     backgroundColor: Colors.ocean + "10",
     borderRadius: 16, borderWidth: 1.5, borderColor: Colors.ocean + "25",
-    padding: 16, gap: 10,
+    padding: 14, gap: 12,
   },
-  trustHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  trustTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.ocean },
-  tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  tipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.ocean, marginTop: 7 },
-  tipText: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.charcoal, flex: 1, lineHeight: 20 },
+  trustHeader: { flexDirection: "row", alignItems: "center", gap: 7 },
+  trustTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
+  trustIconRow: { flexDirection: "row", justifyContent: "space-around" },
+  trustIconItem: { alignItems: "center", gap: 5 },
+  trustIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  trustIconLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.textMuted, textAlign: "center" },
 });

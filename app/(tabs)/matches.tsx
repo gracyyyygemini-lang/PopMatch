@@ -7,32 +7,32 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp, UserProfile, Landlord, FriendRecord, MOCK_USERS } from "@/context/AppContext";
+import { useApp, UserProfile, Landlord, FriendRecord, MOCK_USERS, computeScore } from "@/context/AppContext";
 
 const LANDLORD_ALERTS: Record<Landlord, { level: "info" | "warn" | "danger"; title: string; message: string }> = {
   jsm: {
-    level: "info", title: "JSM Sublease Warning",
-    message: "JSM charges a $50 sublease fee. Your replacement tenant must provide proof of Renter's Insurance. Get JSM's written approval before making any handoff arrangements."
+    level: "info", title: "JSM",
+    message: "$50 sublease fee. Replacement tenant needs Renter's Insurance."
   },
   ugroup: {
-    level: "warn", title: "UGroup — 72-Hour Report",
-    message: "UGroup charges $125 transfer fee. A 72-hour Move-In Condition Report is mandatory — document ALL pre-existing damage with photos within 72 hours of move-in or you'll be charged on move-out."
+    level: "warn", title: "UGroup",
+    message: "$125 transfer fee. Document ALL pre-existing damage within 72 hours of move-in."
   },
   bailey: {
-    level: "warn", title: "Bailey — Walk In Together!",
-    message: "IMPORTANT: Walk into the Bailey office TOGETHER with your replacement tenant. Never go separately. The landlord has been known to negotiate a new full lease directly with the sublessee, cutting out the original tenant."
+    level: "warn", title: "Bailey",
+    message: "Walk into the office TOGETHER with your replacement tenant — never separately."
   },
   american: {
-    level: "danger", title: "American Campus — $600 RELET FEE",
-    message: "FLASH ALERT: American Campus Communities (Latitude, 212, Tower) charges up to $600 in Relet fees. This is one of the highest in Champaign. Weigh all alternatives carefully and get every detail in writing."
+    level: "danger", title: "American Campus — $600 Relet Fee",
+    message: "Up to $600 in Relet fees. Weigh alternatives carefully and get everything in writing."
   },
   smile: {
     level: "info", title: "Smile Properties",
-    message: "Smile Properties: Always confirm sublease approval in writing before proceeding. Keep copies of all signed documents. Contact their office early in the semester."
+    message: "Confirm sublease approval in writing. Keep copies of all signed documents."
   },
   other: {
     level: "info", title: "Private Landlord",
-    message: "For private landlords: get a written sublease agreement signed by all parties. Document the security deposit transfer with a signed cash receipt. Meet in person and verify their identity."
+    message: "Get a written sublease agreement signed by all parties. Verify identity in person."
   },
 };
 
@@ -42,49 +42,6 @@ const LEASE_LABELS: Record<string, string> = {
   spring_sublease: "Spring Sublease",
   summer_sublease: "Summer Sublease",
 };
-
-const COLLEGE_COLORS: Record<string, string> = {
-  Grainger: Colors.ocean,
-  Gies: Colors.orange,
-  LAS: Colors.grassGreen,
-  FAA: "#9B59B6",
-  Media: "#CC5500",
-  iSchool: Colors.goldDark,
-  ACES: "#5A8A5A",
-};
-
-function TrustBadge({ label, type }: { label: string; type: "friend" | "mutual" | "vouched" | "org" }) {
-  const bg =
-    type === "friend" ? Colors.grassGreen + "20" :
-    type === "vouched" ? Colors.orange + "20" :
-    type === "mutual" ? Colors.ocean + "18" :
-    Colors.goldDark + "18";
-  const color =
-    type === "friend" ? Colors.grassGreen :
-    type === "vouched" ? Colors.orange :
-    type === "mutual" ? Colors.ocean :
-    Colors.goldDark;
-  const icon: keyof typeof Ionicons.glyphMap =
-    type === "friend" ? "people" :
-    type === "vouched" ? "star" :
-    type === "mutual" ? "link" :
-    "school-outline";
-
-  return (
-    <View style={[badge.wrap, { backgroundColor: bg, borderColor: color + "40" }]}>
-      <Ionicons name={icon} size={11} color={color} />
-      <Text style={[badge.text, { color }]}>{label}</Text>
-    </View>
-  );
-}
-
-const badge = StyleSheet.create({
-  wrap: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1,
-  },
-  text: { fontFamily: "Nunito_700Bold", fontSize: 10 },
-});
 
 function AgreementModal({ user, score, onClose }: { user: UserProfile; score: number; onClose: () => void }) {
   const now = new Date();
@@ -104,33 +61,29 @@ function AgreementModal({ user, score, onClose }: { user: UserProfile; score: nu
             <View style={styles.agreementSection}>
               <View style={styles.agreementHeaderBlock}>
                 <Text style={styles.agreementTitle}>PopMatch Roommate Agreement</Text>
-                <Text style={styles.agreementDate}>Generated: {dateStr}</Text>
+                <Text style={styles.agreementDate}>{dateStr}</Text>
                 <View style={[styles.scorePill, { backgroundColor: score >= 80 ? Colors.grassGreen : Colors.ocean }]}>
-                  <Text style={styles.scorePillText}>{score}% compatibility</Text>
+                  <Text style={styles.scorePillText}>{score}% compatible</Text>
                 </View>
               </View>
               {[
                 {
                   title: "Parties",
-                  items: [
-                    `Resident A: ${user.name} (${user.email})`,
-                    `Lease Type: ${LEASE_LABELS[user.leaseType]}`,
-                  ]
+                  items: [`Resident A: ${user.name} (${user.email})`, `Lease: ${LEASE_LABELS[user.leaseType]}`]
                 },
                 {
                   title: "Utility Splits",
                   items: [
-                    "Ameren Illinois (Electric/Gas): Split equally by occupancy days",
-                    "Illinois American Water: Split equally per person",
-                    "Internet (Xfinity/Volo): Rotate account holder annually",
-                    "Break periods: Person staying pays full utilities that month",
+                    "Electric/Gas: Split equally by occupancy days",
+                    "Water: Split equally per person",
+                    "Internet: Rotate account holder annually",
+                    "Break periods: Person staying pays full utilities",
                   ]
                 },
                 {
                   title: "Security Deposit",
                   items: [
-                    "Original deposit transferred privately via cash or Venmo",
-                    "Both parties sign a receipt confirming exact amount",
+                    "Transfer via cash or Venmo with signed receipt",
                     "Receipt is binding proof of transfer",
                   ]
                 },
@@ -138,8 +91,8 @@ function AgreementModal({ user, score, onClose }: { user: UserProfile; score: nu
                   title: "House Rules",
                   items: [
                     "Overnight guests: Max 3 consecutive nights without notice",
-                    "Chores: Rotate weekly (kitchen, bathroom, common areas)",
-                    "Thermostat: 68–72°F agreed range",
+                    "Chores: Rotate weekly",
+                    "Thermostat: 68–72°F",
                     "Quiet hours: 10pm–8am weekdays",
                     "Dishes: Cleaned within 24 hours",
                   ]
@@ -185,9 +138,9 @@ function AddFriendModal({ onClose, onAdd }: { onClose: () => void; onAdd: (email
           style={[styles.modalContainer, { height: "auto", padding: 24, borderRadius: 22 }]}
           activeOpacity={1}
         >
-          <Text style={styles.modalTitle}>Add to My Circle</Text>
+          <Text style={styles.modalTitle}>Add a friend</Text>
           <Text style={[styles.agreementDate, { marginBottom: 16 }]}>
-            Enter their @illinois.edu email to connect
+            Enter their @illinois.edu email
           </Text>
           <TextInput
             style={styles.addInput}
@@ -216,7 +169,7 @@ function AddFriendModal({ onClose, onAdd }: { onClose: () => void; onAdd: (email
 
 export default function MyCircleScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, mockUsers, matches, computeScore, friends, addFriend, removeFriend, toggleVouch, getTrustInfo } = useApp();
+  const { currentUser, mockUsers, matches, friends, addFriend, removeFriend, toggleVouch, getTrustInfo } = useApp();
   const [activeTab, setActiveTab] = useState<"circle" | "matches">("circle");
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
   const [agreementUser, setAgreementUser] = useState<UserProfile | null>(null);
@@ -234,14 +187,19 @@ export default function MyCircleScreen() {
     .filter((m): m is { user: UserProfile; score: number } => m !== null)
     .sort((a, b) => b.score - a.score);
 
+  const suggestions = MOCK_USERS.filter(u =>
+    u.email !== currentUser?.email &&
+    !friends.some(f => f.email === u.email)
+  ).slice(0, 5);
+
   const handleAddFriend = (email: string) => {
     const mockUser = MOCK_USERS.find(u => u.email === email);
     if (email === currentUser?.email) {
-      Alert.alert("That's you!", "You cannot add yourself to your circle.");
+      Alert.alert("That's you!", "You cannot add yourself.");
       return;
     }
     if (friends.some(f => f.email === email)) {
-      Alert.alert("Already connected", "This person is already in your circle.");
+      Alert.alert("Already connected", "This person is in your circle.");
       return;
     }
     if (mockUser) {
@@ -255,27 +213,19 @@ export default function MyCircleScreen() {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
-      Alert.alert(
-        "Not found yet",
-        "That student hasn't joined PopMatch yet, but we'll notify you when they do.",
-        [{ text: "OK" }]
-      );
+      Alert.alert("Not on PopMatch yet", "We'll notify you when they join.");
     }
   };
 
   const handleRemoveFriend = (friend: FriendRecord) => {
     Alert.alert(
-      "Remove from Circle",
-      `Remove ${friend.name} from your circle?`,
+      "Remove friend",
+      `Remove ${friend.name}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            removeFriend(friend.email);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }
+          text: "Remove", style: "destructive",
+          onPress: () => { removeFriend(friend.email); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }
         }
       ]
     );
@@ -286,12 +236,11 @@ export default function MyCircleScreen() {
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
         <View>
           <Text style={styles.headerTitle}>My Circle</Text>
-          <Text style={styles.headerSub}>{friends.length} connection{friends.length !== 1 ? "s" : ""} · {likedMatches.length} match{likedMatches.length !== 1 ? "es" : ""}</Text>
+          <Text style={styles.headerSub}>
+            {friends.length} friend{friends.length !== 1 ? "s" : ""} · {likedMatches.length} match{likedMatches.length !== 1 ? "es" : ""}
+          </Text>
         </View>
-        <TouchableOpacity
-          style={styles.addCircleBtn}
-          onPress={() => setShowAddFriend(true)}
-        >
+        <TouchableOpacity style={styles.addCircleBtn} onPress={() => setShowAddFriend(true)}>
           <Ionicons name="person-add-outline" size={18} color={Colors.ocean} />
         </TouchableOpacity>
       </View>
@@ -302,7 +251,7 @@ export default function MyCircleScreen() {
           onPress={() => { setActiveTab("circle"); Haptics.selectionAsync(); }}
         >
           <Ionicons name="people-outline" size={15} color={activeTab === "circle" ? Colors.ocean : Colors.textMuted} />
-          <Text style={[styles.tabText, activeTab === "circle" && styles.tabTextActive]}>My Circle</Text>
+          <Text style={[styles.tabText, activeTab === "circle" && styles.tabTextActive]}>Friends</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === "matches" && styles.tabActive]}
@@ -331,65 +280,43 @@ export default function MyCircleScreen() {
             {friends.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="people-outline" size={52} color={Colors.textLight} />
-                <Text style={styles.emptyTitle}>Your circle is empty</Text>
-                <Text style={styles.emptySub}>Add fellow Illini to build trust and see connection badges on listings.</Text>
+                <Text style={styles.emptyTitle}>No friends yet</Text>
                 <TouchableOpacity style={styles.emptyAddBtn} onPress={() => setShowAddFriend(true)}>
                   <Ionicons name="person-add-outline" size={15} color={Colors.white} />
-                  <Text style={styles.emptyAddBtnText}>Add your first connection</Text>
+                  <Text style={styles.emptyAddBtnText}>Add a friend</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               friends.map((friend) => {
                 const initials = friend.name.split(" ").map(n => n[0]).join("").slice(0, 2);
-                const collegeColor = friend.college ? COLLEGE_COLORS[friend.college] || Colors.textMuted : Colors.textMuted;
-
                 return (
                   <View key={friend.email} style={styles.friendCard}>
                     <View style={[styles.friendAvatar, { backgroundColor: friend.avatarColor }]}>
                       <Text style={styles.friendAvatarText}>{initials}</Text>
                     </View>
                     <View style={styles.friendInfo}>
-                      <Text style={styles.friendName}>{friend.name}</Text>
+                      <View style={styles.friendNameRow}>
+                        <Text style={styles.friendName}>{friend.name}</Text>
+                        {friend.vouchedByMe && (
+                          <View style={styles.vouchedBadge}>
+                            <Ionicons name="star" size={11} color={Colors.orange} />
+                            <Text style={styles.vouchedBadgeText}>Vouched</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.friendEmail}>{friend.email}</Text>
-                      <View style={styles.friendTagRow}>
-                        {friend.major ? (
-                          <View style={styles.friendTag}>
-                            <Text style={styles.friendTagText}>{friend.major}</Text>
-                          </View>
-                        ) : null}
-                        {friend.college ? (
-                          <View style={[styles.friendTag, { backgroundColor: collegeColor + "18", borderColor: collegeColor + "30" }]}>
-                            <Text style={[styles.friendTagText, { color: collegeColor }]}>{friend.college}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <View style={styles.friendBadgeRow}>
-                        <TrustBadge label="1st Degree" type="friend" />
-                        {friend.vouchedByMe && <TrustBadge label="You vouched" type="vouched" />}
-                      </View>
+                      {friend.major ? <Text style={styles.friendMajor}>{friend.major}</Text> : null}
                     </View>
                     <View style={styles.friendActions}>
                       <TouchableOpacity
-                        style={[
-                          styles.vouchBtn,
-                          friend.vouchedByMe && styles.vouchBtnActive
-                        ]}
-                        onPress={() => {
-                          Haptics.selectionAsync();
-                          toggleVouch(friend.email);
-                        }}
+                        style={[styles.actionBtn, friend.vouchedByMe && styles.actionBtnActive]}
+                        onPress={() => { Haptics.selectionAsync(); toggleVouch(friend.email); }}
                       >
-                        <Ionicons
-                          name={friend.vouchedByMe ? "star" : "star-outline"}
-                          size={15}
-                          color={friend.vouchedByMe ? Colors.orange : Colors.textMuted}
-                        />
+                        <Ionicons name={friend.vouchedByMe ? "star" : "star-outline"} size={16}
+                          color={friend.vouchedByMe ? Colors.orange : Colors.textMuted} />
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.removeBtn}
-                        onPress={() => handleRemoveFriend(friend)}
-                      >
-                        <Ionicons name="person-remove-outline" size={15} color={Colors.textLight} />
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => handleRemoveFriend(friend)}>
+                        <Ionicons name="close" size={16} color={Colors.textMuted} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -397,54 +324,42 @@ export default function MyCircleScreen() {
               })
             )}
 
-            <View style={styles.suggestSection}>
-              <Text style={styles.suggestTitle}>Suggested connections</Text>
-              <Text style={styles.suggestSub}>Fellow Illini on PopMatch</Text>
-              {MOCK_USERS.filter(u =>
-                u.email !== currentUser?.email &&
-                !friends.some(f => f.email === u.email)
-              ).slice(0, 4).map(u => {
-                const initials = u.name.split(" ").map(n => n[0]).join("").slice(0, 2);
-                const sharedCollege = u.college === (currentUser?.college || "");
-                const sharedOrgs = (u.organizations || []).some(
-                  org => (currentUser?.organizations || []).includes(org)
-                );
+            {suggestions.length > 0 && (
+              <View style={styles.suggestSection}>
+                <Text style={styles.suggestTitle}>People You May Know</Text>
+                {suggestions.map(user => {
+                  const trust = getTrustInfo(user.email);
+                  const initials = user.name.split(" ").map(n => n[0]).join("").slice(0, 2);
+                  const mutualText = trust.mutualFriendNames.length > 0
+                    ? `${trust.mutualFriendNames.length} mutual friend${trust.mutualFriendNames.length > 1 ? "s" : ""}: ${trust.mutualFriendNames.slice(0, 2).join(", ")}${trust.mutualFriendNames.length > 2 ? ` +${trust.mutualFriendNames.length - 2}` : ""}`
+                    : trust.sharedOrg
+                    ? `Both in ${trust.sharedOrg}`
+                    : null;
 
-                return (
-                  <View key={u.email} style={styles.suggestCard}>
-                    <View style={[styles.suggestAvatar, { backgroundColor: u.avatarColor }]}>
-                      <Text style={styles.suggestAvatarText}>{initials}</Text>
+                  return (
+                    <View key={user.email} style={styles.suggestCard}>
+                      <View style={[styles.suggestAvatar, { backgroundColor: user.avatarColor }]}>
+                        <Text style={styles.suggestAvatarText}>{initials}</Text>
+                      </View>
+                      <View style={styles.suggestInfo}>
+                        <Text style={styles.suggestName}>{user.name}</Text>
+                        <Text style={styles.suggestMajor}>{user.major}</Text>
+                        {mutualText ? (
+                          <View style={styles.mutualRow}>
+                            <Ionicons name="people" size={11} color={Colors.ocean} />
+                            <Text style={styles.mutualText}>{mutualText}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <TouchableOpacity style={styles.connectBtn}
+                        onPress={() => handleAddFriend(user.email)}>
+                        <Ionicons name="person-add-outline" size={16} color={Colors.white} />
+                      </TouchableOpacity>
                     </View>
-                    <View style={styles.suggestInfo}>
-                      <Text style={styles.suggestName}>{u.name}</Text>
-                      <Text style={styles.suggestMajor}>{u.major}{u.college ? ` · ${u.college}` : ""}</Text>
-                      {(sharedCollege || sharedOrgs) && (
-                        <View style={styles.suggestBadgeRow}>
-                          {sharedCollege && <TrustBadge label={`Both in ${u.college}`} type="org" />}
-                          {sharedOrgs && !sharedCollege && <TrustBadge label="Shared RSO" type="org" />}
-                        </View>
-                      )}
-                    </View>
-                    <TouchableOpacity
-                      style={styles.connectBtn}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        addFriend({
-                          email: u.email,
-                          name: u.name,
-                          avatarColor: u.avatarColor,
-                          major: u.major,
-                          college: u.college,
-                          organizations: u.organizations,
-                        });
-                      }}
-                    >
-                      <Ionicons name="add" size={16} color={Colors.white} />
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </View>
+                  );
+                })}
+              </View>
+            )}
           </>
         )}
 
@@ -454,7 +369,7 @@ export default function MyCircleScreen() {
               <View style={styles.emptyState}>
                 <Ionicons name="heart-outline" size={52} color={Colors.textLight} />
                 <Text style={styles.emptyTitle}>No matches yet</Text>
-                <Text style={styles.emptySub}>Open the Year-Long Matchmaker and start swiping!</Text>
+                <Text style={styles.emptySub}>Use the Year-Long Matchmaker to start swiping.</Text>
               </View>
             ) : (
               likedMatches.map(({ user, score }) => {
@@ -464,6 +379,16 @@ export default function MyCircleScreen() {
                 const alertBg = alert.level === "danger" ? "#FFF0F0" : alert.level === "warn" ? "#FFF4E6" : "#EEF6FF";
                 const alertBorder = alert.level === "danger" ? Colors.alertRed : alert.level === "warn" ? Colors.alertOrange : Colors.ocean;
                 const trust = getTrustInfo(user.email);
+
+                const trustParts: string[] = [];
+                if (trust.isFriend) trustParts.push("Friend");
+                if (trust.mutualFriendNames.length > 0) {
+                  const names = trust.mutualFriendNames.slice(0, 2).join(", ");
+                  trustParts.push(`${trust.mutualFriendNames.length} mutual: ${names}`);
+                }
+                if (trust.vouchedByFriend) trustParts.push(`Vouched by ${trust.vouchedByFriend}`);
+                if (trust.sharedOrg && !trust.isFriend) trustParts.push(`Both in ${trust.sharedOrg}`);
+                const trustColor = trust.isFriend ? Colors.grassGreen : trust.mutualFriendNames.length > 0 ? Colors.ocean : Colors.goldDark;
 
                 return (
                   <View key={user.id} style={styles.matchCard}>
@@ -476,16 +401,10 @@ export default function MyCircleScreen() {
                         <Text style={styles.matchName}>{user.name}</Text>
                         <Text style={styles.matchMajor}>{user.major}</Text>
                         <Text style={styles.matchDetail}>${user.budget}/mo · {LEASE_LABELS[user.leaseType]}</Text>
-                        {trust.degree !== null && (
+                        {trustParts.length > 0 && (
                           <View style={styles.trustRow}>
-                            {trust.degree === 1 && <TrustBadge label="1st Degree" type="friend" />}
-                            {trust.degree === 2 && <TrustBadge label="2nd Degree" type="mutual" />}
-                            {trust.vouchedByFriend && <TrustBadge label={`Vouched by ${trust.vouchedByFriend}`} type="vouched" />}
-                          </View>
-                        )}
-                        {trust.sharedOrg && (
-                          <View style={styles.trustRow}>
-                            <TrustBadge label={`Both in ${trust.sharedOrg}`} type="org" />
+                            <Ionicons name={trust.isFriend ? "people" : "person-add"} size={11} color={trustColor} />
+                            <Text style={[styles.trustText, { color: trustColor }]}>{trustParts.join(" · ")}</Text>
                           </View>
                         )}
                       </View>
@@ -505,7 +424,7 @@ export default function MyCircleScreen() {
                           <View style={styles.alertHeader}>
                             <Ionicons
                               name={alert.level === "danger" ? "alert-circle" : alert.level === "warn" ? "warning-outline" : "information-circle-outline"}
-                              size={16} color={alertBorder} />
+                              size={15} color={alertBorder} />
                             <Text style={[styles.alertTitle, { color: alertBorder }]}>{alert.title}</Text>
                           </View>
                           <Text style={styles.alertBody}>{alert.message}</Text>
@@ -590,59 +509,57 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 10 },
   emptyState: { alignItems: "center", paddingTop: 40, gap: 12 },
-  emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 20, color: Colors.charcoal },
-  emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center", paddingHorizontal: 24 },
+  emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 18, color: Colors.charcoal },
+  emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center" },
   emptyAddBtn: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: Colors.ocean, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 12, marginTop: 4,
+    backgroundColor: Colors.ocean, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 12,
   },
   emptyAddBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
   friendCard: {
-    flexDirection: "row", alignItems: "flex-start",
+    flexDirection: "row", alignItems: "center",
     backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5,
     borderColor: Colors.borderSoft, padding: 14, gap: 12,
   },
-  friendAvatar: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  friendAvatarText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
-  friendInfo: { flex: 1, gap: 4 },
+  friendAvatar: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  friendAvatarText: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: Colors.white },
+  friendInfo: { flex: 1, gap: 3 },
+  friendNameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   friendName: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal },
+  vouchedBadge: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: Colors.orange + "18", paddingHorizontal: 7, paddingVertical: 2,
+    borderRadius: 8, borderWidth: 1, borderColor: Colors.orange + "30",
+  },
+  vouchedBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.orange },
   friendEmail: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
-  friendTagRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 2 },
-  friendTag: {
-    backgroundColor: Colors.ocean + "14", borderRadius: 8, borderWidth: 1,
-    borderColor: Colors.ocean + "25", paddingHorizontal: 7, paddingVertical: 2,
-  },
-  friendTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.ocean },
-  friendBadgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 2 },
+  friendMajor: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.ocean },
   friendActions: { gap: 8, alignItems: "center" },
-  vouchBtn: {
+  actionBtn: {
     width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center",
     backgroundColor: Colors.sandDark, borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
-  vouchBtnActive: { backgroundColor: Colors.orange + "20", borderColor: Colors.orange + "40" },
-  removeBtn: {
-    width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center",
-    backgroundColor: Colors.sandDark, borderWidth: 1.5, borderColor: Colors.borderSoft,
-  },
-  suggestSection: { gap: 10, marginTop: 8 },
+  actionBtnActive: { backgroundColor: Colors.orange + "20", borderColor: Colors.orange + "40" },
+  suggestSection: { gap: 10, marginTop: 6 },
   suggestTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal },
-  suggestSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, marginTop: -6 },
   suggestCard: {
     flexDirection: "row", alignItems: "center",
     backgroundColor: Colors.cardBg, borderRadius: 14, borderWidth: 1.5,
-    borderColor: Colors.borderSoft, padding: 12, gap: 10,
+    borderColor: Colors.borderSoft, padding: 12, gap: 12,
   },
-  suggestAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  suggestAvatarText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
+  suggestAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  suggestAvatarText: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.white },
   suggestInfo: { flex: 1, gap: 3 },
   suggestName: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
   suggestMajor: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
-  suggestBadgeRow: { flexDirection: "row", gap: 5, marginTop: 2 },
+  mutualRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  mutualText: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.ocean },
   connectBtn: {
-    width: 32, height: 32, borderRadius: 10, backgroundColor: Colors.ocean,
+    width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.ocean,
     alignItems: "center", justifyContent: "center",
   },
-  trustRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 3 },
+  trustRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+  trustText: { fontFamily: "Nunito_600SemiBold", fontSize: 11, flex: 1 },
   matchCard: { backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5, borderColor: Colors.borderSoft, overflow: "hidden" },
   matchCardTop: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
   matchAvatar: { width: 50, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center" },
@@ -686,15 +603,14 @@ const styles = StyleSheet.create({
   scorePill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 },
   scorePillText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.white },
   agreementBlock: { gap: 6 },
-  agreementSectionTitle: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.ocean, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 },
+  agreementSectionTitle: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.ocean, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 },
   agreementItem: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, lineHeight: 20 },
   signatureBlock: { gap: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.borderSoft },
   signatureLine: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
   addInput: {
     backgroundColor: Colors.cardBg, borderRadius: 14, borderWidth: 1.5,
     borderColor: Colors.borderSoft, paddingHorizontal: 16, paddingVertical: 12,
-    fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.charcoal,
-    marginBottom: 8,
+    fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.charcoal, marginBottom: 8,
   },
   errorText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.alertRed, marginBottom: 8 },
   addBtnRow: { flexDirection: "row", gap: 10, marginTop: 4 },
