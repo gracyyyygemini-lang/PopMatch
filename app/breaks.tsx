@@ -118,18 +118,21 @@ function StickyNote({ post, index, onRequestStay, isCurrentUser }: StickyNotePro
   );
 }
 
-function PostBreakModal({ onClose }: { onClose: () => void }) {
-  const insets = useSafeAreaInsets();
+interface PostBreakModalProps {
+  onClose: () => void;
+  moveInDate: Date | null;
+  moveOutDate: Date | null;
+  onRequestMoveIn: () => void;
+  onRequestMoveOut: () => void;
+}
+
+function PostBreakModal({ onClose, moveInDate, moveOutDate, onRequestMoveIn, onRequestMoveOut }: PostBreakModalProps) {
   const { currentUser, addBreakPost } = useApp();
   const [role, setRole] = useState<"seeking" | "offering">("seeking");
   const [breakType, setBreakType] = useState<BreakType>("thanksgiving");
   const [price, setPrice] = useState("");
   const [zone, setZone] = useState<Zone>("campustown");
   const [description, setDescription] = useState("");
-  const [moveInDate, setMoveInDate] = useState<Date | null>(null);
-  const [moveOutDate, setMoveOutDate] = useState<Date | null>(null);
-  const [showMoveIn, setShowMoveIn] = useState(false);
-  const [showMoveOut, setShowMoveOut] = useState(false);
 
   const days = calcDays(moveInDate?.toISOString(), moveOutDate?.toISOString());
 
@@ -199,7 +202,7 @@ function PostBreakModal({ onClose }: { onClose: () => void }) {
                 </View>
 
                 <Text style={styles.modalLabel}>Move-In Date & Time</Text>
-                <TouchableOpacity style={styles.datePicker} onPress={() => setShowMoveIn(true)}>
+                <TouchableOpacity style={styles.datePicker} onPress={onRequestMoveIn}>
                   <Ionicons name="calendar-outline" size={17} color={Colors.ocean} />
                   <Text style={[styles.datePickerText, !moveInDate && styles.datePickerPlaceholder]}>
                     {moveInDate
@@ -211,7 +214,7 @@ function PostBreakModal({ onClose }: { onClose: () => void }) {
                 </TouchableOpacity>
 
                 <Text style={styles.modalLabel}>Move-Out Date & Time</Text>
-                <TouchableOpacity style={styles.datePicker} onPress={() => setShowMoveOut(true)}>
+                <TouchableOpacity style={styles.datePicker} onPress={onRequestMoveOut}>
                   <Ionicons name="calendar-outline" size={17} color={Colors.ocean} />
                   <Text style={[styles.datePickerText, !moveOutDate && styles.datePickerPlaceholder]}>
                     {moveOutDate
@@ -264,22 +267,6 @@ function PostBreakModal({ onClose }: { onClose: () => void }) {
         </KeyboardAvoidingView>
       </View>
 
-      <DateTimePicker
-        visible={showMoveIn}
-        value={moveInDate}
-        title="Move-In Date & Time"
-        minimumDate={new Date()}
-        onConfirm={d => { setMoveInDate(d); setShowMoveIn(false); }}
-        onCancel={() => setShowMoveIn(false)}
-      />
-      <DateTimePicker
-        visible={showMoveOut}
-        value={moveOutDate}
-        title="Move-Out Date & Time"
-        minimumDate={moveInDate ?? new Date()}
-        onConfirm={d => { setMoveOutDate(d); setShowMoveOut(false); }}
-        onCancel={() => setShowMoveOut(false)}
-      />
     </Modal>
   );
 }
@@ -290,7 +277,17 @@ export default function BreaksScreen() {
   const [activeBreak, setActiveBreak] = useState<BreakType | "all">("all");
   const [showPostModal, setShowPostModal] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const [moveInDate, setMoveInDate] = useState<Date | null>(null);
+  const [moveOutDate, setMoveOutDate] = useState<Date | null>(null);
+  const [showMoveIn, setShowMoveIn] = useState(false);
+  const [showMoveOut, setShowMoveOut] = useState(false);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+
+  const handleClosePostModal = () => {
+    setShowPostModal(false);
+    setMoveInDate(null);
+    setMoveOutDate(null);
+  };
 
   const filtered = activeBreak === "all"
     ? breakPosts
@@ -394,7 +391,33 @@ export default function BreaksScreen() {
         )}
       </ScrollView>
 
-      {showPostModal && <PostBreakModal onClose={() => setShowPostModal(false)} />}
+      {showPostModal && (
+        <PostBreakModal
+          onClose={handleClosePostModal}
+          moveInDate={moveInDate}
+          moveOutDate={moveOutDate}
+          onRequestMoveIn={() => setShowMoveIn(true)}
+          onRequestMoveOut={() => setShowMoveOut(true)}
+        />
+      )}
+
+      {/* DateTimePickers rendered at screen level — NEVER inside a Modal */}
+      <DateTimePicker
+        visible={showMoveIn}
+        value={moveInDate}
+        title="Move-In Date & Time"
+        minimumDate={new Date()}
+        onConfirm={d => { setMoveInDate(d); setShowMoveIn(false); }}
+        onCancel={() => setShowMoveIn(false)}
+      />
+      <DateTimePicker
+        visible={showMoveOut}
+        value={moveOutDate}
+        title="Move-Out Date & Time"
+        minimumDate={moveInDate ?? new Date()}
+        onConfirm={d => { setMoveOutDate(d); setShowMoveOut(false); }}
+        onCancel={() => setShowMoveOut(false)}
+      />
     </View>
   );
 }

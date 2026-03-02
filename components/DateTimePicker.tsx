@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from "react";
+import React, { useState } from "react";
 import {
-  Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView
+  Modal, View, Text, TouchableOpacity, StyleSheet, Platform
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -272,7 +272,7 @@ const s = StyleSheet.create({
     flexDirection: "row", flexWrap: "wrap",
   },
   cell: {
-    width: `${100/7}%` as any,
+    width: "14.28%" as any,
     height: CELL, alignItems: "center", justifyContent: "center",
   },
   cellSelected: {
