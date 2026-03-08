@@ -614,14 +614,40 @@ export default function MatchmakerScreen() {
             <Text style={styles.blockedSub}>
               As a {STATUS_LABELS[userStatus]}, you need to create a listing before using the Matchmaker.
             </Text>
-            <TouchableOpacity style={styles.createListingBtn} onPress={() => router.push("/marketplace" as any)}>
+            <TouchableOpacity style={styles.createListingBtn} onPress={() => router.push("/create-listing" as any)}>
               <Ionicons name="add" size={18} color={Colors.white} />
-              <Text style={styles.createListingText}>Go to Marketplace</Text>
+              <Text style={styles.createListingText}>Create Listing</Text>
             </TouchableOpacity>
           </View>
         </View>
       ) : (
         <>
+          {(userStatus === "host" || userStatus === "sublessor") && ownListing && (
+            <View style={styles.listingPreview}>
+              <View style={styles.listingPreviewHeader}>
+                <Ionicons name="home" size={14} color={Colors.ocean} />
+                <Text style={styles.listingPreviewTitle}>Your Listing</Text>
+              </View>
+              <View style={styles.listingPreviewBody}>
+                <Text style={styles.listingPreviewName}>{ownListing.buildingName}</Text>
+                <Text style={styles.listingPreviewPrice}>${ownListing.pricePerMonth}/mo</Text>
+                {ownListing.roomsAvailable && (
+                  <Text style={styles.listingPreviewRooms}>{ownListing.roomsAvailable} room{ownListing.roomsAvailable > 1 ? "s" : ""} available</Text>
+                )}
+              </View>
+              {ownListing.lifestyleTags && ownListing.lifestyleTags.length > 0 && (
+                <View style={styles.listingPreviewTags}>
+                  {ownListing.lifestyleTags.map(tag => (
+                    <View key={tag} style={styles.listingPreviewTag}>
+                      <Text style={styles.listingPreviewTagText}>
+                        {tag.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
           <View style={styles.deckArea}>
             {remaining.length === 0 ? (
               <View style={styles.emptyCard}>
@@ -737,4 +763,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ocean, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 14, marginTop: 8,
   },
   createListingText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
+  listingPreview: {
+    marginHorizontal: 16, marginBottom: 8, backgroundColor: Colors.cardBg,
+    borderRadius: 16, borderWidth: 1.5, borderColor: Colors.ocean + "30",
+    padding: 14, gap: 6,
+  },
+  listingPreviewHeader: {
+    flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2,
+  },
+  listingPreviewTitle: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.ocean },
+  listingPreviewBody: {
+    flexDirection: "row", alignItems: "baseline", gap: 10, flexWrap: "wrap",
+  },
+  listingPreviewName: { fontFamily: "Nunito_800ExtraBold", fontSize: 15, color: Colors.charcoal },
+  listingPreviewPrice: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
+  listingPreviewRooms: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
+  listingPreviewTags: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 },
+  listingPreviewTag: {
+    backgroundColor: Colors.teal + "18", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+  },
+  listingPreviewTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.teal },
 });

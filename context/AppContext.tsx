@@ -48,6 +48,8 @@ export interface MutualFriend {
   avatarColor: string;
 }
 
+export type LifestyleTag = "quiet" | "social" | "clean" | "studious" | "early_bird" | "night_owl" | "pet_friendly" | "no_smoking";
+
 export interface SubleasePost {
   id: string;
   userId: string;
@@ -65,6 +67,8 @@ export interface SubleasePost {
   avatarColor: string;
   timestamp: number;
   category?: string;
+  roomsAvailable?: number;
+  lifestyleTags?: LifestyleTag[];
 }
 
 export interface BreakPost {
