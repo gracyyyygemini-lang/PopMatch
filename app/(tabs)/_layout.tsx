@@ -18,10 +18,6 @@ function NativeTabLayout() {
         <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
         <Label>My Circle</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="chats">
-        <Icon sf={{ default: "message", selected: "message.fill" }} />
-        <Label>Chats</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="map">
         <Icon sf={{ default: "map", selected: "map.fill" }} />
         <Label>Map</Label>
@@ -76,13 +72,6 @@ function ClassicTabLayout() {
         options={{
           title: "My Circle",
           tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="chats"
-        options={{
-          title: "Chats",
-          tabBarIcon: ({ color }) => <Ionicons name="chatbubbles-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -86,46 +86,6 @@ async function initDb() {
   `).catch(() => {});
 
   await query(`
-    ALTER TABLE listings ADD COLUMN IF NOT EXISTS move_in_at TIMESTAMPTZ
-  `).catch(() => {});
-
-  await query(`
-    ALTER TABLE listings ADD COLUMN IF NOT EXISTS move_out_at TIMESTAMPTZ
-  `).catch(() => {});
-
-  await query(`
-    ALTER TABLE listings ADD COLUMN IF NOT EXISTS floor_plan VARCHAR DEFAULT ''
-  `).catch(() => {});
-
-  await query(`
-    ALTER TABLE break_posts ADD COLUMN IF NOT EXISTS move_in_at TIMESTAMPTZ
-  `).catch(() => {});
-
-  await query(`
-    ALTER TABLE break_posts ADD COLUMN IF NOT EXISTS move_out_at TIMESTAMPTZ
-  `).catch(() => {});
-
-  // Amenity columns on listings
-  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS wifi_included BOOLEAN DEFAULT FALSE`).catch(() => {});
-  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS in_unit_laundry BOOLEAN DEFAULT FALSE`).catch(() => {});
-  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS bedrooms_count INT DEFAULT 1`).catch(() => {});
-  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS private_bathroom BOOLEAN DEFAULT FALSE`).catch(() => {});
-  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS parking_included BOOLEAN DEFAULT FALSE`).catch(() => {});
-  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS furnished BOOLEAN DEFAULT FALSE`).catch(() => {});
-
-  // Room images
-  await query(`
-    CREATE TABLE IF NOT EXISTS listing_images (
-      id SERIAL PRIMARY KEY,
-      listing_id VARCHAR NOT NULL,
-      category VARCHAR NOT NULL,
-      image_data TEXT NOT NULL,
-      verified BOOLEAN DEFAULT TRUE,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `).catch(() => {});
-
-  await query(`
     CREATE TABLE IF NOT EXISTS otp_codes (
       email VARCHAR PRIMARY KEY,
       code VARCHAR(6) NOT NULL,
@@ -161,55 +121,11 @@ async function initDb() {
     ON CONFLICT (key) DO NOTHING
   `);
 
-  await query(`
-    CREATE TABLE IF NOT EXISTS conversations (
-      id VARCHAR PRIMARY KEY,
-      type VARCHAR DEFAULT 'match',
-      listing_id VARCHAR DEFAULT '',
-      listing_title VARCHAR DEFAULT '',
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      last_message_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-
-  await query(`
-    CREATE TABLE IF NOT EXISTS conversation_participants (
-      conversation_id VARCHAR,
-      user_email VARCHAR NOT NULL,
-      PRIMARY KEY (conversation_id, user_email)
-    )
-  `);
-
-  await query(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id SERIAL PRIMARY KEY,
-      conversation_id VARCHAR NOT NULL,
-      sender_email VARCHAR NOT NULL,
-      content TEXT NOT NULL,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-
-  await query(`
-    CREATE TABLE IF NOT EXISTS group_profiles (
-      id VARCHAR PRIMARY KEY,
-      creator_email VARCHAR NOT NULL,
-      building_name VARCHAR NOT NULL,
-      address VARCHAR DEFAULT '',
-      zone VARCHAR DEFAULT 'campustown',
-      rent_per_person INT DEFAULT 0,
-      rooms_available INT DEFAULT 1,
-      description TEXT DEFAULT '',
-      avatar_color VARCHAR DEFAULT '#005F73',
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-
   console.log("Database initialized");
 }
 
 function randomCode(): string {
-  return "123456";
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -270,7 +186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(410).json({ error: "Code expired. Please request a new one." });
       }
 
-      if (row.code !== code.trim() && code.trim() !== "123456") {
+      if (row.code !== code.trim()) {
         await query("UPDATE otp_codes SET attempts = attempts + 1 WHERE email = $1", [email]);
         const remaining = 5 - (row.attempts + 1);
         return res.status(401).json({ error: `Incorrect code. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.` });
@@ -523,148 +439,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/listings", async (req: Request, res: Response) => {
     try {
-      const {
-        category,
-        wifi_included, in_unit_laundry, private_bathroom,
-        parking_included, furnished, bedrooms_count,
-      } = req.query;
-
-      const conditions: string[] = ["l.leased = FALSE"];
-      const params: unknown[] = [];
-
-      if (category) {
-        params.push(category);
-        conditions.push(`l.category = $${params.length}`);
-      }
-      if (wifi_included === "true") conditions.push("l.wifi_included = TRUE");
-      if (in_unit_laundry === "true") conditions.push("l.in_unit_laundry = TRUE");
-      if (private_bathroom === "true") conditions.push("l.private_bathroom = TRUE");
-      if (parking_included === "true") conditions.push("l.parking_included = TRUE");
-      if (furnished === "true") conditions.push("l.furnished = TRUE");
-      if (bedrooms_count) {
-        params.push(Number(bedrooms_count));
-        conditions.push(`l.bedrooms_count >= $${params.length}`);
-      }
-
-      const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-      const sql = `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
-                   FROM listings l LEFT JOIN users u ON l.user_id = u.id
-                   ${where} ORDER BY l.created_at DESC`;
+      const { category } = req.query;
+      const sql = category
+        ? `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
+           FROM listings l LEFT JOIN users u ON l.user_id = u.id
+           WHERE l.category = $1 AND l.leased = FALSE ORDER BY l.created_at DESC`
+        : `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
+           FROM listings l LEFT JOIN users u ON l.user_id = u.id
+           WHERE l.leased = FALSE ORDER BY l.created_at DESC`;
+      const params = category ? [category] : [];
       const rows = await query(sql, params);
       return res.json(rows);
     } catch (err) {
       console.error("GET /api/listings", err);
       return res.status(500).json({ error: "Failed to fetch listings" });
-    }
-  });
-
-  app.get("/api/listings/:id", async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const [row] = await query<Record<string, unknown>>(
-        `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar, u.email as user_email_full
-         FROM listings l LEFT JOIN users u ON l.user_id = u.id
-         WHERE l.id = $1`,
-        [id]
-      );
-      if (!row) return res.status(404).json({ error: "Listing not found" });
-      return res.json(row);
-    } catch (err) {
-      console.error("GET /api/listings/:id", err);
-      return res.status(500).json({ error: "Failed to fetch listing" });
-    }
-  });
-
-  app.get("/api/listings/:id/images", async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const rows = await query<{ id: number; listing_id: string; category: string; image_data: string; verified: boolean }>(
-        `SELECT id, listing_id, category, image_data, verified FROM listing_images WHERE listing_id = $1 ORDER BY id ASC`,
-        [id]
-      );
-      return res.json(rows);
-    } catch (err) {
-      console.error("GET /api/listings/:id/images", err);
-      return res.status(500).json({ error: "Failed to fetch images" });
-    }
-  });
-
-  app.post("/api/listings/:id/images", async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const { category, imageData, verified = true } = req.body;
-      if (!category || !imageData) {
-        return res.status(400).json({ error: "category and imageData are required" });
-      }
-      const [row] = await query<{ id: number }>(
-        `INSERT INTO listing_images (listing_id, category, image_data, verified) VALUES ($1,$2,$3,$4) RETURNING id`,
-        [id, category, imageData, verified]
-      );
-      return res.json({ success: true, id: row.id });
-    } catch (err) {
-      console.error("POST /api/listings/:id/images", err);
-      return res.status(500).json({ error: "Failed to save image" });
-    }
-  });
-
-  app.post("/api/verify-image", async (req: Request, res: Response) => {
-    try {
-      const { imageBase64, category } = req.body;
-      if (!imageBase64 || !category) {
-        return res.status(400).json({ error: "imageBase64 and category are required" });
-      }
-
-      // If OpenAI API key is configured, use Vision API for real verification
-      if (process.env.OPENAI_API_KEY) {
-        try {
-          const response = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model: "gpt-4o-mini",
-              max_tokens: 100,
-              messages: [{
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `Does this image clearly show a ${category} in a residential setting? A kitchen must have a stove, sink, or countertops. A bathroom must have a toilet or sink. A bedroom must have a bed or sleeping area. Answer ONLY "yes" or "no" and one brief reason.`,
-                  },
-                  {
-                    type: "image_url",
-                    image_url: { url: imageBase64.startsWith("data:") ? imageBase64 : `data:image/jpeg;base64,${imageBase64}` },
-                  },
-                ],
-              }],
-            }),
-          });
-          const data = await response.json() as { choices?: { message?: { content?: string } }[] };
-          const answer = (data.choices?.[0]?.message?.content ?? "").toLowerCase();
-          const verified = answer.startsWith("yes");
-          const reason = data.choices?.[0]?.message?.content ?? "";
-          return res.json({ verified, reason });
-        } catch (aiErr) {
-          console.error("OpenAI Vision error:", aiErr);
-          // Fall through to stub
-        }
-      }
-
-      // Stub: approve all images (real AI not configured)
-      const CATEGORY_HINTS: Record<string, string> = {
-        kitchen: "Make sure the photo shows a stove, sink, or countertops.",
-        bathroom: "Make sure the photo shows a toilet, sink, or shower.",
-        bedroom: "Make sure the photo shows a bed, desk, or sleeping area.",
-      };
-      return res.json({
-        verified: true,
-        reason: `Image accepted. Tip: ${CATEGORY_HINTS[category.toLowerCase()] ?? "Clear, well-lit photos help renters decide faster."}`,
-      });
-    } catch (err) {
-      console.error("POST /api/verify-image", err);
-      return res.status(500).json({ error: "Failed to verify image" });
     }
   });
 
@@ -675,9 +463,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         leaseType = "full_year", pricePerMonth = 0, landlord = "other",
         zone = "campustown", availableDuringBreaks = false, breakTypes = [],
         description = "", eventName = "", startDate = "", endDate = "",
-        floorPlan = "", moveInAt = null, moveOutAt = null,
-        wifiIncluded = false, inUnitLaundry = false, bedroomsCount = 1,
-        privateBathroom = false, parkingIncluded = false, furnished = false,
       } = req.body;
 
       if (!id || !userId || !buildingName) {
@@ -687,18 +472,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await query(
         `INSERT INTO listings (id, user_id, building_name, address, category, lease_type,
           price_per_month, landlord, zone, available_during_breaks, break_types,
-          description, event_name, start_date, end_date,
-          floor_plan, move_in_at, move_out_at,
-          wifi_included, in_unit_laundry, bedrooms_count, private_bathroom, parking_included, furnished)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+          description, event_name, start_date, end_date)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
          ON CONFLICT (id) DO NOTHING`,
         [id, userId, buildingName, address, category, leaseType, pricePerMonth,
           landlord, zone, availableDuringBreaks, breakTypes, description,
-          eventName, startDate, endDate,
-          floorPlan, moveInAt, moveOutAt,
-          wifiIncluded, inUnitLaundry, bedroomsCount, privateBathroom, parkingIncluded, furnished]
+          eventName, startDate, endDate]
       );
-      return res.json({ success: true, id });
+      return res.json({ success: true });
     } catch (err) {
       console.error("POST /api/listings", err);
       return res.status(500).json({ error: "Failed to save listing" });
@@ -821,185 +602,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("GET /api/admin/stats", err);
       return res.status(500).json({ error: "Failed to fetch admin stats" });
-    }
-  });
-
-  // ─── PUBLIC STATS ────────────────────────────────────────────────────────────
-
-  app.get("/api/public-stats", async (_req: Request, res: Response) => {
-    try {
-      const [userCount] = await query<{ count: string }>("SELECT COUNT(*) as count FROM users");
-      const [matchConvs] = await query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM conversations WHERE type = 'match'`
-      );
-      const [leasedCount] = await query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM listings WHERE leased = TRUE`
-      );
-      const statsRows = await query<{ key: string; value: number }>("SELECT * FROM stats");
-      const stats = Object.fromEntries(statsRows.map(r => [r.key, r.value]));
-      return res.json({
-        studentsOnline: parseInt(userCount?.count ?? "0"),
-        groupsFormed: parseInt(matchConvs?.count ?? "0") + (stats.total_matches ?? 0),
-        leasesTotal: parseInt(leasedCount?.count ?? "0") + (stats.successful_subleases ?? 0),
-      });
-    } catch (err) {
-      console.error("GET /api/public-stats", err);
-      return res.status(500).json({ error: "Failed to fetch public stats" });
-    }
-  });
-
-  // ─── CONVERSATIONS ──────────────────────────────────────────────────────────
-
-  app.post("/api/conversations/find-or-create", async (req: Request, res: Response) => {
-    try {
-      const { emails, type = "match", listingId = "", listingTitle = "", systemMessage = "" } = req.body;
-      if (!Array.isArray(emails) || emails.length !== 2) {
-        return res.status(400).json({ error: "Provide exactly 2 emails." });
-      }
-      const [e1, e2] = emails;
-      const existing = await query<{ conversation_id: string }>(
-        `SELECT cp1.conversation_id FROM conversation_participants cp1
-         JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
-         JOIN conversations c ON c.id = cp1.conversation_id
-         WHERE cp1.user_email = $1 AND cp2.user_email = $2
-           AND c.type = $3 AND c.listing_id = $4 LIMIT 1`,
-        [e1, e2, type, listingId]
-      );
-      if (existing.length > 0) {
-        return res.json({ conversationId: existing[0].conversation_id, created: false });
-      }
-      const convId = "conv_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
-      await query(
-        `INSERT INTO conversations (id, type, listing_id, listing_title) VALUES ($1, $2, $3, $4)`,
-        [convId, type, listingId, listingTitle]
-      );
-      await query(`INSERT INTO conversation_participants (conversation_id, user_email) VALUES ($1, $2)`, [convId, e1]);
-      await query(`INSERT INTO conversation_participants (conversation_id, user_email) VALUES ($1, $2)`, [convId, e2]);
-      if (systemMessage) {
-        await query(
-          `INSERT INTO messages (conversation_id, sender_email, content) VALUES ($1, 'system', $2)`,
-          [convId, systemMessage]
-        );
-        await query(`UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, [convId]);
-      }
-      return res.json({ conversationId: convId, created: true });
-    } catch (err) {
-      console.error("POST /api/conversations/find-or-create", err);
-      return res.status(500).json({ error: "Failed to create conversation" });
-    }
-  });
-
-  app.get("/api/conversations", async (req: Request, res: Response) => {
-    try {
-      const email = req.query.userEmail as string;
-      if (!email) return res.status(400).json({ error: "userEmail query param required" });
-      const rows = await query<{
-        id: string; type: string; listing_id: string; listing_title: string;
-        last_message_at: string; last_message: string | null; last_sender: string | null;
-      }>(
-        `SELECT c.id, c.type, c.listing_id, c.listing_title, c.last_message_at,
-           (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
-           (SELECT sender_email FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_sender
-         FROM conversations c
-         WHERE c.id IN (SELECT conversation_id FROM conversation_participants WHERE user_email = $1)
-         ORDER BY c.last_message_at DESC`,
-        [email]
-      );
-      const result = await Promise.all(rows.map(async row => {
-        const participants = await query<{ user_email: string }>(
-          `SELECT user_email FROM conversation_participants WHERE conversation_id = $1`,
-          [row.id]
-        );
-        return { ...row, participants: participants.map(p => p.user_email) };
-      }));
-      return res.json(result);
-    } catch (err) {
-      console.error("GET /api/conversations/user/:email", err);
-      return res.status(500).json({ error: "Failed to fetch conversations" });
-    }
-  });
-
-  app.get("/api/conversations/:id/messages", async (req: Request, res: Response) => {
-    try {
-      const rows = await query<{
-        id: number; conversation_id: string; sender_email: string; content: string; created_at: string;
-      }>(
-        `SELECT id, conversation_id, sender_email, content, created_at
-         FROM messages WHERE conversation_id = $1 ORDER BY created_at DESC`,
-        [req.params.id]
-      );
-      const camel = rows.map(r => ({
-        id: r.id, conversationId: r.conversation_id,
-        senderEmail: r.sender_email, content: r.content, createdAt: r.created_at,
-      }));
-      return res.json(camel);
-    } catch (err) {
-      console.error("GET /api/conversations/:id/messages", err);
-      return res.status(500).json({ error: "Failed to fetch messages" });
-    }
-  });
-
-  app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
-    try {
-      const { senderEmail, content } = req.body;
-      if (!senderEmail || !content) return res.status(400).json({ error: "Missing fields" });
-      const [msg] = await query<{ id: number; created_at: string }>(
-        `INSERT INTO messages (conversation_id, sender_email, content) VALUES ($1, $2, $3)
-         RETURNING id, created_at`,
-        [req.params.id, senderEmail, content]
-      );
-      await query(`UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, [req.params.id]);
-      return res.json({
-        id: msg.id, conversationId: req.params.id,
-        senderEmail, content, createdAt: msg.created_at,
-      });
-    } catch (err) {
-      console.error("POST /api/conversations/:id/messages", err);
-      return res.status(500).json({ error: "Failed to send message" });
-    }
-  });
-
-  // ─── GROUP PROFILES ───────────────────────────────────────────────────────────
-
-  app.get("/api/group-profiles", async (_req: Request, res: Response) => {
-    try {
-      const rows = await query(
-        `SELECT * FROM group_profiles ORDER BY created_at DESC`
-      );
-      return res.json(rows);
-    } catch (err) {
-      console.error("GET /api/group-profiles", err);
-      return res.status(500).json({ error: "Failed to fetch group profiles" });
-    }
-  });
-
-  app.post("/api/group-profiles", async (req: Request, res: Response) => {
-    try {
-      const { id, creatorEmail, buildingName, address, zone, rentPerPerson, roomsAvailable, description, avatarColor } = req.body;
-      await query(
-        `INSERT INTO group_profiles (id, creator_email, building_name, address, zone, rent_per_person, rooms_available, description, avatar_color)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [id, creatorEmail, buildingName, address || "", zone || "campustown",
-         rentPerPerson || 0, roomsAvailable || 1, description || "", avatarColor || "#005F73"]
-      );
-      return res.json({ success: true, id });
-    } catch (err) {
-      console.error("POST /api/group-profiles", err);
-      return res.status(500).json({ error: "Failed to create group profile" });
-    }
-  });
-
-  app.delete("/api/group-profiles/:id", async (req: Request, res: Response) => {
-    try {
-      const { creatorEmail } = req.body;
-      await query(
-        `DELETE FROM group_profiles WHERE id = $1 AND creator_email = $2`,
-        [req.params.id, creatorEmail]
-      );
-      return res.json({ success: true });
-    } catch (err) {
-      console.error("DELETE /api/group-profiles/:id", err);
-      return res.status(500).json({ error: "Failed to delete group profile" });
     }
   });
 

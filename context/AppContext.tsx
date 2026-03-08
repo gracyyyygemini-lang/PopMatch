@@ -45,14 +45,6 @@ export interface MutualFriend {
   avatarColor: string;
 }
 
-export interface ListingImage {
-  id?: number;
-  listingId?: string;
-  category: string;
-  imageData: string;
-  verified?: boolean;
-}
-
 export interface SubleasePost {
   id: string;
   userId: string;
@@ -60,7 +52,6 @@ export interface SubleasePost {
   userEmail: string;
   buildingName: string;
   address: string;
-  floorPlan?: string;
   leaseType: LeaseType;
   pricePerMonth: number;
   landlord: Landlord;
@@ -71,15 +62,6 @@ export interface SubleasePost {
   avatarColor: string;
   timestamp: number;
   category?: string;
-  moveInAt?: string | null;
-  moveOutAt?: string | null;
-  wifiIncluded?: boolean;
-  inUnitLaundry?: boolean;
-  bedroomsCount?: number;
-  privateBathroom?: boolean;
-  parkingIncluded?: boolean;
-  furnished?: boolean;
-  images?: ListingImage[];
 }
 
 export interface BreakPost {
@@ -94,8 +76,6 @@ export interface BreakPost {
   description: string;
   avatarColor: string;
   timestamp: number;
-  moveInAt?: string | null;
-  moveOutAt?: string | null;
 }
 
 export interface MatchRecord {

@@ -4,19 +4,6 @@
 PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Expo/React Native).
 @illinois.edu email gate enforced via real OTP verification. PostgreSQL backend for social trust graph (friendships, vouches), OTP codes, feedback, and stats.
 
-## Recent Updates
-- **Mandatory Dates**: Move-In and Move-Out are required on both sublease form and break board. Form validation shows inline errors, date pickers are marked `*` required.
-- **Room Image Upload + AI Verification**: Post form requires Kitchen, Bathroom, Bedroom photos. Uses `expo-image-picker`, verifies via `POST /api/verify-image` (stub, uses OpenAI Vision if OPENAI_API_KEY set). Each row shows Verifying / Verified / Rejected status inline.
-- **Amenity Toggles**: Post form adds WiFi, In-Unit Laundry, Private Bathroom, Parking Included, Furnished chip toggles + bedroom count stepper. All stored in DB.
-- **Clickable Listing Cards + Detail Page**: Tapping a marketplace card navigates to `/listing/[id]`. Detail page shows image carousel (swipeable dots), exact move-in/out formatted timestamps, amenity chips, trust info (FacePile or degree badge), and sticky Message CTA.
-- **Amenity Filter Modal**: Filter button in marketplace header opens slide-up sheet with amenity toggles + bedroom minimum. Active filter count shown as badge. Client-side filtering.
-- **New DB tables**: `listing_images` (id, listing_id, category, image_data, verified). New columns on `listings`: wifi_included, in_unit_laundry, bedrooms_count, private_bathroom, parking_included, furnished.
-- **New API routes**: GET /api/listings/:id, GET /api/listings/:id/images, POST /api/listings/:id/images, POST /api/verify-image. GET /api/listings now accepts amenity filter query params.
-- **DateTimePicker component** (`components/DateTimePicker.tsx`): Custom visual calendar + time picker modal. Month grid with day selection, hour/minute steppers, AM/PM toggle. Exports `formatDateRange()` and `calcDays()`. Used in post-sublease and break board.
-- **Sublease form safety**: No exact apartment numbers — building name + floor plan shown publicly. Room letter OK. Address is street only. Green privacy notice at top.
-- **Chat inbox pills**: Each conversation row has a colored pill badge: Sublease (#278B9A), New Roommates (#E8C4A2), Open Room (#5A6F80). Legend row shown at top. Auto-names conversations by listing title or participant first names.
-- **Break board**: Date pickers in post modal with auto-calculated day count. Sticky cards show dates + "N Days" badge. "Request Stay" button opens pre-filled chat with the poster.
-
 ## Architecture
 
 ### Stack
@@ -42,15 +29,12 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 ### Tabs (app/(tabs)/)
 - `index.tsx` — Browse: 4 UIUC housing category cards + Matchmaker/Breaks shortcuts
 - `matches.tsx` — My Circle: social trust graph (sub-tab) + roommate matches (sub-tab)
-- `chats.tsx` — In-app chat list: all conversations sorted by most recent message
 - `map.tsx` — PopMap: zone guide grid + listing pins
 - `profile.tsx` — User profile, stats, Sign Out, Reset All Data; 5-tap version label → /admin
 
 ### Stack Screens
-- `app/matchmaker.tsx` — Path A/B selection; Path A: swipe deck (auto-creates chat on like + match overlay); Path B: group profiles + Request to Join
-- `app/marketplace.tsx` — Sublease listings with FacePile trust + Mark as Leased + Message Subleaser button
-- `app/chat/[id].tsx` — Individual chat screen: inverted FlatList, 3s polling, listing context banner
-- `app/create-group.tsx` — Create group profile (building, zone, rent, rooms, description)
+- `app/matchmaker.tsx` — Year-Long swipe discovery (PanResponder, weighted score)
+- `app/marketplace.tsx` — Sublease listings with FacePile trust + Mark as Leased button
 - `app/post-sublease.tsx` — Post a sublease form with landlord warnings
 - `app/breaks.tsx` — Break Stay bulletin board (sticky-note grid)
 - `app/admin.tsx` — Hidden admin dashboard (accessed via 5-tap on profile version label)

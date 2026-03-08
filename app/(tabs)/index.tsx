@@ -1,15 +1,14 @@
-import React, { useState, useCallback } from "react";
+import React from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
 import { ScamBanner } from "@/components/ScamBanner";
-import { getApiUrl } from "@/lib/query-client";
 
 const CATEGORIES = [
   {
@@ -49,8 +48,8 @@ const CATEGORIES = [
 const FEATURES = [
   {
     route: "/matchmaker" as const,
-    title: "Roommate Matchmaker",
-    subtitle: "Find roommates or fill empty beds in your place",
+    title: "Year-Long Matchmaker",
+    subtitle: "Swipe & match for a full 12-month lease",
     icon: "heart" as const,
     color: Colors.ocean,
   },
@@ -63,65 +62,18 @@ const FEATURES = [
   },
 ];
 
-interface LiveStats {
-  studentsOnline: number;
-  groupsFormed: number;
-  leasesTotal: number;
-}
-
-function LiveStatsBanner({ stats, loading }: { stats: LiveStats | null; loading: boolean }) {
-  const items = [
-    { icon: "flame" as const, color: Colors.ponyo, value: stats?.studentsOnline ?? 0, label: "Students on PopMatch" },
-    { icon: "people" as const, color: Colors.ocean, value: stats?.groupsFormed ?? 0, label: "Groups Formed" },
-    { icon: "home" as const, color: Colors.grassGreen, value: stats?.leasesTotal ?? 0, label: "Leases Signed" },
-  ];
-
-  return (
-    <View style={lb.banner}>
-      <View style={lb.bannerHeader}>
-        <View style={lb.liveDot} />
-        <Text style={lb.bannerTitle}>Live Campus Stats</Text>
-      </View>
-      <View style={lb.row}>
-        {items.map((item, i) => (
-          <View key={i} style={[lb.statItem, i < items.length - 1 && lb.statItemBorder]}>
-            <View style={[lb.iconWrap, { backgroundColor: item.color + "20" }]}>
-              <Ionicons name={item.icon} size={18} color={item.color} />
-            </View>
-            <Text style={lb.statNum}>{loading ? "—" : item.value.toLocaleString()}</Text>
-            <Text style={lb.statLabel}>{item.label}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser } = useApp();
+  const { currentUser, friends, subleases, breakPosts } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
-  const [liveStats, setLiveStats] = useState<LiveStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
 
   const firstName = currentUser?.name.split(" ")[0] ?? "there";
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const url = new URL("/api/public-stats", getApiUrl()).toString();
-      const res = await fetch(url);
-      if (res.ok) setLiveStats(await res.json());
-    } catch {}
-    setStatsLoading(false);
-  }, []);
-
-  useFocusEffect(useCallback(() => { fetchStats(); }, [fetchStats]));
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
         <View>
-          <Text style={styles.greeting}>Hey, {firstName} 👋</Text>
+          <Text style={styles.greeting}>Hey, {firstName}</Text>
           <Text style={styles.tagline}>UIUC Housing — Find your match</Text>
         </View>
         <View style={styles.logoMark}>
@@ -137,8 +89,6 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScamBanner />
-
-        <LiveStatsBanner stats={liveStats} loading={statsLoading} />
 
         <Text style={styles.sectionLabel}>Browse by housing type</Text>
 
@@ -186,6 +136,21 @@ export default function HomeScreen() {
           </TouchableOpacity>
         ))}
 
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statNum}>{friends.length}</Text>
+            <Text style={styles.statLabel}>Circle</Text>
+          </View>
+          <View style={[styles.statBox, styles.statBoxMid]}>
+            <Text style={styles.statNum}>{subleases.length}</Text>
+            <Text style={styles.statLabel}>Listings</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statNum}>{breakPosts.length}</Text>
+            <Text style={styles.statLabel}>Break Posts</Text>
+          </View>
+        </View>
+
         <View style={styles.trustCard}>
           <View style={styles.trustHeader}>
             <Ionicons name="shield-checkmark" size={16} color={Colors.ocean} />
@@ -208,40 +173,19 @@ export default function HomeScreen() {
   );
 }
 
-const lb = StyleSheet.create({
-  banner: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: 20, borderWidth: 1.5, borderColor: Colors.borderSoft,
-    padding: 16, gap: 12,
-    shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
-  },
-  bannerHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  liveDot: {
-    width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.ponyo,
-  },
-  bannerTitle: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.charcoal, textTransform: "uppercase", letterSpacing: 0.8 },
-  row: { flexDirection: "row" },
-  statItem: { flex: 1, alignItems: "center", gap: 4, paddingVertical: 4 },
-  statItemBorder: { borderRightWidth: 1, borderRightColor: Colors.borderSoft },
-  iconWrap: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: 2 },
-  statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.charcoal },
-  statLabel: { fontFamily: "Nunito_400Regular", fontSize: 10, color: Colors.textMuted, textAlign: "center" },
-});
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
     paddingHorizontal: 20, paddingBottom: 16, backgroundColor: Colors.sand,
   },
-  greeting: { fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: Colors.charcoal },
+  greeting: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
   tagline: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
   logoMark: {
     width: 44, height: 44, borderRadius: 14,
-    backgroundColor: Colors.ocean + "20",
+    backgroundColor: Colors.ocean + "18",
     alignItems: "center", justifyContent: "center",
-    borderWidth: 1.5, borderColor: Colors.ocean + "40",
+    borderWidth: 1.5, borderColor: Colors.ocean + "30",
   },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 4, gap: 12 },
@@ -249,14 +193,19 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted,
     textTransform: "uppercase", letterSpacing: 0.8, marginTop: 4,
   },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  grid: {
+    flexDirection: "row", flexWrap: "wrap", gap: 10,
+  },
   categoryCard: {
     width: "48%", backgroundColor: Colors.cardBg, borderRadius: 18,
     borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 14, gap: 5,
     shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
-  catIconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 2 },
+  catIconWrap: {
+    width: 44, height: 44, borderRadius: 14,
+    alignItems: "center", justifyContent: "center", marginBottom: 2,
+  },
   catTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
   catDates: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.textMuted },
   catDesc: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight, lineHeight: 16 },
@@ -271,9 +220,18 @@ const styles = StyleSheet.create({
   featureText: { flex: 1 },
   featureTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal },
   featureSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, lineHeight: 17, marginTop: 2 },
+  statsRow: { flexDirection: "row", gap: 10 },
+  statBox: {
+    flex: 1, backgroundColor: Colors.cardBg, borderRadius: 14,
+    borderWidth: 1.5, borderColor: Colors.borderSoft,
+    padding: 14, alignItems: "center", gap: 2,
+  },
+  statBoxMid: { backgroundColor: Colors.ocean + "12", borderColor: Colors.ocean + "30" },
+  statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 24, color: Colors.ocean },
+  statLabel: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
   trustCard: {
-    backgroundColor: Colors.ocean + "12",
-    borderRadius: 16, borderWidth: 1.5, borderColor: Colors.ocean + "30",
+    backgroundColor: Colors.ocean + "10",
+    borderRadius: 16, borderWidth: 1.5, borderColor: Colors.ocean + "25",
     padding: 16, gap: 10,
   },
   trustHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
