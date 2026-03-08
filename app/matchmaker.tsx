@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, Animated, PanResponder, Dimensions,
   TouchableOpacity, ScrollView, Platform
@@ -8,7 +8,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp, UserProfile } from "@/context/AppContext";
+import { useApp, UserProfile, Zone } from "@/context/AppContext";
+import ZonePicker from "@/components/ZonePicker";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 40;
@@ -170,12 +171,23 @@ function SwipeableCard({
 
 export default function MatchmakerScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, mockUsers, addMatch, addLiked, addPassed, likedUserIds, passedUserIds, computeScore } = useApp();
+  const { currentUser, mockUsers, addMatch, addLiked, addPassed, likedUserIds, passedUserIds, computeScore, subleases } = useApp();
+  const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
+
+  useEffect(() => {
+    if (currentUser?.intent === "host" || currentUser?.intent === "sublessor") {
+      const hasListing = subleases.some(s => s.userId === currentUser.id);
+      if (!hasListing) {
+        router.replace("/link-listing");
+      }
+    }
+  }, [currentUser?.intent]);
 
   const filtered = mockUsers.filter(u => {
     if (!currentUser) return true;
     if (u.id === currentUser.id) return false;
     if (!matchesGenderFilter(currentUser, u)) return false;
+    if (zoneFilter !== "all" && u.zone !== zoneFilter) return false;
     return true;
   });
 
@@ -212,6 +224,8 @@ export default function MatchmakerScreen() {
           </View>
         </View>
       </View>
+
+      <ZonePicker selected={zoneFilter} onSelect={setZoneFilter} />
 
       <View style={styles.deckArea}>
         {remaining.length === 0 ? (

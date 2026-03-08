@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp, UserProfile, LeaseType, GenderPref, Zone, Landlord } from "@/context/AppContext";
+import { useApp, UserProfile, LeaseType, GenderPref, Zone, Landlord, Intent } from "@/context/AppContext";
 import { getApiUrl } from "@/lib/query-client";
 
 const MAJORS = [
@@ -200,8 +200,9 @@ export default function OnboardingScreen() {
   const [staysThanksgiving, setStaysThanksgiving] = useState(false);
   const [staysSpringBreak, setStaysSpringBreak] = useState(false);
   const [showMajorPicker, setShowMajorPicker] = useState(false);
+  const [intent, setIntent] = useState<Intent>("joiner");
 
-  const STEPS = 5;
+  const STEPS = 6;
 
   const startCountdown = (seconds = 60) => {
     setCountdown(seconds);
@@ -283,7 +284,7 @@ export default function OnboardingScreen() {
   };
 
   const handleNext = () => {
-    if (step === 1 && !name.trim()) return;
+    if (step === 2 && !name.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setStep(s => Math.min(s + 1, STEPS - 1));
   };
@@ -297,7 +298,7 @@ export default function OnboardingScreen() {
       name: name.trim(), email: email.toLowerCase().trim(),
       major: major || "Undeclared", bio: bio.trim(), budget, gender, genderPref,
       cleanliness, noise, leaseType, zone, landlord,
-      staysThanksgiving, staysSpringBreak, avatarColor,
+      staysThanksgiving, staysSpringBreak, avatarColor, intent,
     };
     await setCurrentUser(user);
     await setIsOnboarded(true);
@@ -448,6 +449,36 @@ export default function OnboardingScreen() {
         {step === 1 && (
           <View style={styles.stepContainer}>
             <View style={styles.iconCircle}>
+              <Ionicons name="compass" size={38} color={Colors.teal} />
+            </View>
+            <Text style={styles.stepTitle}>What's Your Role?</Text>
+            <Text style={styles.stepSubtitle}>Tell us how you want to use PopMatch</Text>
+
+            {([
+              { key: "host" as Intent, label: "Host", icon: "home-outline" as const, desc: "I have a place and need a roommate" },
+              { key: "joiner" as Intent, label: "Joiner", icon: "person-add-outline" as const, desc: "I'm looking for an open room to join" },
+              { key: "co_seeker" as Intent, label: "Co-Seeker", icon: "people-outline" as const, desc: "I want to find a place with someone" },
+              { key: "sublessor" as Intent, label: "Sublessor", icon: "swap-horizontal-outline" as const, desc: "I need to sublease my current spot" },
+              { key: "sublessee" as Intent, label: "Sublessee", icon: "search-outline" as const, desc: "I'm looking for a sublease to pick up" },
+            ]).map(({ key, label, icon, desc }) => (
+              <TouchableOpacity key={key} style={[styles.optionCard, intent === key && styles.optionCardActive]}
+                onPress={() => { setIntent(key); Haptics.selectionAsync(); }}>
+                <View style={[styles.zoneIcon, { backgroundColor: Colors.teal + "18" }]}>
+                  <Ionicons name={icon} size={18} color={intent === key ? Colors.teal : Colors.charcoal} />
+                </View>
+                <View style={styles.optionLeft}>
+                  <Text style={[styles.optionLabel, intent === key && styles.optionLabelActive]}>{label}</Text>
+                  <Text style={styles.optionDesc}>{desc}</Text>
+                </View>
+                {intent === key && <Ionicons name="checkmark-circle" size={18} color={Colors.teal} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {step === 2 && (
+          <View style={styles.stepContainer}>
+            <View style={styles.iconCircle}>
               <Ionicons name="person" size={38} color={Colors.teal} />
             </View>
             <Text style={styles.stepTitle}>About You</Text>
@@ -498,7 +529,7 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <View style={styles.stepContainer}>
             <View style={styles.iconCircle}>
               <Ionicons name="home" size={38} color={Colors.teal} />
@@ -553,7 +584,7 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <View style={styles.stepContainer}>
             <View style={styles.iconCircle}>
               <Ionicons name="map" size={38} color={Colors.teal} />
@@ -591,7 +622,7 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <View style={styles.stepContainer}>
             <View style={styles.iconCircle}>
               <Ionicons name="calendar" size={38} color={Colors.teal} />
@@ -646,9 +677,9 @@ export default function OnboardingScreen() {
         )}
         {step > 0 && (
           <TouchableOpacity
-            style={[styles.nextBtn, step === 1 && !name.trim() && styles.nextBtnDisabled]}
+            style={[styles.nextBtn, step === 2 && !name.trim() && styles.nextBtnDisabled]}
             onPress={step === STEPS - 1 ? handleFinish : handleNext}
-            disabled={step === 1 && !name.trim()}
+            disabled={step === 2 && !name.trim()}
           >
             <Text style={styles.nextBtnText}>{step === STEPS - 1 ? "Find My Match" : "Continue"}</Text>
             <Ionicons name={step === STEPS - 1 ? "heart" : "arrow-forward"} size={17} color={Colors.white} />

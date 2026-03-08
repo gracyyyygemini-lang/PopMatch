@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform
 } from "react-native";
@@ -7,8 +7,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp } from "@/context/AppContext";
+import { useApp, Zone } from "@/context/AppContext";
 import { ScamBanner } from "@/components/ScamBanner";
+import ZonePicker from "@/components/ZonePicker";
 
 const CATEGORIES = [
   {
@@ -65,6 +66,7 @@ const FEATURES = [
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, friends, subleases, breakPosts } = useApp();
+  const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const firstName = currentUser?.name.split(" ")[0] ?? "there";
@@ -90,6 +92,10 @@ export default function HomeScreen() {
       >
         <ScamBanner />
 
+        <ZonePicker selected={zoneFilter} onSelect={z => {
+          setZoneFilter(z);
+        }} />
+
         <Text style={styles.sectionLabel}>Browse by housing type</Text>
 
         <View style={styles.grid}>
@@ -100,7 +106,8 @@ export default function HomeScreen() {
               activeOpacity={0.82}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                router.push(`/marketplace?category=${cat.id}` as any);
+                const zoneParam = zoneFilter !== "all" ? `&zone=${zoneFilter}` : "";
+                router.push(`/marketplace?category=${cat.id}${zoneParam}` as any);
               }}
             >
               <View style={[styles.catIconWrap, { backgroundColor: cat.color }]}>

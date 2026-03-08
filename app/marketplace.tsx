@@ -7,9 +7,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp, SubleasePost, Landlord } from "@/context/AppContext";
+import { useApp, SubleasePost, Landlord, Zone } from "@/context/AppContext";
 import FacePile from "@/components/FacePile";
 import MicroFeedback from "@/components/MicroFeedback";
+import ZonePicker from "@/components/ZonePicker";
 import { getApiUrl } from "@/lib/query-client";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -184,6 +185,23 @@ function SubleaseCard({ post, onMarkLeased }: {
         ) : null}
       </View>
 
+      {post.amenities && (
+        <View style={styles.amenityGrid}>
+          <View style={[styles.amenityIcon, post.amenities.isFurnished && styles.amenityIconActive]}>
+            <Ionicons name="bed-outline" size={14} color={post.amenities.isFurnished ? Colors.ocean : Colors.textLight} />
+          </View>
+          <View style={[styles.amenityIcon, post.amenities.hasLaundry && styles.amenityIconActive]}>
+            <Ionicons name="water-outline" size={14} color={post.amenities.hasLaundry ? Colors.ocean : Colors.textLight} />
+          </View>
+          <View style={[styles.amenityIcon, post.amenities.hasWifi && styles.amenityIconActive]}>
+            <Ionicons name="wifi-outline" size={14} color={post.amenities.hasWifi ? Colors.ocean : Colors.textLight} />
+          </View>
+          <View style={[styles.amenityIcon, post.amenities.hasAC && styles.amenityIconActive]}>
+            <Ionicons name="snow-outline" size={14} color={post.amenities.hasAC ? Colors.ocean : Colors.textLight} />
+          </View>
+        </View>
+      )}
+
       {post.description ? (
         <Text style={styles.description} numberOfLines={2}>{post.description}</Text>
       ) : null}
@@ -240,11 +258,12 @@ function SubleaseCard({ post, onMarkLeased }: {
 
 export default function MarketplaceScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ category?: string }>();
+  const params = useLocalSearchParams<{ category?: string; zone?: string }>();
   const { subleases, removeSublease, currentUser } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
+  const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
   const [showCongrats, setShowCongrats] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [leasedPost, setLeasedPost] = useState<SubleasePost | null>(null);
@@ -253,11 +272,16 @@ export default function MarketplaceScreen() {
     if (params.category && Object.keys(CATEGORY_LABELS).includes(params.category)) {
       setActiveFilter(params.category as CategoryFilter);
     }
-  }, [params.category]);
+    if (params.zone && ["campustown", "north", "south", "urbana", "downtown"].includes(params.zone)) {
+      setZoneFilter(params.zone as Zone);
+    }
+  }, [params.category, params.zone]);
 
-  const filtered = activeFilter === "all"
-    ? subleases
-    : subleases.filter(s => (s.category || "semester_takeover") === activeFilter);
+  const filtered = subleases.filter(s => {
+    if (activeFilter !== "all" && (s.category || "semester_takeover") !== activeFilter) return false;
+    if (zoneFilter !== "all" && s.zone !== zoneFilter) return false;
+    return true;
+  });
 
   const headerCatColor = activeFilter !== "all" ? CATEGORY_COLORS[activeFilter] : Colors.ocean;
 
@@ -303,6 +327,8 @@ export default function MarketplaceScreen() {
           <Text style={styles.postBtnText}>Post</Text>
         </TouchableOpacity>
       </View>
+
+      <ZonePicker selected={zoneFilter} onSelect={setZoneFilter} />
 
       <ScrollView
         horizontal showsHorizontalScrollIndicator={false}
@@ -455,6 +481,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8,
   },
   trustChipText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
+  amenityGrid: {
+    flexDirection: "row", gap: 6, flexWrap: "wrap",
+  },
+  amenityIcon: {
+    width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center",
+    backgroundColor: Colors.sandDark, borderWidth: 1, borderColor: Colors.borderSoft,
+  },
+  amenityIconActive: {
+    backgroundColor: Colors.ocean + "15", borderColor: Colors.ocean + "40",
+  },
   leasedBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.ponyo, borderRadius: 12, paddingVertical: 12, marginTop: 2,

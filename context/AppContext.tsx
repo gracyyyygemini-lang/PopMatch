@@ -6,6 +6,36 @@ export type GenderPref = "girls_only" | "boys_only" | "mixed";
 export type Zone = "campustown" | "north" | "south" | "urbana" | "downtown";
 export type Landlord = "jsm" | "ugroup" | "bailey" | "american" | "smile" | "other";
 export type BreakType = "thanksgiving" | "spring_break" | "winter";
+export type Intent = "host" | "joiner" | "co_seeker" | "sublessor" | "sublessee";
+export type CleaningFrequency = "daily" | "weekly" | "monthly";
+export type ShoePolicy = "shoes_off" | "front_door" | "no_policy";
+export type KitchenType = "private" | "communal";
+
+export interface Amenities {
+  isFurnished: boolean;
+  hasLaundry: boolean;
+  hasWifi: boolean;
+  hasAC: boolean;
+  hasStudyLounge: boolean;
+  hasPrinting: boolean;
+  hasBikeStorage: boolean;
+  hasSecurity: boolean;
+  utilsIncluded: boolean;
+  noDeposit: boolean;
+  parkingIncluded: boolean;
+  hasGym: boolean;
+  hasPool: boolean;
+  hasElevator: boolean;
+  hasRooftop: boolean;
+  hasLockers: boolean;
+}
+
+export const DEFAULT_AMENITIES: Amenities = {
+  isFurnished: false, hasLaundry: false, hasWifi: false, hasAC: false,
+  hasStudyLounge: false, hasPrinting: false, hasBikeStorage: false, hasSecurity: false,
+  utilsIncluded: false, noDeposit: false, parkingIncluded: false,
+  hasGym: false, hasPool: false, hasElevator: false, hasRooftop: false, hasLockers: false,
+};
 
 export interface UserProfile {
   id: string;
@@ -26,6 +56,7 @@ export interface UserProfile {
   avatarColor: string;
   college?: string;
   organizations?: string[];
+  intent?: Intent;
 }
 
 export interface FriendRecord {
@@ -62,6 +93,13 @@ export interface SubleasePost {
   avatarColor: string;
   timestamp: number;
   category?: string;
+  kitchenType?: KitchenType;
+  moveInDate?: string;
+  moveOutDate?: string;
+  amenities?: Amenities;
+  cleaningFrequency?: CleaningFrequency;
+  shoePolicy?: ShoePolicy;
+  images?: string[];
 }
 
 export interface BreakPost {
@@ -100,7 +138,10 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 950, landlord: "american", zone: "campustown",
     availableDuringBreaks: false, breakTypes: [],
     description: "Cozy 1BR/1BA in Hub, fully furnished. Floor-to-ceiling windows, great view.",
-    avatarColor: "#1A7AAF", timestamp: Date.now() - 86400000, category: "semester_takeover"
+    avatarColor: "#1A7AAF", timestamp: Date.now() - 86400000, category: "semester_takeover",
+    kitchenType: "private", moveInDate: "2026-08-15T14:00:00Z", moveOutDate: "2026-12-20T12:00:00Z",
+    amenities: { isFurnished: true, hasLaundry: true, hasWifi: true, hasAC: true, hasStudyLounge: true, hasPrinting: false, hasBikeStorage: true, hasSecurity: true, utilsIncluded: true, noDeposit: false, parkingIncluded: false, hasGym: true, hasPool: true, hasElevator: true, hasRooftop: false, hasLockers: true },
+    cleaningFrequency: "weekly", shoePolicy: "shoes_off", images: [],
   },
   {
     id: "sp2", userId: "u3", userName: "Jake Torres", userEmail: "jtorres6@illinois.edu",
@@ -108,7 +149,10 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 750, landlord: "jsm", zone: "north",
     availableDuringBreaks: true, breakTypes: ["spring_break"],
     description: "Studio apartment near Siebel. Quiet building, laundry in unit.",
-    avatarColor: "#5A8A5A", timestamp: Date.now() - 172800000, category: "semester_takeover"
+    avatarColor: "#5A8A5A", timestamp: Date.now() - 172800000, category: "semester_takeover",
+    kitchenType: "private", moveInDate: "2026-01-10T15:00:00Z", moveOutDate: "2026-05-15T12:00:00Z",
+    amenities: { isFurnished: false, hasLaundry: true, hasWifi: true, hasAC: false, hasStudyLounge: false, hasPrinting: false, hasBikeStorage: true, hasSecurity: false, utilsIncluded: false, noDeposit: true, parkingIncluded: false, hasGym: false, hasPool: false, hasElevator: false, hasRooftop: false, hasLockers: false },
+    cleaningFrequency: "weekly", shoePolicy: "no_policy", images: [],
   },
   {
     id: "sp3", userId: "u5", userName: "Marcus Webb", userEmail: "mwebb3@illinois.edu",
@@ -116,7 +160,10 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 620, landlord: "ugroup", zone: "urbana",
     availableDuringBreaks: true, breakTypes: ["thanksgiving", "spring_break"],
     description: "1BR in quiet Urbana neighborhood. Perfect for grad students or summer research.",
-    avatarColor: "#9B59B6", timestamp: Date.now() - 259200000, category: "summer_only"
+    avatarColor: "#9B59B6", timestamp: Date.now() - 259200000, category: "summer_only",
+    kitchenType: "private", moveInDate: "2026-05-15T14:00:00Z", moveOutDate: "2026-08-10T12:00:00Z",
+    amenities: { isFurnished: true, hasLaundry: false, hasWifi: true, hasAC: true, hasStudyLounge: false, hasPrinting: false, hasBikeStorage: false, hasSecurity: false, utilsIncluded: true, noDeposit: false, parkingIncluded: true, hasGym: false, hasPool: false, hasElevator: false, hasRooftop: false, hasLockers: false },
+    cleaningFrequency: "monthly", shoePolicy: "front_door", images: [],
   },
   {
     id: "sp4", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
@@ -124,7 +171,10 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 540, landlord: "other", zone: "urbana",
     availableDuringBreaks: false, breakTypes: [],
     description: "Sunny studio, available May 15 – Aug 10. Furnished, near MTD bus stop.",
-    avatarColor: "#5A8A5A", timestamp: Date.now() - 345600000, category: "summer_only"
+    avatarColor: "#5A8A5A", timestamp: Date.now() - 345600000, category: "summer_only",
+    kitchenType: "communal", moveInDate: "2026-05-15T10:00:00Z", moveOutDate: "2026-08-10T10:00:00Z",
+    amenities: { isFurnished: true, hasLaundry: false, hasWifi: true, hasAC: false, hasStudyLounge: true, hasPrinting: true, hasBikeStorage: false, hasSecurity: true, utilsIncluded: true, noDeposit: true, parkingIncluded: false, hasGym: false, hasPool: false, hasElevator: false, hasRooftop: false, hasLockers: true },
+    cleaningFrequency: "daily", shoePolicy: "shoes_off", images: [],
   },
   {
     id: "sp5", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
@@ -132,7 +182,10 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 890, landlord: "bailey", zone: "campustown",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
     description: "1-2 weeks available in early August before fall lease starts. Great location.",
-    avatarColor: "#E0BC00", timestamp: Date.now() - 432000000, category: "august_gap"
+    avatarColor: "#E0BC00", timestamp: Date.now() - 432000000, category: "august_gap",
+    kitchenType: "private", moveInDate: "2026-08-01T14:00:00Z", moveOutDate: "2026-08-14T12:00:00Z",
+    amenities: { isFurnished: true, hasLaundry: true, hasWifi: true, hasAC: true, hasStudyLounge: false, hasPrinting: false, hasBikeStorage: true, hasSecurity: true, utilsIncluded: false, noDeposit: false, parkingIncluded: false, hasGym: true, hasPool: false, hasElevator: true, hasRooftop: true, hasLockers: false },
+    cleaningFrequency: "weekly", shoePolicy: "front_door", images: [],
   },
   {
     id: "sp6", userId: "u8", userName: "Zoe Mitchell", userEmail: "zmitchell@illinois.edu",
@@ -140,7 +193,10 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 760, landlord: "smile", zone: "south",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
     description: "Moms Weekend & graduation weekend stay available. Great for families visiting!",
-    avatarColor: "#CC5500", timestamp: Date.now() - 518400000, category: "short_term"
+    avatarColor: "#CC5500", timestamp: Date.now() - 518400000, category: "short_term",
+    kitchenType: "communal", moveInDate: "2026-08-15T12:00:00Z", moveOutDate: "2027-08-14T12:00:00Z",
+    amenities: { isFurnished: false, hasLaundry: true, hasWifi: true, hasAC: true, hasStudyLounge: true, hasPrinting: true, hasBikeStorage: false, hasSecurity: true, utilsIncluded: false, noDeposit: false, parkingIncluded: true, hasGym: true, hasPool: false, hasElevator: true, hasRooftop: false, hasLockers: true },
+    cleaningFrequency: "weekly", shoePolicy: "no_policy", images: [],
   },
 ];
 

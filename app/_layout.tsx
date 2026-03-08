@@ -26,6 +26,7 @@ function RootLayoutNav() {
       <Stack.Screen name="matchmaker" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="marketplace" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="post-sublease" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="link-listing" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="breaks" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="admin" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="+not-found" />
