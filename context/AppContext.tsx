@@ -49,6 +49,44 @@ export interface MutualFriend {
 }
 
 export type LifestyleTag = "quiet" | "social" | "clean" | "studious" | "early_bird" | "night_owl" | "pet_friendly" | "no_smoking";
+export type CleaningFrequency = "daily" | "weekly" | "monthly";
+export type ShoePolicy = "shoes_off" | "front_door" | "no_policy";
+export type AmenityKey =
+  | "furnished" | "in_unit_laundry" | "high_speed_wifi" | "central_ac"
+  | "study_lounge" | "secure_printing" | "bike_storage" | "security_24_7"
+  | "utilities_included" | "no_security_deposit" | "parking_included"
+  | "gym" | "pool" | "elevator" | "rooftop_terrace" | "package_lockers";
+
+export interface AmenityDef {
+  key: AmenityKey;
+  label: string;
+  icon: string;
+  category: "foundational" | "collegiate" | "financial" | "building";
+}
+
+export const AMENITY_DEFS: AmenityDef[] = [
+  { key: "furnished", label: "Fully Furnished", icon: "bed-outline", category: "foundational" },
+  { key: "in_unit_laundry", label: "In-Unit Laundry", icon: "water-outline", category: "foundational" },
+  { key: "high_speed_wifi", label: "High-Speed Wi-Fi", icon: "wifi", category: "foundational" },
+  { key: "central_ac", label: "Central A/C", icon: "snow-outline", category: "foundational" },
+  { key: "study_lounge", label: "Study Lounge", icon: "library-outline", category: "collegiate" },
+  { key: "secure_printing", label: "Secure Printing", icon: "print-outline", category: "collegiate" },
+  { key: "bike_storage", label: "Bike Storage", icon: "bicycle-outline", category: "collegiate" },
+  { key: "security_24_7", label: "24/7 Security", icon: "shield-checkmark-outline", category: "collegiate" },
+  { key: "utilities_included", label: "Utilities Included", icon: "flash-outline", category: "financial" },
+  { key: "no_security_deposit", label: "No Security Deposit", icon: "card-outline", category: "financial" },
+  { key: "parking_included", label: "Parking Included", icon: "car-outline", category: "financial" },
+  { key: "gym", label: "Gym", icon: "barbell-outline", category: "building" },
+  { key: "pool", label: "Pool", icon: "water", category: "building" },
+  { key: "elevator", label: "Elevator", icon: "arrow-up-outline", category: "building" },
+  { key: "rooftop_terrace", label: "Rooftop Terrace", icon: "sunny-outline", category: "building" },
+  { key: "package_lockers", label: "Package Lockers", icon: "cube-outline", category: "building" },
+];
+
+export interface ListingPhoto {
+  uri: string;
+  slot: "bedroom" | "bathroom" | "kitchen" | "communal";
+}
 
 export interface SubleasePost {
   id: string;
@@ -69,6 +107,13 @@ export interface SubleasePost {
   category?: string;
   roomsAvailable?: number;
   lifestyleTags?: LifestyleTag[];
+  photos?: ListingPhoto[];
+  moveInDate?: string;
+  moveOutDate?: string;
+  cleaningFrequency?: CleaningFrequency;
+  shoePolicy?: ShoePolicy;
+  amenities?: AmenityKey[];
+  hasPrivateKitchen?: boolean;
 }
 
 export interface BreakPost {
@@ -107,7 +152,9 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 950, landlord: "american", zone: "campustown",
     availableDuringBreaks: false, breakTypes: [],
     description: "Cozy 1BR/1BA in Hub, fully furnished. Floor-to-ceiling windows, great view.",
-    avatarColor: "#1A7AAF", timestamp: Date.now() - 86400000, category: "semester_takeover"
+    avatarColor: "#1A7AAF", timestamp: Date.now() - 86400000, category: "semester_takeover",
+    amenities: ["furnished", "high_speed_wifi", "central_ac", "gym", "pool", "elevator", "package_lockers"],
+    cleaningFrequency: "weekly", shoePolicy: "shoes_off", roomsAvailable: 1
   },
   {
     id: "sp2", userId: "u3", userName: "Jake Torres", userEmail: "jtorres6@illinois.edu",
@@ -115,7 +162,9 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 750, landlord: "jsm", zone: "north",
     availableDuringBreaks: true, breakTypes: ["spring_break"],
     description: "Studio apartment near Siebel. Quiet building, laundry in unit.",
-    avatarColor: "#5A8A5A", timestamp: Date.now() - 172800000, category: "semester_takeover"
+    avatarColor: "#5A8A5A", timestamp: Date.now() - 172800000, category: "semester_takeover",
+    amenities: ["furnished", "in_unit_laundry", "high_speed_wifi", "study_lounge", "bike_storage"],
+    cleaningFrequency: "daily", shoePolicy: "shoes_off", roomsAvailable: 1
   },
   {
     id: "sp3", userId: "u5", userName: "Marcus Webb", userEmail: "mwebb3@illinois.edu",
@@ -123,7 +172,9 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 620, landlord: "ugroup", zone: "urbana",
     availableDuringBreaks: true, breakTypes: ["thanksgiving", "spring_break"],
     description: "1BR in quiet Urbana neighborhood. Perfect for grad students or summer research.",
-    avatarColor: "#9B59B6", timestamp: Date.now() - 259200000, category: "summer_only"
+    avatarColor: "#9B59B6", timestamp: Date.now() - 259200000, category: "summer_only",
+    amenities: ["high_speed_wifi", "parking_included", "utilities_included"],
+    cleaningFrequency: "weekly", shoePolicy: "no_policy", roomsAvailable: 1
   },
   {
     id: "sp4", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
@@ -131,7 +182,9 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 540, landlord: "other", zone: "urbana",
     availableDuringBreaks: false, breakTypes: [],
     description: "Sunny studio, available May 15 – Aug 10. Furnished, near MTD bus stop.",
-    avatarColor: "#5A8A5A", timestamp: Date.now() - 345600000, category: "summer_only"
+    avatarColor: "#5A8A5A", timestamp: Date.now() - 345600000, category: "summer_only",
+    amenities: ["furnished", "central_ac", "utilities_included", "no_security_deposit"],
+    cleaningFrequency: "monthly", shoePolicy: "front_door", roomsAvailable: 1
   },
   {
     id: "sp5", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
@@ -139,7 +192,9 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 890, landlord: "bailey", zone: "campustown",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
     description: "1-2 weeks available in early August before fall lease starts. Great location.",
-    avatarColor: "#E0BC00", timestamp: Date.now() - 432000000, category: "august_gap"
+    avatarColor: "#E0BC00", timestamp: Date.now() - 432000000, category: "august_gap",
+    amenities: ["furnished", "in_unit_laundry", "high_speed_wifi", "central_ac", "gym", "security_24_7", "package_lockers"],
+    cleaningFrequency: "weekly", shoePolicy: "shoes_off", roomsAvailable: 2
   },
   {
     id: "sp6", userId: "u8", userName: "Zoe Mitchell", userEmail: "zmitchell@illinois.edu",
@@ -147,7 +202,9 @@ const DEMO_POSTS: SubleasePost[] = [
     pricePerMonth: 760, landlord: "smile", zone: "south",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
     description: "Moms Weekend & graduation weekend stay available. Great for families visiting!",
-    avatarColor: "#CC5500", timestamp: Date.now() - 518400000, category: "short_term"
+    avatarColor: "#CC5500", timestamp: Date.now() - 518400000, category: "short_term",
+    amenities: ["furnished", "high_speed_wifi", "elevator", "package_lockers", "parking_included"],
+    cleaningFrequency: "weekly", shoePolicy: "front_door", roomsAvailable: 1
   },
 ];
 

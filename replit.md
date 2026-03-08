@@ -35,7 +35,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 ### Stack Screens
 - `app/matchmaker.tsx` — Intent-based swipe discovery with specialized cards per housing status; "Your Listing" preview for hosts
 - `app/marketplace.tsx` — Sublease listings with FacePile trust + Mark as Leased button + zone filtering
-- `app/create-listing.tsx` — Host listing creation form (modal); on submit links listing to user profile + redirects to matchmaker
+- `app/create-listing.tsx` — Master Listing Creator: smart image logic (private kitchen toggle → conditional photo slots), custom DateTime picker (month/day/year/hour/min), cleaning frequency + shoe policy, 16-point amenity grid (4 categories), lifestyle tags; on submit links listing to user profile + redirects to matchmaker
 - `app/post-sublease.tsx` — Post a sublease form with landlord warnings
 - `app/breaks.tsx` — Break Stay bulletin board (sticky-note grid)
 - `app/admin.tsx` — Hidden admin dashboard (accessed via 5-tap on profile version label)
@@ -54,8 +54,9 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - Host/Sublessor see → Joiner/Sublessee/Co-Seeker cards
 - Co-Seeker sees → other Co-Seekers and Joiners
 - Host/Sublessor must link a listing before entering matchmaker (blocking screen → "Create Listing" button → /create-listing form)
-- Create Listing form: Building Name, Address, Rent, Rooms Available (1-5), Zone, Lifestyle Tags (Quiet/Social/Clean/Studious/Early Bird/Night Owl/Pet Friendly/No Smoking), Description
-- On submit: creates SubleasePost + links to user profile (linkedListingId) + redirects to matchmaker
+- Master Listing Creator form: Building Name, Address, Rent, Rooms Available, Zone, Private Kitchen toggle (Yes/No → conditional required photo slots), Move-In/Move-Out DateTime pickers, Cleaning Frequency (Daily/Weekly/Monthly), Shoe Policy (Shoes Off/Front Door/No Policy), 16-point Amenity Grid (4 categories: Foundational/Collegiate/Financial/Building), Lifestyle Tags
+- Submit gated: requires building name, rent, all photos uploaded, cleaning frequency, shoe policy, and kitchen question answered
+- On submit: creates SubleasePost with all new fields + links to user profile (linkedListingId) + redirects to matchmaker
 - "Your Listing" preview card shown at top of matchmaker for hosts with linked listing (building name, price, rooms, lifestyle tags)
 - Trust badge (1st/2nd degree + FacePile) visible on every card
 
@@ -148,8 +149,13 @@ Migrations: `ALTER TABLE listings ADD COLUMN IF NOT EXISTS leased BOOLEAN DEFAUL
 - GET /api/admin/stats — full admin dashboard payload
 
 ## State (context/AppContext.tsx)
-- UserProfile (with housingStatus, linkedListingId), SubleasePost (with roomsAvailable, lifestyleTags), BreakPost, MatchRecord, FriendRecord, TrustInfo, MutualFriend
+- UserProfile (with housingStatus, linkedListingId), SubleasePost (with roomsAvailable, lifestyleTags, photos, moveInDate, moveOutDate, cleaningFrequency, shoePolicy, amenities, hasPrivateKitchen), BreakPost, MatchRecord, FriendRecord, TrustInfo, MutualFriend
 - HousingStatus type: "host" | "joiner" | "co_seeker" | "sublessor" | "sublessee"
+- CleaningFrequency type: "daily" | "weekly" | "monthly"
+- ShoePolicy type: "shoes_off" | "front_door" | "no_policy"
+- AmenityKey type: 16 values across 4 categories (foundational, collegiate, financial, building)
+- AMENITY_DEFS: exported constant defining all 16 amenities with name, icon, and category
+- FOUNDATIONAL_KEYS: ["furnished", "in_unit_laundry", "high_speed_wifi", "central_ac"] — displayed as 2x2 grid on matchmaker cards
 - LifestyleTag type: "quiet" | "social" | "clean" | "studious" | "early_bird" | "night_owl" | "pet_friendly" | "no_smoking"
 - Persisted: @popmatch_user, _onboarded, _matches, _liked, _passed, _scam, _subleases, _breaks, _friends
 - `otpVerifiedEmail` (session only, not persisted)

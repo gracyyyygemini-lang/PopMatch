@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp, UserProfile, HousingStatus, SubleasePost, TrustInfo } from "@/context/AppContext";
+import { useApp, UserProfile, HousingStatus, SubleasePost, TrustInfo, AMENITY_DEFS, AmenityKey } from "@/context/AppContext";
 import FacePile from "@/components/FacePile";
 
 const { width } = Dimensions.get("window");
@@ -45,6 +45,43 @@ const STATUS_COLORS: Record<HousingStatus, string> = {
   sublessor: Colors.goldDark,
   sublessee: Colors.teal,
 };
+
+const ZONE_FILTER_OPTIONS: { key: string; label: string }[] = [
+  { key: "all", label: "All Zones" },
+  { key: "campustown", label: "Campustown" },
+  { key: "north", label: "North" },
+  { key: "south", label: "South" },
+  { key: "urbana", label: "Urbana" },
+  { key: "downtown", label: "Champaign" },
+];
+
+const FOUNDATIONAL_KEYS: AmenityKey[] = ["furnished", "in_unit_laundry", "high_speed_wifi", "central_ac"];
+
+function AmenityGrid2x2({ amenities }: { amenities?: AmenityKey[] }) {
+  if (!amenities || amenities.length === 0) return null;
+  const foundational = FOUNDATIONAL_KEYS.filter(k => amenities.includes(k));
+  if (foundational.length === 0) return null;
+  const defs = foundational.slice(0, 4).map(k => AMENITY_DEFS.find(a => a.key === k)!);
+  return (
+    <View style={amenGridStyles.grid}>
+      {defs.map(d => (
+        <View key={d.key} style={amenGridStyles.cell}>
+          <Ionicons name={d.icon as any} size={12} color={Colors.ocean} />
+          <Text style={amenGridStyles.cellText} numberOfLines={1}>{d.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const amenGridStyles = StyleSheet.create({
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  cell: {
+    flexDirection: "row", alignItems: "center", gap: 3, width: "48%" as any,
+    backgroundColor: Colors.ocean + "0A", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3,
+  },
+  cellText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.ocean },
+});
 
 const SUBLEASE_DATE_RANGES: Record<string, string> = {
   fall_sublease: "Aug – Dec",
@@ -130,7 +167,14 @@ function HostCard({ user, score, listing, trustInfo }: { user: UserProfile; scor
                 <Ionicons name="location-outline" size={11} color={Colors.ocean} />
                 <Text style={[cardStyles.tagText, { color: Colors.ocean }]}>{ZONE_LABELS[listing.zone]}</Text>
               </View>
+              {listing.cleaningFrequency && (
+                <View style={[cardStyles.tag, { backgroundColor: Colors.grassGreen + "18" }]}>
+                  <Ionicons name="sparkles-outline" size={11} color={Colors.grassGreen} />
+                  <Text style={[cardStyles.tagText, { color: Colors.grassGreen }]}>{listing.cleaningFrequency}</Text>
+                </View>
+              )}
             </View>
+            <AmenityGrid2x2 amenities={listing.amenities} />
           </View>
         )}
 
@@ -177,6 +221,7 @@ function SublessorCard({ user, score, listing, trustInfo }: { user: UserProfile;
             <Text style={cardStyles.listingLabel}>{listing.buildingName}</Text>
             <Text style={cardStyles.listingPrice}>${listing.pricePerMonth}/mo</Text>
             <Text style={cardStyles.dateRange}>{SUBLEASE_DATE_RANGES[listing.leaseType] || "Flexible"}</Text>
+            <AmenityGrid2x2 amenities={listing.amenities} />
           </View>
         )}
 
@@ -537,6 +582,9 @@ export default function MatchmakerScreen() {
   const { currentUser, mockUsers, subleases, friends, addMatch, addLiked, addPassed, likedUserIds, passedUserIds, computeScore, getTrustInfo } = useApp();
 
   const userStatus = currentUser?.housingStatus || "joiner";
+  const [selectedZone, setSelectedZone] = useState("all");
+
+  const ownListing = currentUser ? subleases.find(s => s.userId === currentUser.id) : null;
 
   const filtered = mockUsers.filter(u => {
     if (!currentUser) return true;
@@ -544,14 +592,26 @@ export default function MatchmakerScreen() {
     if (!matchesGenderFilter(currentUser, u)) return false;
 
     if (userStatus === "joiner" || userStatus === "sublessee") {
-      return u.housingStatus === "host" || u.housingStatus === "sublessor";
+      if (u.housingStatus !== "host" && u.housingStatus !== "sublessor") return false;
+    } else if (userStatus === "host" || userStatus === "sublessor") {
+      if (u.housingStatus !== "joiner" && u.housingStatus !== "sublessee" && u.housingStatus !== "co_seeker") return false;
+
+      if (ownListing) {
+        const budgetDiff = Math.abs(u.budget - ownListing.pricePerMonth) / ownListing.pricePerMonth;
+        if (budgetDiff > 0.35) return false;
+
+        if (ownListing.cleaningFrequency) {
+          const cleaningMap: Record<string, number> = { daily: 5, weekly: 3, monthly: 1 };
+          const listingClean = cleaningMap[ownListing.cleaningFrequency] || 3;
+          if (Math.abs(u.cleanliness - listingClean) > 2) return false;
+        }
+      }
+    } else if (userStatus === "co_seeker") {
+      if (u.housingStatus !== "co_seeker" && u.housingStatus !== "joiner") return false;
     }
-    if (userStatus === "host" || userStatus === "sublessor") {
-      return u.housingStatus === "joiner" || u.housingStatus === "sublessee" || u.housingStatus === "co_seeker";
-    }
-    if (userStatus === "co_seeker") {
-      return u.housingStatus === "co_seeker" || u.housingStatus === "joiner";
-    }
+
+    if (selectedZone !== "all" && u.zone !== selectedZone) return false;
+
     return true;
   });
 
@@ -580,7 +640,6 @@ export default function MatchmakerScreen() {
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const needsListing = (userStatus === "host" || userStatus === "sublessor") && !currentUser?.linkedListingId;
-  const ownListing = currentUser ? subleases.find(s => s.userId === currentUser.id) : null;
   const isBlocked = needsListing && !ownListing;
 
   const intentLabel = userStatus === "joiner" || userStatus === "sublessee"
@@ -605,6 +664,17 @@ export default function MatchmakerScreen() {
           </View>
         </View>
       </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        style={styles.zoneFilterRow} contentContainerStyle={styles.zoneFilterContent}>
+        {ZONE_FILTER_OPTIONS.map(z => (
+          <TouchableOpacity key={z.key}
+            style={[styles.zoneChip, selectedZone === z.key && styles.zoneChipActive]}
+            onPress={() => { setSelectedZone(z.key); Haptics.selectionAsync(); }}>
+            <Text style={[styles.zoneChipText, selectedZone === z.key && styles.zoneChipTextActive]}>{z.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {isBlocked ? (
         <View style={styles.blockedContainer}>
@@ -632,19 +702,32 @@ export default function MatchmakerScreen() {
                 <Text style={styles.listingPreviewName}>{ownListing.buildingName}</Text>
                 <Text style={styles.listingPreviewPrice}>${ownListing.pricePerMonth}/mo</Text>
                 {ownListing.roomsAvailable && (
-                  <Text style={styles.listingPreviewRooms}>{ownListing.roomsAvailable} room{ownListing.roomsAvailable > 1 ? "s" : ""} available</Text>
+                  <Text style={styles.listingPreviewRooms}>{ownListing.roomsAvailable} room{ownListing.roomsAvailable > 1 ? "s" : ""}</Text>
                 )}
               </View>
-              {ownListing.lifestyleTags && ownListing.lifestyleTags.length > 0 && (
-                <View style={styles.listingPreviewTags}>
-                  {ownListing.lifestyleTags.map(tag => (
-                    <View key={tag} style={styles.listingPreviewTag}>
-                      <Text style={styles.listingPreviewTagText}>
-                        {tag.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+              <View style={styles.listingPreviewTags}>
+                {ownListing.cleaningFrequency && (
+                  <View style={styles.listingPreviewTag}>
+                    <Text style={styles.listingPreviewTagText}>{ownListing.cleaningFrequency} clean</Text>
+                  </View>
+                )}
+                {ownListing.shoePolicy && ownListing.shoePolicy !== "no_policy" && (
+                  <View style={styles.listingPreviewTag}>
+                    <Text style={styles.listingPreviewTagText}>
+                      {ownListing.shoePolicy === "shoes_off" ? "Shoes Off" : "At Door"}
+                    </Text>
+                  </View>
+                )}
+                {ownListing.lifestyleTags && ownListing.lifestyleTags.map(tag => (
+                  <View key={tag} style={styles.listingPreviewTag}>
+                    <Text style={styles.listingPreviewTagText}>
+                      {tag.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              {ownListing.amenities && ownListing.amenities.length > 0 && (
+                <AmenityGrid2x2 amenities={ownListing.amenities} />
               )}
             </View>
           )}
@@ -710,6 +793,15 @@ const styles = StyleSheet.create({
   headerRight: {},
   matchBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   matchBadgeText: { fontFamily: "Nunito_800ExtraBold", fontSize: 14 },
+  zoneFilterRow: { maxHeight: 36, marginBottom: 6 },
+  zoneFilterContent: { paddingHorizontal: 16, gap: 6 },
+  zoneChip: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+    backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
+  },
+  zoneChipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
+  zoneChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
+  zoneChipTextActive: { color: Colors.white },
   deckArea: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
   card: {
     position: "absolute", width: CARD_WIDTH, maxHeight: 440,
