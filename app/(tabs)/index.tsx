@@ -13,6 +13,14 @@ import ZonePicker from "@/components/ZonePicker";
 
 const CATEGORIES = [
   {
+    id: "roommate_openings",
+    title: "Roommate Openings",
+    dates: "Join an existing lease",
+    icon: "people-outline" as const,
+    color: "#8B5CF6",
+    desc: "Hosts looking for roommates — move into an open spot",
+  },
+  {
     id: "summer_only",
     title: "Summer Only",
     dates: "Mid-May – Early August",

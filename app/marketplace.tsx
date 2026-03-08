@@ -16,6 +16,7 @@ import { getApiUrl } from "@/lib/query-client";
 
 const CATEGORY_LABELS: Record<string, string> = {
   all: "All",
+  roommate_openings: "Roommate Openings",
   summer_only: "Summer Only",
   august_gap: "August Gap",
   semester_takeover: "Semester / Full Year",
@@ -24,6 +25,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   all: "apps-outline",
+  roommate_openings: "people-outline",
   summer_only: "sunny-outline",
   august_gap: "time-outline",
   semester_takeover: "calendar-outline",
@@ -32,6 +34,7 @@ const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 
 const CATEGORY_COLORS: Record<string, string> = {
   all: Colors.ocean,
+  roommate_openings: "#8B5CF6",
   summer_only: Colors.orange,
   august_gap: Colors.ocean,
   semester_takeover: Colors.grassGreen,
@@ -69,7 +72,7 @@ const LEASE_LABELS: Record<string, string> = {
   summer_sublease: "Summer Sublease",
 };
 
-type CategoryFilter = "all" | "summer_only" | "august_gap" | "semester_takeover" | "short_term";
+type CategoryFilter = "all" | "roommate_openings" | "summer_only" | "august_gap" | "semester_takeover" | "short_term";
 
 function CongratsSheet({ visible, onDone }: { visible: boolean; onDone: () => void }) {
   const insets = useSafeAreaInsets();
@@ -131,7 +134,7 @@ const cg = StyleSheet.create({
 
 const PLACEHOLDER_COLORS = ["#1A7AAF", "#5A8A5A", "#9B59B6", "#CC5500", "#E0BC00", "#4A8A5A"];
 
-function CardPhotoSection({ post }: { post: SubleasePost }) {
+function CardPhotoSection({ post, onImagePress }: { post: SubleasePost; onImagePress?: () => void }) {
   const hasImage = post.images && post.images.length > 0 && post.images[0] !== "";
   const placeholderColor = post.avatarColor || PLACEHOLDER_COLORS[post.buildingName.length % PLACEHOLDER_COLORS.length];
   const amenities = post.amenities;
@@ -159,7 +162,12 @@ function CardPhotoSection({ post }: { post: SubleasePost }) {
   };
 
   return (
-    <View style={styles.photoSection} onLayout={(e) => setCardWidth(e.nativeEvent.layout.width)}>
+    <TouchableOpacity
+      activeOpacity={onImagePress && hasImage ? 0.85 : 1}
+      onPress={onImagePress && hasImage ? onImagePress : undefined}
+      style={styles.photoSection}
+      onLayout={(e) => setCardWidth(e.nativeEvent.layout.width)}
+    >
       {hasImage ? (
         hasMultiple ? (
           <>
@@ -214,9 +222,76 @@ function CardPhotoSection({ post }: { post: SubleasePost }) {
           ))}
         </View>
       )}
-    </View>
+      {hasImage && (
+        <View style={styles.expandHint}>
+          <Ionicons name="expand-outline" size={12} color={Colors.white} />
+        </View>
+      )}
+    </TouchableOpacity>
   );
 }
+
+function FullScreenGallery({ images, visible, onClose, buildingName }: {
+  images: string[]; visible: boolean; onClose: () => void; buildingName: string;
+}) {
+  const insets = useSafeAreaInsets();
+  const [activeIdx, setActiveIdx] = useState(0);
+  const screenW = Dimensions.get("window").width;
+
+  if (!visible) return null;
+  return (
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent>
+      <View style={fsStyles.overlay}>
+        <View style={[fsStyles.header, { paddingTop: (Platform.OS === "web" ? 67 : insets.top) + 8 }]}>
+          <TouchableOpacity onPress={onClose} style={fsStyles.closeBtn}>
+            <Ionicons name="close" size={24} color={Colors.white} />
+          </TouchableOpacity>
+          <Text style={fsStyles.title} numberOfLines={1}>{buildingName}</Text>
+          <Text style={fsStyles.counter}>{activeIdx + 1} / {images.length}</Text>
+        </View>
+        <ScrollView
+          horizontal pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => {
+            const idx = Math.round(e.nativeEvent.contentOffset.x / e.nativeEvent.layoutMeasurement.width);
+            setActiveIdx(idx);
+          }}
+          style={fsStyles.scroll}
+          contentContainerStyle={fsStyles.scrollContent}
+        >
+          {images.map((uri, idx) => (
+            <Image key={idx} source={{ uri }} style={{ width: screenW, height: "100%" }} resizeMode="contain" />
+          ))}
+        </ScrollView>
+        <View style={[fsStyles.dots, { paddingBottom: insets.bottom + 16 }]}>
+          {images.map((_, idx) => (
+            <View key={idx} style={[fsStyles.dot, idx === activeIdx && fsStyles.dotActive]} />
+          ))}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const fsStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)" },
+  header: {
+    flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, gap: 12,
+  },
+  closeBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center", justifyContent: "center",
+  },
+  title: { flex: 1, fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.white },
+  counter: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: "rgba(255,255,255,0.6)" },
+  scroll: { flex: 1 },
+  scrollContent: { alignItems: "center" as const },
+  dots: {
+    flexDirection: "row", justifyContent: "center", gap: 6, paddingTop: 12,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.35)" },
+  dotActive: { backgroundColor: Colors.white, width: 8, height: 8, borderRadius: 4 },
+});
 
 function SubleaseCard({ post, onMarkLeased }: {
   post: SubleasePost;
@@ -225,13 +300,24 @@ function SubleaseCard({ post, onMarkLeased }: {
   const { getTrustInfo, currentUser, startConversation } = useApp();
   const trust = getTrustInfo(post.userEmail);
   const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
-  const cat = post.category || "semester_takeover";
+  const cat = post.listingType === "roommate" ? "roommate_openings" : (post.category || "semester_takeover");
   const catColor = CATEGORY_COLORS[cat] || Colors.ocean;
   const isOwner = currentUser?.email === post.userEmail;
+  const [galleryVisible, setGalleryVisible] = useState(false);
+
+  const allImages: string[] = [];
+  if (post.images) post.images.forEach(img => { if (img) allImages.push(img); });
+  if (post.floorPlanUrl) allImages.push(post.floorPlanUrl);
 
   return (
     <View style={styles.card}>
-      <CardPhotoSection post={post} />
+      <CardPhotoSection post={post} onImagePress={allImages.length > 0 ? () => setGalleryVisible(true) : undefined} />
+      <FullScreenGallery
+        images={allImages}
+        visible={galleryVisible}
+        onClose={() => setGalleryVisible(false)}
+        buildingName={post.buildingName}
+      />
 
       <View style={styles.cardBody}>
         <View style={styles.cardHeader}>
@@ -289,6 +375,22 @@ function SubleaseCard({ post, onMarkLeased }: {
           ) : null}
         </View>
 
+        {post.listingType === "roommate" && (
+          <View style={styles.roommateInfo}>
+            {post.roomsAvailable ? (
+              <View style={styles.roommateInfoItem}>
+                <Ionicons name="bed-outline" size={13} color="#8B5CF6" />
+                <Text style={styles.roommateInfoText}>{post.roomsAvailable} spot{post.roomsAvailable > 1 ? "s" : ""} open</Text>
+              </View>
+            ) : null}
+            {post.currentResidentBio ? (
+              <Text style={styles.residentBio} numberOfLines={2}>
+                {post.currentResidentBio}
+              </Text>
+            ) : null}
+          </View>
+        )}
+
         {post.description ? (
           <Text style={styles.description} numberOfLines={2}>{post.description}</Text>
         ) : null}
@@ -343,7 +445,9 @@ function SubleaseCard({ post, onMarkLeased }: {
             }}
           >
             <Ionicons name="chatbubble-outline" size={15} color={Colors.ocean} />
-            <Text style={styles.messageBtnText}>Message {post.userName.split(" ")[0]}</Text>
+            <Text style={styles.messageBtnText}>
+              {post.listingType === "roommate" ? "Message Host" : `Message ${post.userName.split(" ")[0]}`}
+            </Text>
           </TouchableOpacity>
         )}
 
@@ -383,7 +487,12 @@ export default function MarketplaceScreen() {
   }, [params.category, params.zone]);
 
   const filtered = subleases.filter(s => {
-    if (activeFilter !== "all" && (s.category || "semester_takeover") !== activeFilter) return false;
+    if (activeFilter === "roommate_openings") {
+      if (s.listingType !== "roommate") return false;
+    } else if (activeFilter !== "all") {
+      if (s.listingType === "roommate") return false;
+      if ((s.category || "semester_takeover") !== activeFilter) return false;
+    }
     if (zoneFilter !== "all" && s.zone !== zoneFilter) return false;
     return true;
   });
@@ -576,6 +685,12 @@ const styles = StyleSheet.create({
   floorPlanLabelText: {
     fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.white,
   },
+  expandHint: {
+    position: "absolute" as const, top: 8, right: 8,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center" as const, justifyContent: "center" as const,
+  },
   photoPlaceholder: {
     width: "100%",
     height: "100%",
@@ -652,6 +767,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 2, marginLeft: 6, alignSelf: "center" as const,
   },
   fullyPrivateText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.grassGreen },
+  roommateInfo: {
+    backgroundColor: "#8B5CF6" + "0D", borderRadius: 10, padding: 10, gap: 6,
+    borderWidth: 1, borderColor: "#8B5CF6" + "20",
+  },
+  roommateInfoItem: {
+    flexDirection: "row" as const, alignItems: "center" as const, gap: 6,
+  },
+  roommateInfoText: { fontFamily: "Nunito_700Bold", fontSize: 13, color: "#8B5CF6" },
+  residentBio: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.charcoal, lineHeight: 17 },
   description: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, lineHeight: 19 },
   metaRow: { flexDirection: "row", gap: 16 },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 5 },

@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
@@ -99,6 +99,8 @@ const TOTAL_STEPS = 4;
 export default function PostSubleaseScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, addSublease } = useApp();
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const isHostMode = params.mode === "host";
   const [step, setStep] = useState(0);
 
   const [buildingName, setBuildingName] = useState("");
@@ -118,6 +120,8 @@ export default function PostSubleaseScreen() {
   const [isPrivateBathroom, setIsPrivateBathroom] = useState(true);
   const [images, setImages] = useState<(string | null)[]>([null, null, null]);
   const [floorPlanImage, setFloorPlanImage] = useState<string | null>(null);
+  const [roomsAvailable, setRoomsAvailable] = useState("1");
+  const [currentResidentBio, setCurrentResidentBio] = useState("");
 
   const [amenities, setAmenities] = useState<Amenities>({ ...DEFAULT_AMENITIES });
 
@@ -216,6 +220,9 @@ export default function PostSubleaseScreen() {
       isPrivateBedroom,
       isPrivateBathroom,
       floorPlanUrl: floorPlanImage || undefined,
+      roomsAvailable: isHostMode && roomsAvailable ? Number(roomsAvailable) : undefined,
+      currentResidentBio: isHostMode && currentResidentBio.trim() ? currentResidentBio.trim() : undefined,
+      listingType: isHostMode ? "roommate" : "sublease",
       moveInDate: moveInDate!.toISOString(),
       moveOutDate: moveOutDate!.toISOString(),
       amenities,
@@ -225,7 +232,11 @@ export default function PostSubleaseScreen() {
     };
 
     await addSublease(post);
-    router.back();
+    if (isHostMode) {
+      router.replace("/(tabs)/profile");
+    } else {
+      router.canGoBack() ? router.back() : router.replace("/(tabs)");
+    }
   };
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -241,7 +252,11 @@ export default function PostSubleaseScreen() {
 
   const stepValid = (s: number) => {
     if (s === 0) return !!(buildingName.trim() && price.trim() && !isNaN(Number(price)) && Number(price) > 0);
-    if (s === 1) return allImagesUploaded;
+    if (s === 1) {
+      if (!allImagesUploaded) return false;
+      if (isHostMode && !unitType.trim()) return false;
+      return true;
+    }
     if (s === 2) return true;
     if (s === 3) return moveInDate !== null && moveOutDate !== null;
     return true;
@@ -255,7 +270,7 @@ export default function PostSubleaseScreen() {
           <Ionicons name={step === 0 ? "close" : "arrow-back"} size={20} color={Colors.ocean} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Post My Sublease</Text>
+          <Text style={styles.headerTitle}>{isHostMode ? "Post My Apartment" : "Post My Sublease"}</Text>
           <Text style={styles.headerSub}>Step {step + 1} of {TOTAL_STEPS}</Text>
         </View>
         <View style={styles.stepDots}>
@@ -380,10 +395,36 @@ export default function PostSubleaseScreen() {
               )}
             </View>
 
+            {isHostMode && (
+              <>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Spots Available *</Text>
+                  <View style={styles.chipRow}>
+                    {["1", "2", "3", "4"].map(n => (
+                      <TouchableOpacity key={n} style={[styles.chip, roomsAvailable === n && styles.chipActive]}
+                        onPress={() => { setRoomsAvailable(n); Haptics.selectionAsync(); }}>
+                        <Text style={[styles.chipText, roomsAvailable === n && styles.chipTextActive]}>{n}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label}>Who Already Lives There?</Text>
+                  <TextInput style={[styles.input, styles.textArea]} value={currentResidentBio} onChangeText={setCurrentResidentBio}
+                    placeholder="e.g. 2 junior CS majors, clean and quiet. We cook together on weekends."
+                    placeholderTextColor={Colors.textLight} multiline numberOfLines={3} textAlignVertical="top" />
+                  <Text style={styles.fieldHint}>Help joiners know who they'd be living with</Text>
+                </View>
+              </>
+            )}
+
             <View style={styles.field}>
               <Text style={styles.label}>Description</Text>
               <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription}
-                placeholder="Describe the unit, amenities, furniture situation..."
+                placeholder={isHostMode
+                  ? "Describe the room, common spaces, house rules..."
+                  : "Describe the unit, amenities, furniture situation..."}
                 placeholderTextColor={Colors.textLight} multiline numberOfLines={3} textAlignVertical="top" />
             </View>
           </>
@@ -640,7 +681,7 @@ export default function PostSubleaseScreen() {
             disabled={!canSubmit}
           >
             <Ionicons name="checkmark" size={20} color={Colors.white} />
-            <Text style={styles.submitBtnText}>Post Sublease</Text>
+            <Text style={styles.submitBtnText}>{isHostMode ? "Post Apartment" : "Post Sublease"}</Text>
           </TouchableOpacity>
         )}
       </View>

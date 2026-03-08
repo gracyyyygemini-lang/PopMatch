@@ -56,7 +56,12 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 ### 5-Pathway Intent System
 - Intent types: Host, Joiner, Co-Seeker, Sublessor, Sublessee
 - Selected during onboarding Step 1 (after email verification)
-- Host/Sublessor users without listings redirected to "Link a Listing First" screen
+- Post-registration routing:
+  - Host → /post-sublease?mode=host (Post My Apartment form, redirects to Profile after posting)
+  - Joiner → /marketplace?category=roommate_openings (Roommate Openings filter)
+  - Co-Seeker → /matchmaker
+  - Sublessor → /post-sublease
+  - Sublessee → /marketplace?category=short_term
 - Intent stored in UserProfile (`intent` field)
 
 ### Email OTP Authentication
@@ -110,7 +115,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - `Amenities`: 16-boolean interface with DEFAULT_AMENITIES constant
 - `Conversation`: id, participant IDs, listing context (building, price, unitType), last message
 - `ChatMessage`: id, conversationId, senderId, content, createdAt
-- `SubleasePost`: includes unitType, isPrivateBedroom, isPrivateBathroom, floorPlanUrl, bathroomType, kitchenType, moveInDate, moveOutDate, amenities, images
+- `SubleasePost`: includes unitType, isPrivateBedroom, isPrivateBathroom, floorPlanUrl, roomsAvailable, currentResidentBio, listingType ('sublease'|'roommate'), bathroomType, kitchenType, moveInDate, moveOutDate, amenities, images
 
 ## Database Schema (PostgreSQL)
 Tables: `users`, `friendships`, `vouches`, `listings`, `break_posts`, `otp_codes`, `feedback`, `stats`, `conversations`, `messages`

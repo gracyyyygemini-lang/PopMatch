@@ -304,10 +304,10 @@ export default function OnboardingScreen() {
     await setIsOnboarded(true);
     switch (intent) {
       case "host":
-        router.replace("/link-listing");
+        router.replace("/post-sublease?mode=host");
         break;
       case "joiner":
-        router.replace("/marketplace?category=semester_takeover");
+        router.replace("/marketplace?category=roommate_openings");
         break;
       case "co_seeker":
         router.replace("/matchmaker");

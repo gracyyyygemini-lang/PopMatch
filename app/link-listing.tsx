@@ -32,7 +32,7 @@ export default function LinkListingScreen() {
           style={styles.primaryBtn}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.replace("/post-sublease");
+            router.replace("/post-sublease?mode=host");
           }}
         >
           <Ionicons name="add-circle-outline" size={20} color={Colors.white} />

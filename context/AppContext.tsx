@@ -100,6 +100,9 @@ export interface SubleasePost {
   isPrivateBedroom?: boolean;
   isPrivateBathroom?: boolean;
   floorPlanUrl?: string;
+  roomsAvailable?: number;
+  currentResidentBio?: string;
+  listingType?: 'sublease' | 'roommate';
   moveInDate?: string;
   moveOutDate?: string;
   amenities?: Amenities;
