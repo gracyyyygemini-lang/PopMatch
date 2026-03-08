@@ -83,9 +83,13 @@ export default function ChatScreen() {
       <View style={styles.listingPreview}>
         <Ionicons name="home-outline" size={16} color={Colors.ocean} />
         <Text style={styles.listingPreviewText} numberOfLines={1}>
-          {convo.listingBuilding}
+          {convo.listingUnitType
+            ? `${convo.listingUnitType} — $${convo.listingPrice}/mo`
+            : convo.listingBuilding}
         </Text>
-        <Text style={styles.listingPreviewPrice}>${convo.listingPrice}/mo</Text>
+        {!convo.listingUnitType && (
+          <Text style={styles.listingPreviewPrice}>${convo.listingPrice}/mo</Text>
+        )}
       </View>
 
       <FlatList

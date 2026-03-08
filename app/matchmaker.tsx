@@ -123,7 +123,8 @@ function ProfileCard({ user, score }: { user: UserProfile; score: number }) {
               user.id, user.name, user.avatarColor, user.email,
               listing?.id || `roommate-${user.id}`,
               listing?.buildingName || "Roommate Match",
-              listing?.pricePerMonth || user.budget
+              listing?.pricePerMonth || user.budget,
+              listing?.unitType
             );
             router.push(`/chat?conversationId=${convoId}`);
           }}

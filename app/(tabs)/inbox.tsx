@@ -39,7 +39,9 @@ function ConversationRow({ convo }: { convo: Conversation }) {
         <View style={styles.convoMeta}>
           <Ionicons name="home-outline" size={11} color={Colors.textLight} />
           <Text style={styles.convoBuilding} numberOfLines={1}>
-            {convo.listingBuilding} · ${convo.listingPrice}/mo
+            {convo.listingUnitType
+              ? `${convo.listingUnitType} — $${convo.listingPrice}/mo`
+              : `${convo.listingBuilding} · $${convo.listingPrice}/mo`}
           </Text>
         </View>
         {convo.lastMessage ? (

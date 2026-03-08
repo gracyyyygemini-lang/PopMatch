@@ -96,6 +96,10 @@ export interface SubleasePost {
   category?: string;
   kitchenType?: KitchenType;
   bathroomType?: BathroomType;
+  unitType?: string;
+  isPrivateBedroom?: boolean;
+  isPrivateBathroom?: boolean;
+  floorPlanUrl?: string;
   moveInDate?: string;
   moveOutDate?: string;
   amenities?: Amenities;
@@ -111,6 +115,7 @@ export interface Conversation {
   listingId: string;
   listingBuilding: string;
   listingPrice: number;
+  listingUnitType?: string;
   lastMessage?: string;
   lastMessageAt?: number;
   otherUserName?: string;
@@ -273,7 +278,7 @@ interface AppContextValue {
   toggleVouch: (email: string) => Promise<void>;
   getTrustInfo: (userEmail: string) => TrustInfo;
   conversations: Conversation[];
-  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number) => string;
+  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string) => string;
   sendMessage: (conversationId: string, content: string) => void;
   getMessages: (conversationId: string) => ChatMessage[];
 }
@@ -484,7 +489,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_friends", JSON.stringify(updated));
   };
 
-  const startConversation = (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number): string => {
+  const startConversation = (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string): string => {
     if (!currentUser) return "";
     const existing = conversations.find(c =>
       c.listingId === listingId &&
@@ -500,6 +505,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       listingId,
       listingBuilding,
       listingPrice,
+      listingUnitType,
       otherUserName: targetName,
       otherUserAvatar: targetAvatar,
       otherUserEmail: targetEmail,

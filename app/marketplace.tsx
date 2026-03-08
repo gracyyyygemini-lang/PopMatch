@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Modal, Animated, Image
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Modal, Animated, Image, Dimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -135,6 +135,15 @@ function CardPhotoSection({ post }: { post: SubleasePost }) {
   const hasImage = post.images && post.images.length > 0 && post.images[0] !== "";
   const placeholderColor = post.avatarColor || PLACEHOLDER_COLORS[post.buildingName.length % PLACEHOLDER_COLORS.length];
   const amenities = post.amenities;
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [cardWidth, setCardWidth] = useState(Math.min(Dimensions.get("window").width - 32, 500));
+
+  const allImages: string[] = [];
+  if (post.images) {
+    post.images.forEach(img => { if (img) allImages.push(img); });
+  }
+  if (post.floorPlanUrl) allImages.push(post.floorPlanUrl);
+  const hasMultiple = allImages.length > 1;
 
   const amenityItems = amenities ? [
     { icon: "bed-outline" as const, active: amenities.isFurnished, label: "Furnished" },
@@ -143,10 +152,43 @@ function CardPhotoSection({ post }: { post: SubleasePost }) {
     { icon: "snow-outline" as const, active: amenities.hasAC, label: "AC" },
   ] : [];
 
+  const handleScroll = (e: any) => {
+    const x = e.nativeEvent.contentOffset.x;
+    const w = e.nativeEvent.layoutMeasurement.width;
+    if (w > 0) setActiveIdx(Math.round(x / w));
+  };
+
   return (
-    <View style={styles.photoSection}>
+    <View style={styles.photoSection} onLayout={(e) => setCardWidth(e.nativeEvent.layout.width)}>
       {hasImage ? (
-        <Image source={{ uri: post.images![0] }} style={styles.photoImage} resizeMode="cover" />
+        hasMultiple ? (
+          <>
+            <ScrollView
+              horizontal pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={handleScroll}
+              scrollEventThrottle={16}
+              style={styles.galleryScroll}
+            >
+              {allImages.map((uri, idx) => (
+                <Image key={idx} source={{ uri }} style={[styles.galleryImage, { width: cardWidth }]} resizeMode="cover" />
+              ))}
+            </ScrollView>
+            <View style={styles.galleryDots}>
+              {allImages.map((_, idx) => (
+                <View key={idx} style={[styles.galleryDot, idx === activeIdx && styles.galleryDotActive]} />
+              ))}
+            </View>
+            {post.floorPlanUrl && activeIdx === allImages.length - 1 && (
+              <View style={styles.floorPlanLabel}>
+                <Ionicons name="map-outline" size={10} color={Colors.white} />
+                <Text style={styles.floorPlanLabelText}>Floor Plan</Text>
+              </View>
+            )}
+          </>
+        ) : (
+          <Image source={{ uri: allImages[0] }} style={styles.photoImage} resizeMode="cover" />
+        )
       ) : (
         <View style={[styles.photoPlaceholder, { backgroundColor: placeholderColor + "20" }]}>
           <Ionicons name="home-outline" size={40} color={placeholderColor + "60"} />
@@ -225,6 +267,11 @@ function SubleaseCard({ post, onMarkLeased }: {
         <Text style={styles.address}>{post.address}</Text>
 
         <View style={styles.priceRow}>
+          {post.unitType ? (
+            <View style={styles.unitTypeBadge}>
+              <Text style={styles.unitTypeText}>{post.unitType}</Text>
+            </View>
+          ) : null}
           <Text style={styles.price}>${post.pricePerMonth}</Text>
           <Text style={styles.priceSub}>/month</Text>
           {cat === "august_gap" || cat === "short_term" ? (
@@ -232,6 +279,12 @@ function SubleaseCard({ post, onMarkLeased }: {
               <Text style={[styles.dateBadgeText, { color: catColor }]}>
                 {CATEGORY_DATES[cat]}
               </Text>
+            </View>
+          ) : null}
+          {post.isPrivateBedroom && post.isPrivateBathroom ? (
+            <View style={styles.fullyPrivateBadge}>
+              <Ionicons name="shield-checkmark" size={10} color={Colors.grassGreen} />
+              <Text style={styles.fullyPrivateText}>Fully Private</Text>
             </View>
           ) : null}
         </View>
@@ -284,7 +337,7 @@ function SubleaseCard({ post, onMarkLeased }: {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               const convoId = startConversation(
                 post.userId, post.userName, post.avatarColor, post.userEmail,
-                post.id, post.buildingName, post.pricePerMonth
+                post.id, post.buildingName, post.pricePerMonth, post.unitType
               );
               router.push(`/chat?conversationId=${convoId}`);
             }}
@@ -497,6 +550,32 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
+  galleryScroll: {
+    width: "100%",
+    height: "100%",
+  },
+  galleryImage: {
+    height: "100%",
+  },
+  galleryDots: {
+    position: "absolute" as const, bottom: 8, left: 0, right: 0,
+    flexDirection: "row" as const, justifyContent: "center" as const, gap: 5,
+  },
+  galleryDot: {
+    width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.45)",
+  },
+  galleryDotActive: {
+    backgroundColor: Colors.white, width: 8, height: 8, borderRadius: 4,
+  },
+  floorPlanLabel: {
+    position: "absolute" as const, top: 8, left: 8,
+    flexDirection: "row" as const, alignItems: "center" as const, gap: 4,
+    backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  floorPlanLabelText: {
+    fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.white,
+  },
   photoPlaceholder: {
     width: "100%",
     height: "100%",
@@ -562,6 +641,17 @@ const styles = StyleSheet.create({
     marginLeft: 8, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, alignSelf: "center",
   },
   dateBadgeText: { fontFamily: "Nunito_600SemiBold", fontSize: 11 },
+  unitTypeBadge: {
+    backgroundColor: Colors.ocean + "15", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2,
+    marginRight: 4, alignSelf: "center" as const,
+  },
+  unitTypeText: { fontFamily: "Nunito_800ExtraBold", fontSize: 13, color: Colors.ocean },
+  fullyPrivateBadge: {
+    flexDirection: "row" as const, alignItems: "center" as const, gap: 3,
+    backgroundColor: Colors.grassGreen + "15", borderRadius: 8,
+    paddingHorizontal: 7, paddingVertical: 2, marginLeft: 6, alignSelf: "center" as const,
+  },
+  fullyPrivateText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.grassGreen },
   description: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, lineHeight: 19 },
   metaRow: { flexDirection: "row", gap: 16 },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 5 },

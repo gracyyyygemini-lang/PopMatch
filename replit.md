@@ -64,10 +64,13 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - Backend: POST /api/auth/send-otp, POST /api/auth/verify-otp
 - **OTP is hardcoded to `123456` for testing**
 
-### Browse Card UI (60% Photo + Amenity Overlay)
+### Browse Card UI (60% Photo + Amenity Overlay + Gallery)
 - Listing cards show image at 60% height (or colored placeholder with building icon)
+- Swipeable photo gallery when multiple images exist (with dot indicators)
+- Floor plan shown as last gallery slide with "Floor Plan" label overlay
+- Unit Type badge (e.g., "2B2B") displayed next to price
+- "Fully Private" badge (green shield) when both bedroom and bathroom are private
 - 2x2 amenity icon overlay at bottom-right of photo (Bed/Laundry/WiFi/AC)
-- Active amenities highlighted with semi-transparent white background
 
 ### 16-Point Amenity System
 - **Foundational**: isFurnished, hasLaundry, hasWifi, hasAC
@@ -77,10 +80,14 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 
 ### Smart Create Listing Form (4 steps)
 - **Step 1**: Basic info — building, address, price, lease type, landlord, zone, breaks, description
-- **Step 2**: Bathroom toggle (Private/Shared) + Kitchen toggle (Private/Communal) → 3 required photos with dynamic labels
-  - Slot 1: Always "Bedroom"
-  - Slot 2: "Private Bathroom" or "Shared Bathroom"
-  - Slot 3: "Private Kitchen" or "Communal Kitchen/Area"
+- **Step 2**: Unit geometry + privacy + photos
+  - Unit Type input (e.g., "2B2B", "Studio")
+  - Private Bedroom toggle (isPrivateBedroom)
+  - Private Bathroom toggle (isPrivateBathroom, syncs bathroomType)
+  - Kitchen type (Private/Communal)
+  - 3 required photo slots with dynamic labels + 1 optional Floor Plan slot
+  - Slot 1: "Bedroom", Slot 2: "Private/Shared Bathroom", Slot 3: "Private/Communal Kitchen"
+  - Slot 4 (optional): Floor Plan image (dashed border, 16:9 aspect)
 - **Step 3**: 16 amenity toggles in grouped sections
 - **Step 4**: Cleaning frequency + shoe policy + date picker grid for move-in/out
 
@@ -101,9 +108,9 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - `CleaningFrequency`: 'daily' | 'weekly' | 'monthly'
 - `ShoePolicy`: 'shoes_off' | 'front_door' | 'no_policy'
 - `Amenities`: 16-boolean interface with DEFAULT_AMENITIES constant
-- `Conversation`: id, participant IDs, listing context (building, price), last message
+- `Conversation`: id, participant IDs, listing context (building, price, unitType), last message
 - `ChatMessage`: id, conversationId, senderId, content, createdAt
-- `SubleasePost`: includes bathroomType, kitchenType, moveInDate, moveOutDate, amenities, images
+- `SubleasePost`: includes unitType, isPrivateBedroom, isPrivateBathroom, floorPlanUrl, bathroomType, kitchenType, moveInDate, moveOutDate, amenities, images
 
 ## Database Schema (PostgreSQL)
 Tables: `users`, `friendships`, `vouches`, `listings`, `break_posts`, `otp_codes`, `feedback`, `stats`, `conversations`, `messages`

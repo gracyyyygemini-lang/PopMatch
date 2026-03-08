@@ -113,7 +113,11 @@ export default function PostSubleaseScreen() {
 
   const [kitchenType, setKitchenType] = useState<KitchenType>("private");
   const [bathroomType, setBathroomType] = useState<BathroomType>("private");
+  const [unitType, setUnitType] = useState("");
+  const [isPrivateBedroom, setIsPrivateBedroom] = useState(true);
+  const [isPrivateBathroom, setIsPrivateBathroom] = useState(true);
   const [images, setImages] = useState<(string | null)[]>([null, null, null]);
+  const [floorPlanImage, setFloorPlanImage] = useState<string | null>(null);
 
   const [amenities, setAmenities] = useState<Amenities>({ ...DEFAULT_AMENITIES });
 
@@ -138,7 +142,7 @@ export default function PostSubleaseScreen() {
 
   const imageLabels = [
     "Bedroom",
-    bathroomType === "private" ? "Private Bathroom" : "Shared Bathroom",
+    isPrivateBathroom ? "Private Bathroom" : "Shared Bathroom",
     kitchenType === "private" ? "Private Kitchen" : "Communal Kitchen/Area",
   ];
 
@@ -153,6 +157,18 @@ export default function PostSubleaseScreen() {
       const newImages = [...images];
       newImages[index] = result.assets[0].uri;
       setImages(newImages);
+    }
+  };
+
+  const pickFloorPlan = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setFloorPlanImage(result.assets[0].uri);
     }
   };
 
@@ -196,6 +212,10 @@ export default function PostSubleaseScreen() {
       timestamp: Date.now(),
       kitchenType,
       bathroomType,
+      unitType: unitType.trim() || undefined,
+      isPrivateBedroom,
+      isPrivateBathroom,
+      floorPlanUrl: floorPlanImage || undefined,
       moveInDate: moveInDate!.toISOString(),
       moveOutDate: moveOutDate!.toISOString(),
       amenities,
@@ -372,18 +392,43 @@ export default function PostSubleaseScreen() {
         {step === 1 && (
           <>
             <Text style={styles.sectionTitle}>Unit Details & Photos</Text>
-            <Text style={styles.sectionSub}>Set your bathroom and kitchen type, then upload 3 required photos.</Text>
+            <Text style={styles.sectionSub}>Describe your unit layout, privacy options, then upload photos.</Text>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Unit Type</Text>
+              <TextInput style={styles.input}
+                value={unitType} onChangeText={setUnitType}
+                placeholder="e.g. 2B2B, 3B3B, Studio, 1B1B"
+                placeholderTextColor={Colors.textLight}
+                autoCapitalize="characters" />
+              <Text style={styles.fieldHint}>Format: [Bedrooms]B[Bathrooms]B or Studio</Text>
+            </View>
 
             <View style={styles.field}>
               <TouchableOpacity style={styles.toggleRow}
-                onPress={() => { setBathroomType(bathroomType === "private" ? "shared" : "private"); Haptics.selectionAsync(); }}>
+                onPress={() => { setIsPrivateBedroom(!isPrivateBedroom); Haptics.selectionAsync(); }}>
+                <View>
+                  <Text style={styles.toggleTitle}>Private Bedroom?</Text>
+                  <Text style={styles.toggleDesc}>The bedroom is not shared with another person</Text>
+                </View>
+                <View style={[styles.toggle, isPrivateBedroom && styles.toggleOn]}>
+                  <Text style={[styles.toggleText, isPrivateBedroom && styles.toggleTextOn]}>
+                    {isPrivateBedroom ? "Yes" : "No"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.field}>
+              <TouchableOpacity style={styles.toggleRow}
+                onPress={() => { setIsPrivateBathroom(!isPrivateBathroom); setBathroomType(isPrivateBathroom ? "shared" : "private"); Haptics.selectionAsync(); }}>
                 <View>
                   <Text style={styles.toggleTitle}>Private Bathroom?</Text>
                   <Text style={styles.toggleDesc}>Your unit has its own private bathroom</Text>
                 </View>
-                <View style={[styles.toggle, bathroomType === "private" && styles.toggleOn]}>
-                  <Text style={[styles.toggleText, bathroomType === "private" && styles.toggleTextOn]}>
-                    {bathroomType === "private" ? "Yes" : "No"}
+                <View style={[styles.toggle, isPrivateBathroom && styles.toggleOn]}>
+                  <Text style={[styles.toggleText, isPrivateBathroom && styles.toggleTextOn]}>
+                    {isPrivateBathroom ? "Yes" : "No"}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -429,6 +474,25 @@ export default function PostSubleaseScreen() {
               {!allImagesUploaded && (
                 <Text style={styles.photoHint}>Tap each slot to upload. All 3 photos are required.</Text>
               )}
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Floor Plan (Optional)</Text>
+              <TouchableOpacity style={styles.floorPlanSlot} onPress={pickFloorPlan}>
+                {floorPlanImage ? (
+                  <Image source={{ uri: floorPlanImage }} style={styles.floorPlanImage} />
+                ) : (
+                  <View style={styles.floorPlanEmpty}>
+                    <Ionicons name="map-outline" size={28} color={Colors.textLight} />
+                    <Text style={styles.photoLabel}>Floor Plan</Text>
+                  </View>
+                )}
+                {floorPlanImage && (
+                  <View style={styles.photoLabelOverlay}>
+                    <Text style={styles.photoLabelOverlayText}>Floor Plan</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -676,6 +740,13 @@ const styles = StyleSheet.create({
   },
   photoLabelOverlayText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.white },
   photoHint: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textLight, marginTop: 4 },
+  floorPlanSlot: {
+    width: "100%", aspectRatio: 16 / 9, borderRadius: 14, overflow: "hidden",
+    backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
+    borderStyle: "dashed" as const,
+  },
+  floorPlanEmpty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6 },
+  floorPlanImage: { width: "100%", height: "100%", resizeMode: "cover" as const },
   amenitySection: { gap: 8, marginBottom: 8 },
   amenitySectionTitle: {
     fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted,
