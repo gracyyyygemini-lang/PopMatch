@@ -11,9 +11,8 @@ import Colors from "@/constants/colors";
 import { useApp, UserProfile, Zone } from "@/context/AppContext";
 import ZonePicker from "@/components/ZonePicker";
 
-const { width } = Dimensions.get("window");
-const CARD_WIDTH = width - 40;
-const SWIPE_THRESHOLD = width * 0.28;
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
 
 const ZONE_LABELS: Record<string, string> = {
   campustown: "Campustown",
@@ -138,12 +137,12 @@ function ProfileCard({ user, score }: { user: UserProfile; score: number }) {
 }
 
 function SwipeableCard({
-  user, score, onLike, onPass, isTop
+  user, score, onLike, onPass, isTop, cardWidth
 }: {
-  user: UserProfile; score: number; onLike: () => void; onPass: () => void; isTop: boolean;
+  user: UserProfile; score: number; onLike: () => void; onPass: () => void; isTop: boolean; cardWidth: number;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
-  const rotate = pan.x.interpolate({ inputRange: [-width / 2, 0, width / 2], outputRange: ["-10deg", "0deg", "10deg"] });
+  const rotate = pan.x.interpolate({ inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2], outputRange: ["-10deg", "0deg", "10deg"] });
   const likeOpacity = pan.x.interpolate({ inputRange: [0, SWIPE_THRESHOLD], outputRange: [0, 1] });
   const passOpacity = pan.x.interpolate({ inputRange: [-SWIPE_THRESHOLD, 0], outputRange: [1, 0] });
 
@@ -154,9 +153,9 @@ function SwipeableCard({
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
       onPanResponderRelease: (_, gs) => {
         if (gs.dx > SWIPE_THRESHOLD) {
-          Animated.spring(pan, { toValue: { x: width * 1.5, y: gs.dy }, useNativeDriver: false }).start(onLike);
+          Animated.spring(pan, { toValue: { x: SCREEN_WIDTH * 1.5, y: gs.dy }, useNativeDriver: false }).start(onLike);
         } else if (gs.dx < -SWIPE_THRESHOLD) {
-          Animated.spring(pan, { toValue: { x: -width * 1.5, y: gs.dy }, useNativeDriver: false }).start(onPass);
+          Animated.spring(pan, { toValue: { x: -SCREEN_WIDTH * 1.5, y: gs.dy }, useNativeDriver: false }).start(onPass);
         } else {
           Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
         }
@@ -167,6 +166,7 @@ function SwipeableCard({
   return (
     <Animated.View
       style={[styles.card, {
+        width: cardWidth,
         transform: [{ translateX: pan.x }, { translateY: isTop ? pan.y : 0 }, { rotate: isTop ? rotate : "0deg" }],
         zIndex: isTop ? 10 : 5,
         opacity: isTop ? 1 : 0.9,
@@ -229,6 +229,7 @@ export default function MatchmakerScreen() {
 
   const isDesktopMm = Platform.OS === "web" && Dimensions.get("window").width >= 1024;
   const contentMaxWidthMm = isDesktopMm ? 720 : Dimensions.get("window").width;
+  const cardWidth = Math.min(contentMaxWidthMm - 40, 500);
   const topPadding = Platform.OS === "web" ? (isDesktopMm ? 24 : 67) : insets.top;
 
   return (
@@ -266,6 +267,7 @@ export default function MatchmakerScreen() {
             const score = currentUser ? computeScore(currentUser, user) : 75;
             return (
               <SwipeableCard key={user.id} user={user} score={score} isTop={isTop}
+                cardWidth={cardWidth}
                 onLike={() => handleLike(user)} onPass={() => handlePass(user)} />
             );
           }).reverse()
@@ -309,7 +311,7 @@ const styles = StyleSheet.create({
   matchBadgeText: { fontFamily: "Nunito_800ExtraBold", fontSize: 14 },
   deckArea: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
   card: {
-    position: "absolute", width: CARD_WIDTH, maxHeight: 440,
+    position: "absolute", maxHeight: 440,
     backgroundColor: Colors.cardBg, borderRadius: 22,
     borderWidth: 1.5, borderColor: Colors.borderSoft,
     shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 4 },
@@ -368,9 +370,10 @@ const styles = StyleSheet.create({
   countBadge: { backgroundColor: Colors.sandDark, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 7 },
   countText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
   emptyCard: {
-    width: CARD_WIDTH, alignItems: "center", justifyContent: "center",
+    alignItems: "center", justifyContent: "center",
     backgroundColor: Colors.cardBg, borderRadius: 22, borderWidth: 1.5,
     borderColor: Colors.borderSoft, padding: 40, gap: 12,
+    maxWidth: 500, width: "100%",
   },
   emptyTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal },
   emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center" },

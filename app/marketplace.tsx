@@ -524,7 +524,7 @@ export default function MarketplaceScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
-      <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 12 }, isDesktop && { maxWidth: 960, alignSelf: "center" as const, width: "100%" }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}>
           <Ionicons name="arrow-back" size={20} color={Colors.ocean} />
         </TouchableOpacity>
@@ -583,7 +583,7 @@ export default function MarketplaceScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, {
           paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20,
-          maxWidth: contentMaxWidth,
+          maxWidth: isDesktop ? 960 : contentMaxWidth,
           alignSelf: "center" as const,
           width: "100%",
         }]}
@@ -601,6 +601,14 @@ export default function MarketplaceScreen() {
             <TouchableOpacity style={styles.postFirstBtn} onPress={() => router.push("/post-sublease")}>
               <Text style={styles.postFirstBtnText}>Post a Sublease</Text>
             </TouchableOpacity>
+          </View>
+        ) : isDesktop ? (
+          <View style={styles.desktopGrid}>
+            {filtered.map(post => (
+              <View key={post.id} style={styles.desktopGridItem}>
+                <SubleaseCard post={post} onMarkLeased={handleMarkLeased} />
+              </View>
+            ))}
           </View>
         ) : (
           filtered.map(post => (
@@ -810,6 +818,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ponyo, borderRadius: 12, paddingVertical: 12, marginTop: 2,
   },
   leasedBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
+  desktopGrid: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 16,
+  },
+  desktopGridItem: {
+    width: "48.5%" as any,
+  },
   emptyState: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 20, color: Colors.charcoal },
   emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center", paddingHorizontal: 20 },

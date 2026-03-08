@@ -15,6 +15,7 @@ import {
   Nunito_800ExtraBold,
 } from "@expo-google-fonts/nunito";
 import { AppProvider } from "@/context/AppContext";
+import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -61,21 +62,24 @@ function RootLayoutNav() {
 }
 
 function WebContainer({ children }: { children: React.ReactNode }) {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
+
   return (
     <View
       style={{
         flex: 1,
         width: "100%",
         alignItems: "center",
-        backgroundColor: "#FDFBF7",
+        backgroundColor: isDesktop ? Colors.sand : "#FDFBF7",
       }}
     >
       <View
         style={{
           flex: 1,
           width: "100%",
-          maxWidth: 500,
-          backgroundColor: "white",
+          maxWidth: isDesktop ? undefined : 500,
+          backgroundColor: isDesktop ? Colors.sand : "white",
           overflow: "hidden",
         }}
       >
