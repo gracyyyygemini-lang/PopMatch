@@ -240,7 +240,7 @@ function SubleaseCard({ post, onMarkLeased }: {
 
 export default function MarketplaceScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ category?: string; zone?: string }>();
+  const params = useLocalSearchParams<{ category?: string }>();
   const { subleases, removeSublease, currentUser } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
@@ -255,13 +255,9 @@ export default function MarketplaceScreen() {
     }
   }, [params.category]);
 
-  const zoneFiltered = params.zone
-    ? subleases.filter(s => s.zone === params.zone)
-    : subleases;
-
   const filtered = activeFilter === "all"
-    ? zoneFiltered
-    : zoneFiltered.filter(s => (s.category || "semester_takeover") === activeFilter);
+    ? subleases
+    : subleases.filter(s => (s.category || "semester_takeover") === activeFilter);
 
   const headerCatColor = activeFilter !== "all" ? CATEGORY_COLORS[activeFilter] : Colors.ocean;
 

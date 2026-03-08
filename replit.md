@@ -26,44 +26,20 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - `app/onboarding.tsx` — Email OTP step (Step 0) → 5-step onboarding with Ponyo fish animation
 - `app/admin.tsx` — Hidden admin dashboard (5-tap on profile version label)
 
-### Tabs (app/(tabs)/) — 3 tabs
-- `index.tsx` — Browse: Zone filter header + 4 housing category cards + Matchmaker/Breaks shortcuts
+### Tabs (app/(tabs)/)
+- `index.tsx` — Browse: 4 UIUC housing category cards + Matchmaker/Breaks shortcuts
 - `matches.tsx` — My Circle: social trust graph (sub-tab) + roommate matches (sub-tab)
-- `profile.tsx` — User profile with housing status badge, stats, Sign Out, Reset All Data; 5-tap version label → /admin
-- `map.tsx` — Hidden (href: null), PopMap removed from bottom nav
+- `map.tsx` — PopMap: zone guide grid + listing pins
+- `profile.tsx` — User profile, stats, Sign Out, Reset All Data; 5-tap version label → /admin
 
 ### Stack Screens
-- `app/matchmaker.tsx` — Intent-based swipe discovery with specialized cards per housing status; "Your Listing" preview for hosts
-- `app/marketplace.tsx` — Sublease listings with FacePile trust + Mark as Leased button + zone filtering
-- `app/create-listing.tsx` — Master Listing Creator: smart image logic (private kitchen toggle → conditional photo slots), custom DateTime picker (month/day/year/hour/min), cleaning frequency + shoe policy, 16-point amenity grid (4 categories), lifestyle tags; on submit links listing to user profile + redirects to matchmaker
+- `app/matchmaker.tsx` — Year-Long swipe discovery (PanResponder, weighted score)
+- `app/marketplace.tsx` — Sublease listings with FacePile trust + Mark as Leased button
 - `app/post-sublease.tsx` — Post a sublease form with landlord warnings
 - `app/breaks.tsx` — Break Stay bulletin board (sticky-note grid)
 - `app/admin.tsx` — Hidden admin dashboard (accessed via 5-tap on profile version label)
 
 ## Features
-
-### 5 Housing Intents (HousingStatus)
-- **Host**: Has a lease, needs a roommate. Card shows "Lease at [Building]" + Price.
-- **Joiner**: Wants to join existing lease. Feed shows Hosts/Sublessors with listings.
-- **Co-Seeker**: Let's find a place together. Card focuses on lifestyle tags + CTA.
-- **Sublessor**: Subletting their place. Card shows date range + "Short-Term" badge.
-- **Sublessee**: Looking for a sublease. Feed shows Sublessors with listings.
-
-### Intent-Based Matchmaker Logic
-- Joiner/Sublessee see → Host/Sublessor cards (with linked listings)
-- Host/Sublessor see → Joiner/Sublessee/Co-Seeker cards
-- Co-Seeker sees → other Co-Seekers and Joiners
-- Host/Sublessor must link a listing before entering matchmaker (blocking screen → "Create Listing" button → /create-listing form)
-- Master Listing Creator form: Building Name, Address, Rent, Rooms Available, Zone, Private Kitchen toggle (Yes/No → conditional required photo slots), Move-In/Move-Out DateTime pickers, Cleaning Frequency (Daily/Weekly/Monthly), Shoe Policy (Shoes Off/Front Door/No Policy), 16-point Amenity Grid (4 categories: Foundational/Collegiate/Financial/Building), Lifestyle Tags
-- Submit gated: requires building name, rent, all photos uploaded, cleaning frequency, shoe policy, and kitchen question answered
-- On submit: creates SubleasePost with all new fields + links to user profile (linkedListingId) + redirects to matchmaker
-- "Your Listing" preview card shown at top of matchmaker for hosts with linked listing (building name, price, rooms, lifestyle tags)
-- Trust badge (1st/2nd degree + FacePile) visible on every card
-
-### Zone Filtering
-- Browse tab: horizontal "Zone Filter" chips (All, Campustown, North, South, Urbana, Champaign)
-- Zone passed to marketplace via URL params (?zone=campustown)
-- computeScore weights zone matching at 40% (highest factor)
 
 ### Email OTP Authentication
 - Onboarding Step 0: email-only input → "Send Verification Code" button
@@ -77,7 +53,6 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 ### Face Pile UI (components/FacePile.tsx)
 - Overlapping circular avatar initials for mutual friends
 - Shows on marketplace listing cards when trust.degree === 2 + mutualFriends exist
-- Shows on every matchmaker card via TrustBadge component
 - Tapping opens bottom sheet with full names + emails + "In your circle" badges
 - `getTrustInfo()` in AppContext returns `mutualFriends: MutualFriend[]`
 
@@ -100,14 +75,14 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - **The August Gap**: 1–2 week temporary stays in August
 - **Semester / Full Year**: Fall (Aug–Dec), Spring (Jan–May), or 12-month takeovers
 - **Short-Term & Events**: 1–14 days for Moms Weekend, Thanksgiving, graduation stays
-- Each category card navigates to marketplace pre-filtered on that category + optional zone
+- Each category card navigates to marketplace pre-filtered on that category
 
 ### Social Trust Graph (My Circle Tab)
 - Two sub-tabs: "My Circle" (social graph) and "Matches" (roommate matches)
 - Add friends by @illinois.edu email — looks up in mock users + backend
 - **Trust display**: 1st Degree (green chip), 2nd Degree → FacePile component, Shared Org (gold chip)
 - Vouch toggle: star button on each friend card
-- Trust badges appear on **marketplace listing cards** and **matchmaker cards**
+- Trust badges appear on **marketplace listing cards** and **roommate match cards**
 
 ### Trust Badge Logic (getTrustInfo in AppContext)
 1. Email in friends list → degree: 1 (1st Degree Friend)
@@ -116,10 +91,9 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 4. Vouched by you → vouchedByFriend shown
 5. 2nd degree + mutuals → FacePile shown instead of text badge
 
-### Marketplace with Category + Zone Filters
+### Marketplace with Category Filters
 - Filter chips: All, Summer Only, August Gap, Semester/Full Year, Short-Term & Events
 - Category pre-selected via `?category=` URL param from home screen
-- Zone filtering via `?zone=` URL param from Browse tab zone filter
 - Category badges, trust FacePile, break-friendly tag, landlord badge
 - "Your Post" tag on user's own listings, "Mark as Leased" button at bottom
 
@@ -149,20 +123,12 @@ Migrations: `ALTER TABLE listings ADD COLUMN IF NOT EXISTS leased BOOLEAN DEFAUL
 - GET /api/admin/stats — full admin dashboard payload
 
 ## State (context/AppContext.tsx)
-- UserProfile (with housingStatus, linkedListingId), SubleasePost (with roomsAvailable, lifestyleTags, photos, moveInDate, moveOutDate, cleaningFrequency, shoePolicy, amenities, hasPrivateKitchen), BreakPost, MatchRecord, FriendRecord, TrustInfo, MutualFriend
-- HousingStatus type: "host" | "joiner" | "co_seeker" | "sublessor" | "sublessee"
-- CleaningFrequency type: "daily" | "weekly" | "monthly"
-- ShoePolicy type: "shoes_off" | "front_door" | "no_policy"
-- AmenityKey type: 16 values across 4 categories (foundational, collegiate, financial, building)
-- AMENITY_DEFS: exported constant defining all 16 amenities with name, icon, and category
-- FOUNDATIONAL_KEYS: ["furnished", "in_unit_laundry", "high_speed_wifi", "central_ac"] — displayed as 2x2 grid on matchmaker cards
-- LifestyleTag type: "quiet" | "social" | "clean" | "studious" | "early_bird" | "night_owl" | "pet_friendly" | "no_smoking"
+- UserProfile, SubleasePost, BreakPost, MatchRecord, FriendRecord, TrustInfo, MutualFriend
 - Persisted: @popmatch_user, _onboarded, _matches, _liked, _passed, _scam, _subleases, _breaks, _friends
 - `otpVerifiedEmail` (session only, not persisted)
-- Demo seed data for subleases (6) and break posts (3) and mock users (8, with college/organizations/housingStatus)
+- Demo seed data for subleases (6) and break posts (3) and mock users (8, with college/organizations)
 - `removeSublease(id)` removes listing by ID from state + AsyncStorage
 - `getTrustInfo()` returns mutualFriends list for FacePile rendering
-- `computeScore()` weights: Budget 25%, Cleanliness 20%, Noise 15%, Zone 40%
 
 ## Components
 - `components/FacePile.tsx` — overlapping avatar initials with tap-to-expand mutual friends modal
@@ -190,5 +156,3 @@ Migrations: `ALTER TABLE listings ADD COLUMN IF NOT EXISTS leased BOOLEAN DEFAUL
 - No emojis in UI components — @expo/vector-icons (Ionicons) throughout
 - Web platform: 67px top / 34px bottom inset handling on all screens
 - Resend integration was dismissed; add `RESEND_API_KEY` env secret to enable real emails
-- **OTP hardcoded to `123456`** for testing — revert `randomCode()` in server/routes.ts for production
-- Bottom nav: 3 tabs (Browse, My Circle, Profile) — PopMap removed

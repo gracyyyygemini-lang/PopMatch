@@ -8,16 +8,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp, UserProfile, LeaseType, GenderPref, Zone, Landlord, HousingStatus } from "@/context/AppContext";
+import { useApp, UserProfile, LeaseType, GenderPref, Zone, Landlord } from "@/context/AppContext";
 import { getApiUrl } from "@/lib/query-client";
-
-const HOUSING_STATUSES: { key: HousingStatus; label: string; icon: keyof typeof Ionicons.glyphMap; desc: string }[] = [
-  { key: "host", label: "Host", icon: "key-outline", desc: "I have a lease & need a roommate" },
-  { key: "joiner", label: "Joiner", icon: "enter-outline", desc: "I want to join an existing lease" },
-  { key: "co_seeker", label: "Co-Seeker", icon: "people-outline", desc: "Let's find a place together" },
-  { key: "sublessor", label: "Sublessor", icon: "exit-outline", desc: "I'm subletting my place" },
-  { key: "sublessee", label: "Sublessee", icon: "search-outline", desc: "I'm looking for a sublease" },
-];
 
 const MAJORS = [
   "Computer Science", "Engineering", "Business", "Biology", "Psychology",
@@ -205,7 +197,6 @@ export default function OnboardingScreen() {
   const [leaseType, setLeaseType] = useState<LeaseType>("full_year");
   const [zone, setZone] = useState<Zone>("campustown");
   const [landlord, setLandlord] = useState<Landlord>("other");
-  const [housingStatus, setHousingStatus] = useState<HousingStatus>("joiner");
   const [staysThanksgiving, setStaysThanksgiving] = useState(false);
   const [staysSpringBreak, setStaysSpringBreak] = useState(false);
   const [showMajorPicker, setShowMajorPicker] = useState(false);
@@ -306,7 +297,7 @@ export default function OnboardingScreen() {
       name: name.trim(), email: email.toLowerCase().trim(),
       major: major || "Undeclared", bio: bio.trim(), budget, gender, genderPref,
       cleanliness, noise, leaseType, zone, landlord,
-      housingStatus, staysThanksgiving, staysSpringBreak, avatarColor,
+      staysThanksgiving, staysSpringBreak, avatarColor,
     };
     await setCurrentUser(user);
     await setIsOnboarded(true);
@@ -514,21 +505,6 @@ export default function OnboardingScreen() {
             </View>
             <Text style={styles.stepTitle}>Housing Preferences</Text>
             <Text style={styles.stepSubtitle}>What kind of living situation do you want?</Text>
-
-            <Text style={styles.label}>Housing Status</Text>
-            {HOUSING_STATUSES.map(h => (
-              <TouchableOpacity key={h.key} style={[styles.optionCard, housingStatus === h.key && styles.optionCardActive]}
-                onPress={() => { setHousingStatus(h.key); Haptics.selectionAsync(); }}>
-                <View style={[styles.zoneIcon, { backgroundColor: Colors.teal + "18" }]}>
-                  <Ionicons name={h.icon} size={18} color={Colors.teal} />
-                </View>
-                <View style={styles.optionLeft}>
-                  <Text style={[styles.optionLabel, housingStatus === h.key && styles.optionLabelActive]}>{h.label}</Text>
-                  <Text style={styles.optionDesc}>{h.desc}</Text>
-                </View>
-                {housingStatus === h.key && <Ionicons name="checkmark-circle" size={18} color={Colors.teal} />}
-              </TouchableOpacity>
-            ))}
 
             <Text style={styles.label}>Monthly Budget</Text>
             <View style={styles.budgetRow}>
