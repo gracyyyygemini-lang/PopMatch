@@ -142,6 +142,13 @@ Tables: `users`, `friendships`, `vouches`, `listings`, `break_posts`, `otp_codes
 - `components/ScamBanner.tsx` — dismissable scam warning
 - `components/ErrorBoundary.tsx` — crash boundary with reloadAppAsync
 
+## Deployment (Production)
+- **Build**: `npx expo export --platform web && npm run server:build`
+- **Run**: `npm run server:prod` (Express serves both API routes + dist/ static files)
+- **Target**: Autoscale — Express serves the `dist/` folder (Expo web export) as static files with SPA fallback, plus all `/api/*` routes
+- When `dist/` folder exists, server serves web app from it; otherwise falls back to `static-build/` + landing page (dev/legacy mode)
+- `serve` package installed for standalone static serving if needed (`npx serve dist -l $PORT`)
+
 ## Workflows
 - `Start Backend`: `npm run server:dev` → Express on port 5000
 - `Start Frontend`: `npm run expo:dev` → Expo Metro on port 8081

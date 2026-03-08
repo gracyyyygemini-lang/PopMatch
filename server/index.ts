@@ -160,48 +160,71 @@ function serveLandingPage({
   res.status(200).send(html);
 }
 
-function configureExpoAndLanding(app: express.Application) {
-  const templatePath = path.resolve(
-    process.cwd(),
-    "server",
-    "templates",
-    "landing-page.html",
-  );
-  const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
-  const appName = getAppName();
+function configureStaticServing(app: express.Application) {
+  const distPath = path.resolve(process.cwd(), "dist");
+  const hasDistFolder = fs.existsSync(distPath);
 
   log("Serving static Expo files with dynamic manifest routing");
 
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith("/api")) {
-      return next();
-    }
+  if (hasDistFolder) {
+    log("Found dist/ folder — serving Expo web export");
+    app.use(express.static(distPath));
+  } else {
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith("/api")) {
+        return next();
+      }
 
-    if (req.path !== "/" && req.path !== "/manifest") {
-      return next();
-    }
+      if (req.path !== "/" && req.path !== "/manifest") {
+        return next();
+      }
 
-    const platform = req.header("expo-platform");
-    if (platform && (platform === "ios" || platform === "android")) {
-      return serveExpoManifest(platform, res);
-    }
+      const templatePath = path.resolve(
+        process.cwd(),
+        "server",
+        "templates",
+        "landing-page.html",
+      );
+      const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
+      const appName = getAppName();
 
-    if (req.path === "/") {
-      return serveLandingPage({
-        req,
-        res,
-        landingPageTemplate,
-        appName,
-      });
-    }
+      const platform = req.header("expo-platform");
+      if (platform && (platform === "ios" || platform === "android")) {
+        return serveExpoManifest(platform, res);
+      }
 
-    next();
-  });
+      if (req.path === "/") {
+        return serveLandingPage({
+          req,
+          res,
+          landingPageTemplate,
+          appName,
+        });
+      }
 
-  app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
-  app.use(express.static(path.resolve(process.cwd(), "static-build")));
+      next();
+    });
+
+    app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
+    app.use(express.static(path.resolve(process.cwd(), "static-build")));
+  }
 
   log("Expo routing: Checking expo-platform header on / and /manifest");
+}
+
+function configureSpaCatchAll(app: express.Application) {
+  const distPath = path.resolve(process.cwd(), "dist");
+  const indexPath = path.join(distPath, "index.html");
+
+  if (fs.existsSync(indexPath)) {
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith("/api")) {
+        return next();
+      }
+
+      res.sendFile(indexPath);
+    });
+  }
 }
 
 function setupErrorHandler(app: express.Application) {
@@ -230,9 +253,11 @@ function setupErrorHandler(app: express.Application) {
   setupBodyParsing(app);
   setupRequestLogging(app);
 
-  configureExpoAndLanding(app);
+  configureStaticServing(app);
 
   const server = await registerRoutes(app);
+
+  configureSpaCatchAll(app);
 
   setupErrorHandler(app);
 
