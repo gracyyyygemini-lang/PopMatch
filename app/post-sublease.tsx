@@ -11,7 +11,7 @@ import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import {
   useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType,
-  KitchenType, CleaningFrequency, ShoePolicy, Amenities, DEFAULT_AMENITIES
+  KitchenType, BathroomType, CleaningFrequency, ShoePolicy, Amenities, DEFAULT_AMENITIES
 } from "@/context/AppContext";
 
 const LEASE_OPTIONS: { key: LeaseType; label: string; desc: string }[] = [
@@ -112,6 +112,7 @@ export default function PostSubleaseScreen() {
   const [description, setDescription] = useState("");
 
   const [kitchenType, setKitchenType] = useState<KitchenType>("private");
+  const [bathroomType, setBathroomType] = useState<BathroomType>("private");
   const [images, setImages] = useState<(string | null)[]>([null, null, null]);
 
   const [amenities, setAmenities] = useState<Amenities>({ ...DEFAULT_AMENITIES });
@@ -135,9 +136,11 @@ export default function PostSubleaseScreen() {
     Haptics.selectionAsync();
   };
 
-  const imageLabels = kitchenType === "private"
-    ? ["Bedroom", "Bathroom", "Kitchen"]
-    : ["Bedroom", "Bathroom", "Communal Area"];
+  const imageLabels = [
+    "Bedroom",
+    bathroomType === "private" ? "Private Bathroom" : "Shared Bathroom",
+    kitchenType === "private" ? "Private Kitchen" : "Communal Kitchen/Area",
+  ];
 
   const pickImage = async (index: number) => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -192,6 +195,7 @@ export default function PostSubleaseScreen() {
       avatarColor: currentUser?.avatarColor || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
       timestamp: Date.now(),
       kitchenType,
+      bathroomType,
       moveInDate: moveInDate!.toISOString(),
       moveOutDate: moveOutDate!.toISOString(),
       amenities,
@@ -367,8 +371,23 @@ export default function PostSubleaseScreen() {
 
         {step === 1 && (
           <>
-            <Text style={styles.sectionTitle}>Kitchen & Photos</Text>
-            <Text style={styles.sectionSub}>Select your kitchen type, then upload 3 required photos.</Text>
+            <Text style={styles.sectionTitle}>Unit Details & Photos</Text>
+            <Text style={styles.sectionSub}>Set your bathroom and kitchen type, then upload 3 required photos.</Text>
+
+            <View style={styles.field}>
+              <TouchableOpacity style={styles.toggleRow}
+                onPress={() => { setBathroomType(bathroomType === "private" ? "shared" : "private"); Haptics.selectionAsync(); }}>
+                <View>
+                  <Text style={styles.toggleTitle}>Private Bathroom?</Text>
+                  <Text style={styles.toggleDesc}>Your unit has its own private bathroom</Text>
+                </View>
+                <View style={[styles.toggle, bathroomType === "private" && styles.toggleOn]}>
+                  <Text style={[styles.toggleText, bathroomType === "private" && styles.toggleTextOn]}>
+                    {bathroomType === "private" ? "Yes" : "No"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.field}>
               <Text style={styles.label}>Kitchen Type *</Text>

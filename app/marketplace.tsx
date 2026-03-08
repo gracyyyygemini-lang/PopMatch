@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Modal, Animated
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Modal, Animated, Image
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,6 +8,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, SubleasePost, Landlord, Zone } from "@/context/AppContext";
+import { useCallback } from "react";
 import FacePile from "@/components/FacePile";
 import MicroFeedback from "@/components/MicroFeedback";
 import ZonePicker from "@/components/ZonePicker";
@@ -128,11 +129,58 @@ const cg = StyleSheet.create({
   btnText: { fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.white },
 });
 
+const PLACEHOLDER_COLORS = ["#1A7AAF", "#5A8A5A", "#9B59B6", "#CC5500", "#E0BC00", "#4A8A5A"];
+
+function CardPhotoSection({ post }: { post: SubleasePost }) {
+  const hasImage = post.images && post.images.length > 0 && post.images[0] !== "";
+  const placeholderColor = post.avatarColor || PLACEHOLDER_COLORS[post.buildingName.length % PLACEHOLDER_COLORS.length];
+  const amenities = post.amenities;
+
+  const amenityItems = amenities ? [
+    { icon: "bed-outline" as const, active: amenities.isFurnished, label: "Furnished" },
+    { icon: "water-outline" as const, active: amenities.hasLaundry, label: "Laundry" },
+    { icon: "wifi-outline" as const, active: amenities.hasWifi, label: "WiFi" },
+    { icon: "snow-outline" as const, active: amenities.hasAC, label: "AC" },
+  ] : [];
+
+  return (
+    <View style={styles.photoSection}>
+      {hasImage ? (
+        <Image source={{ uri: post.images![0] }} style={styles.photoImage} resizeMode="cover" />
+      ) : (
+        <View style={[styles.photoPlaceholder, { backgroundColor: placeholderColor + "20" }]}>
+          <Ionicons name="home-outline" size={40} color={placeholderColor + "60"} />
+          <Text style={[styles.photoPlaceholderText, { color: placeholderColor + "80" }]}>{post.buildingName}</Text>
+        </View>
+      )}
+      {amenities && (
+        <View style={styles.amenityOverlay}>
+          {amenityItems.map((item, idx) => (
+            <View
+              key={idx}
+              style={[
+                styles.amenityOverlayIcon,
+                item.active && styles.amenityOverlayIconActive,
+              ]}
+            >
+              <Ionicons
+                name={item.icon}
+                size={13}
+                color={item.active ? Colors.white : "rgba(255,255,255,0.5)"}
+              />
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 function SubleaseCard({ post, onMarkLeased }: {
   post: SubleasePost;
   onMarkLeased: (post: SubleasePost) => void;
 }) {
-  const { getTrustInfo, currentUser } = useApp();
+  const { getTrustInfo, currentUser, startConversation } = useApp();
   const trust = getTrustInfo(post.userEmail);
   const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
   const cat = post.category || "semester_takeover";
@@ -141,117 +189,121 @@ function SubleaseCard({ post, onMarkLeased }: {
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        {cat !== "semester_takeover" && (
-          <View style={[styles.catTag, { backgroundColor: catColor + "18", borderColor: catColor + "40" }]}>
-            <Ionicons name={CATEGORY_ICONS[cat] || "home-outline"} size={11} color={catColor} />
-            <Text style={[styles.catTagText, { color: catColor }]}>{CATEGORY_LABELS[cat] ?? cat}</Text>
-          </View>
-        )}
-        {cat === "semester_takeover" && (
-          <View style={[styles.catTag, { backgroundColor: Colors.grassGreen + "18", borderColor: Colors.grassGreen + "40" }]}>
-            <Text style={[styles.catTagText, { color: Colors.grassGreen }]}>{LEASE_LABELS[post.leaseType]}</Text>
-          </View>
-        )}
-        {post.availableDuringBreaks && (
-          <View style={styles.breakAvailTag}>
-            <Ionicons name="home" size={10} color={Colors.grassGreen} />
-            <Text style={styles.breakAvailText}>Break-Friendly</Text>
-          </View>
-        )}
-        {isOwner && (
-          <View style={styles.ownerTag}>
-            <Ionicons name="person" size={10} color={Colors.ocean} />
-            <Text style={styles.ownerTagText}>Your Post</Text>
-          </View>
-        )}
-        <Text style={styles.cardTime}>
-          {Math.floor((Date.now() - post.timestamp) / 86400000)}d ago
-        </Text>
-      </View>
+      <CardPhotoSection post={post} />
 
-      <Text style={styles.buildingName}>{post.buildingName}</Text>
-      <Text style={styles.address}>{post.address}</Text>
-
-      <View style={styles.priceRow}>
-        <Text style={styles.price}>${post.pricePerMonth}</Text>
-        <Text style={styles.priceSub}>/month</Text>
-        {cat === "august_gap" || cat === "short_term" ? (
-          <View style={[styles.dateBadge, { backgroundColor: catColor + "15" }]}>
-            <Text style={[styles.dateBadgeText, { color: catColor }]}>
-              {CATEGORY_DATES[cat]}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-
-      {post.amenities && (
-        <View style={styles.amenityGrid}>
-          <View style={[styles.amenityIcon, post.amenities.isFurnished && styles.amenityIconActive]}>
-            <Ionicons name="bed-outline" size={14} color={post.amenities.isFurnished ? Colors.ocean : Colors.textLight} />
-          </View>
-          <View style={[styles.amenityIcon, post.amenities.hasLaundry && styles.amenityIconActive]}>
-            <Ionicons name="water-outline" size={14} color={post.amenities.hasLaundry ? Colors.ocean : Colors.textLight} />
-          </View>
-          <View style={[styles.amenityIcon, post.amenities.hasWifi && styles.amenityIconActive]}>
-            <Ionicons name="wifi-outline" size={14} color={post.amenities.hasWifi ? Colors.ocean : Colors.textLight} />
-          </View>
-          <View style={[styles.amenityIcon, post.amenities.hasAC && styles.amenityIconActive]}>
-            <Ionicons name="snow-outline" size={14} color={post.amenities.hasAC ? Colors.ocean : Colors.textLight} />
-          </View>
-        </View>
-      )}
-
-      {post.description ? (
-        <Text style={styles.description} numberOfLines={2}>{post.description}</Text>
-      ) : null}
-
-      <View style={styles.metaRow}>
-        <View style={styles.metaItem}>
-          <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.metaText}>{ZONE_LABELS[post.zone]}</Text>
-        </View>
-        <View style={styles.metaItem}>
-          <Ionicons name="business-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.metaText}>{LANDLORD_LABELS[post.landlord]}</Text>
-        </View>
-      </View>
-
-      <View style={styles.posterRow}>
-        <View style={[styles.posterAvatar, { backgroundColor: post.avatarColor }]}>
-          <Text style={styles.posterInitials}>{initials}</Text>
-        </View>
-        <View style={styles.posterInfo}>
-          <Text style={styles.posterName}>{post.userName}</Text>
-          <Text style={styles.posterEmail}>{post.userEmail}</Text>
-        </View>
-        <View style={{ alignItems: "flex-end", gap: 4 }}>
-          {trust.degree === 1 && (
-            <View style={[styles.trustChip, { backgroundColor: Colors.grassGreen + "20" }]}>
-              <Ionicons name="people" size={10} color={Colors.grassGreen} />
-              <Text style={[styles.trustChipText, { color: Colors.grassGreen }]}>1st Degree</Text>
+      <View style={styles.cardBody}>
+        <View style={styles.cardHeader}>
+          {cat !== "semester_takeover" && (
+            <View style={[styles.catTag, { backgroundColor: catColor + "18", borderColor: catColor + "40" }]}>
+              <Ionicons name={CATEGORY_ICONS[cat] || "home-outline"} size={11} color={catColor} />
+              <Text style={[styles.catTagText, { color: catColor }]}>{CATEGORY_LABELS[cat] ?? cat}</Text>
             </View>
           )}
-          {trust.degree === 2 && trust.mutualFriends.length > 0 ? (
-            <FacePile mutuals={trust.mutualFriends} maxVisible={3} />
-          ) : trust.sharedOrg && !trust.degree ? (
-            <View style={[styles.trustChip, { backgroundColor: Colors.goldDark + "20" }]}>
-              <Ionicons name="school-outline" size={10} color={Colors.goldDark} />
-              <Text style={[styles.trustChipText, { color: Colors.goldDark }]}>{trust.sharedOrg}</Text>
+          {cat === "semester_takeover" && (
+            <View style={[styles.catTag, { backgroundColor: Colors.grassGreen + "18", borderColor: Colors.grassGreen + "40" }]}>
+              <Text style={[styles.catTagText, { color: Colors.grassGreen }]}>{LEASE_LABELS[post.leaseType]}</Text>
+            </View>
+          )}
+          {post.availableDuringBreaks && (
+            <View style={styles.breakAvailTag}>
+              <Ionicons name="home" size={10} color={Colors.grassGreen} />
+              <Text style={styles.breakAvailText}>Break-Friendly</Text>
+            </View>
+          )}
+          {isOwner && (
+            <View style={styles.ownerTag}>
+              <Ionicons name="person" size={10} color={Colors.ocean} />
+              <Text style={styles.ownerTagText}>Your Post</Text>
+            </View>
+          )}
+          <Text style={styles.cardTime}>
+            {Math.floor((Date.now() - post.timestamp) / 86400000)}d ago
+          </Text>
+        </View>
+
+        <Text style={styles.buildingName}>{post.buildingName}</Text>
+        <Text style={styles.address}>{post.address}</Text>
+
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>${post.pricePerMonth}</Text>
+          <Text style={styles.priceSub}>/month</Text>
+          {cat === "august_gap" || cat === "short_term" ? (
+            <View style={[styles.dateBadge, { backgroundColor: catColor + "15" }]}>
+              <Text style={[styles.dateBadgeText, { color: catColor }]}>
+                {CATEGORY_DATES[cat]}
+              </Text>
             </View>
           ) : null}
         </View>
-      </View>
 
-      {isOwner && (
-        <TouchableOpacity
-          style={styles.leasedBtn}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onMarkLeased(post); }}
-        >
-          <Ionicons name="checkmark-circle" size={16} color={Colors.white} />
-          <Text style={styles.leasedBtnText}>Mark as Leased</Text>
-        </TouchableOpacity>
-      )}
+        {post.description ? (
+          <Text style={styles.description} numberOfLines={2}>{post.description}</Text>
+        ) : null}
+
+        <View style={styles.metaRow}>
+          <View style={styles.metaItem}>
+            <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.metaText}>{ZONE_LABELS[post.zone]}</Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Ionicons name="business-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.metaText}>{LANDLORD_LABELS[post.landlord]}</Text>
+          </View>
+        </View>
+
+        <View style={styles.posterRow}>
+          <View style={[styles.posterAvatar, { backgroundColor: post.avatarColor }]}>
+            <Text style={styles.posterInitials}>{initials}</Text>
+          </View>
+          <View style={styles.posterInfo}>
+            <Text style={styles.posterName}>{post.userName}</Text>
+            <Text style={styles.posterEmail}>{post.userEmail}</Text>
+          </View>
+          <View style={{ alignItems: "flex-end" as const, gap: 4 }}>
+            {trust.degree === 1 && (
+              <View style={[styles.trustChip, { backgroundColor: Colors.grassGreen + "20" }]}>
+                <Ionicons name="people" size={10} color={Colors.grassGreen} />
+                <Text style={[styles.trustChipText, { color: Colors.grassGreen }]}>1st Degree</Text>
+              </View>
+            )}
+            {trust.degree === 2 && trust.mutualFriends.length > 0 ? (
+              <FacePile mutuals={trust.mutualFriends} maxVisible={3} />
+            ) : trust.sharedOrg && !trust.degree ? (
+              <View style={[styles.trustChip, { backgroundColor: Colors.goldDark + "20" }]}>
+                <Ionicons name="school-outline" size={10} color={Colors.goldDark} />
+                <Text style={[styles.trustChipText, { color: Colors.goldDark }]}>{trust.sharedOrg}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        {!isOwner && (
+          <TouchableOpacity
+            style={styles.messageBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              const convoId = startConversation(
+                post.userId, post.userName, post.avatarColor, post.userEmail,
+                post.id, post.buildingName, post.pricePerMonth
+              );
+              router.push(`/chat?conversationId=${convoId}`);
+            }}
+          >
+            <Ionicons name="chatbubble-outline" size={15} color={Colors.ocean} />
+            <Text style={styles.messageBtnText}>Message {post.userName.split(" ")[0]}</Text>
+          </TouchableOpacity>
+        )}
+
+        {isOwner && (
+          <TouchableOpacity
+            style={styles.leasedBtn}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onMarkLeased(post); }}
+          >
+            <Ionicons name="checkmark-circle" size={16} color={Colors.white} />
+            <Text style={styles.leasedBtnText}>Mark as Leased</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -431,9 +483,56 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 16, gap: 12 },
   card: {
     backgroundColor: Colors.cardBg, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.borderSoft,
-    padding: 16, gap: 10,
+    overflow: "hidden" as const,
     shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+  },
+  photoSection: {
+    width: "100%",
+    aspectRatio: 1.6,
+    backgroundColor: Colors.sandDark,
+    position: "relative" as const,
+  },
+  photoImage: {
+    width: "100%",
+    height: "100%",
+  },
+  photoPlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 8,
+  },
+  photoPlaceholderText: {
+    fontFamily: "Nunito_700Bold",
+    fontSize: 14,
+  },
+  amenityOverlay: {
+    position: "absolute" as const,
+    bottom: 8,
+    right: 8,
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    width: 62,
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 10,
+    padding: 6,
+  },
+  amenityOverlayIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  amenityOverlayIconActive: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  cardBody: {
+    padding: 16,
+    gap: 10,
   },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
   catTag: {
@@ -481,16 +580,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8,
   },
   trustChipText: { fontFamily: "Nunito_700Bold", fontSize: 10 },
-  amenityGrid: {
-    flexDirection: "row", gap: 6, flexWrap: "wrap",
+  messageBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.ocean + "10", borderRadius: 12, paddingVertical: 12,
+    borderWidth: 1.5, borderColor: Colors.ocean + "30",
   },
-  amenityIcon: {
-    width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center",
-    backgroundColor: Colors.sandDark, borderWidth: 1, borderColor: Colors.borderSoft,
-  },
-  amenityIconActive: {
-    backgroundColor: Colors.ocean + "15", borderColor: Colors.ocean + "40",
-  },
+  messageBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
   leasedBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.ponyo, borderRadius: 12, paddingVertical: 12, marginTop: 2,

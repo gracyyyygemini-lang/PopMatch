@@ -113,6 +113,28 @@ async function initDb() {
   `);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id VARCHAR PRIMARY KEY,
+      participant1_id VARCHAR NOT NULL,
+      participant2_id VARCHAR NOT NULL,
+      listing_id VARCHAR DEFAULT '',
+      listing_building VARCHAR DEFAULT '',
+      listing_price INT DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id VARCHAR PRIMARY KEY,
+      conversation_id VARCHAR NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      sender_id VARCHAR NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
     INSERT INTO stats (key, value) VALUES ('successful_subleases', 0)
     ON CONFLICT (key) DO NOTHING
   `);
@@ -602,6 +624,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("GET /api/admin/stats", err);
       return res.status(500).json({ error: "Failed to fetch admin stats" });
+    }
+  });
+
+  // ─── CONVERSATIONS & MESSAGES ────────────────────────────────────────────────
+
+  app.post("/api/conversations", async (req: Request, res: Response) => {
+    try {
+      const { participant1Id, participant2Id, listingId = "", listingBuilding = "", listingPrice = 0 } = req.body;
+      if (!participant1Id || !participant2Id) {
+        return res.status(400).json({ error: "participant1Id and participant2Id are required" });
+      }
+
+      const existing = await query<{ id: string }>(
+        `SELECT id FROM conversations
+         WHERE ((participant1_id = $1 AND participant2_id = $2)
+            OR (participant1_id = $2 AND participant2_id = $1))
+           AND listing_id = $3`,
+        [participant1Id, participant2Id, listingId]
+      );
+
+      if (existing.length > 0) {
+        const [conv] = await query("SELECT * FROM conversations WHERE id = $1", [existing[0].id]);
+        return res.json(conv);
+      }
+
+      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      await query(
+        `INSERT INTO conversations (id, participant1_id, participant2_id, listing_id, listing_building, listing_price)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, participant1Id, participant2Id, listingId, listingBuilding, listingPrice]
+      );
+
+      const [conv] = await query("SELECT * FROM conversations WHERE id = $1", [id]);
+      return res.json(conv);
+    } catch (err) {
+      console.error("POST /api/conversations", err);
+      return res.status(500).json({ error: "Failed to create conversation" });
+    }
+  });
+
+  app.get("/api/conversations/:userId", async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const rows = await query(
+        `SELECT c.*,
+          u1.name as participant1_name, u1.avatar_color as participant1_avatar,
+          u2.name as participant2_name, u2.avatar_color as participant2_avatar,
+          (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
+          (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_at
+         FROM conversations c
+         LEFT JOIN users u1 ON c.participant1_id = u1.id
+         LEFT JOIN users u2 ON c.participant2_id = u2.id
+         WHERE c.participant1_id = $1 OR c.participant2_id = $1
+         ORDER BY COALESCE(
+           (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1),
+           c.created_at
+         ) DESC`,
+        [userId]
+      );
+      return res.json(rows);
+    } catch (err) {
+      console.error("GET /api/conversations/:userId", err);
+      return res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  app.post("/api/messages", async (req: Request, res: Response) => {
+    try {
+      const { conversationId, senderId, content } = req.body;
+      if (!conversationId || !senderId || !content) {
+        return res.status(400).json({ error: "conversationId, senderId, and content are required" });
+      }
+
+      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      await query(
+        `INSERT INTO messages (id, conversation_id, sender_id, content)
+         VALUES ($1, $2, $3, $4)`,
+        [id, conversationId, senderId, content]
+      );
+
+      const [msg] = await query("SELECT * FROM messages WHERE id = $1", [id]);
+      return res.json(msg);
+    } catch (err) {
+      console.error("POST /api/messages", err);
+      return res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  app.get("/api/messages/:conversationId", async (req: Request, res: Response) => {
+    try {
+      const { conversationId } = req.params;
+      const rows = await query(
+        `SELECT m.*, u.name as sender_name, u.avatar_color as sender_avatar
+         FROM messages m
+         LEFT JOIN users u ON m.sender_id = u.id
+         WHERE m.conversation_id = $1
+         ORDER BY m.created_at ASC`,
+        [conversationId]
+      );
+      return res.json(rows);
+    } catch (err) {
+      console.error("GET /api/messages/:conversationId", err);
+      return res.status(500).json({ error: "Failed to fetch messages" });
     }
   });
 

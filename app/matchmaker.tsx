@@ -37,7 +37,9 @@ function matchesGenderFilter(current: UserProfile, candidate: UserProfile): bool
 }
 
 function ProfileCard({ user, score }: { user: UserProfile; score: number }) {
+  const { startConversation, subleases } = useApp();
   const initials = user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  const userListing = subleases.find(s => s.userId === user.id);
 
   return (
     <ScrollView style={styles.cardScroll} showsVerticalScrollIndicator={false} bounces={false}>
@@ -111,6 +113,24 @@ function ProfileCard({ user, score }: { user: UserProfile; score: number }) {
             </Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.msgBtn}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            const listing = userListing;
+            const convoId = startConversation(
+              user.id, user.name, user.avatarColor, user.email,
+              listing?.id || `roommate-${user.id}`,
+              listing?.buildingName || "Roommate Match",
+              listing?.pricePerMonth || user.budget
+            );
+            router.push(`/chat?conversationId=${convoId}`);
+          }}
+        >
+          <Ionicons name="chatbubble-outline" size={14} color={Colors.ocean} />
+          <Text style={styles.msgBtnText}>Message {user.name.split(" ")[0]}</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -232,8 +252,8 @@ export default function MatchmakerScreen() {
           <View style={styles.emptyCard}>
             <Ionicons name="checkmark-circle" size={52} color={Colors.grassGreen} />
             <Text style={styles.emptyTitle}>All caught up!</Text>
-            <Text style={styles.emptySub}>Check your Matches tab to connect with people you liked.</Text>
-            <TouchableOpacity style={styles.goMatchesBtn} onPress={() => router.push("/(tabs)/matches")}>
+            <Text style={styles.emptySub}>Check your Inbox to connect with people you liked.</Text>
+            <TouchableOpacity style={styles.goMatchesBtn} onPress={() => router.push("/(tabs)/inbox")}>
               <Text style={styles.goMatchesBtnText}>View Matches</Text>
             </TouchableOpacity>
           </View>
@@ -325,6 +345,12 @@ const styles = StyleSheet.create({
   breakChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.charcoal },
   genderPrefChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: Colors.ocean + "18" },
   genderPrefText: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.ocean },
+  msgBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7,
+    backgroundColor: Colors.ocean + "10", borderRadius: 10, paddingVertical: 10,
+    borderWidth: 1.5, borderColor: Colors.ocean + "30", marginTop: 2,
+  },
+  msgBtnText: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.ocean },
   actionRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 24, paddingHorizontal: 40, paddingTop: 16,

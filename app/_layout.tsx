@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
+import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -28,6 +29,7 @@ function RootLayoutNav() {
       <Stack.Screen name="post-sublease" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="link-listing" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="breaks" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="chat" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="admin" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="+not-found" />
     </Stack>
@@ -55,9 +57,11 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <AppProvider>
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <RootLayoutNav />
-            </KeyboardProvider>
+            <View style={Platform.OS === "web" ? { flex: 1, maxWidth: 500, marginLeft: "auto", marginRight: "auto", width: "100%" } : { flex: 1 }}>
+              <KeyboardProvider>
+                <RootLayoutNav />
+              </KeyboardProvider>
+            </View>
           </GestureHandlerRootView>
         </AppProvider>
       </QueryClientProvider>

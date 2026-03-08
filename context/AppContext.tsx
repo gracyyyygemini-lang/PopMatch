@@ -10,6 +10,7 @@ export type Intent = "host" | "joiner" | "co_seeker" | "sublessor" | "sublessee"
 export type CleaningFrequency = "daily" | "weekly" | "monthly";
 export type ShoePolicy = "shoes_off" | "front_door" | "no_policy";
 export type KitchenType = "private" | "communal";
+export type BathroomType = "private" | "shared";
 
 export interface Amenities {
   isFurnished: boolean;
@@ -94,12 +95,35 @@ export interface SubleasePost {
   timestamp: number;
   category?: string;
   kitchenType?: KitchenType;
+  bathroomType?: BathroomType;
   moveInDate?: string;
   moveOutDate?: string;
   amenities?: Amenities;
   cleaningFrequency?: CleaningFrequency;
   shoePolicy?: ShoePolicy;
   images?: string[];
+}
+
+export interface Conversation {
+  id: string;
+  participant1Id: string;
+  participant2Id: string;
+  listingId: string;
+  listingBuilding: string;
+  listingPrice: number;
+  lastMessage?: string;
+  lastMessageAt?: number;
+  otherUserName?: string;
+  otherUserAvatar?: string;
+  otherUserEmail?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  createdAt: number;
 }
 
 export interface BreakPost {
@@ -248,6 +272,10 @@ interface AppContextValue {
   removeFriend: (email: string) => Promise<void>;
   toggleVouch: (email: string) => Promise<void>;
   getTrustInfo: (userEmail: string) => TrustInfo;
+  conversations: Conversation[];
+  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number) => string;
+  sendMessage: (conversationId: string, content: string) => void;
+  getMessages: (conversationId: string) => ChatMessage[];
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -344,6 +372,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [subleases, setSubleases] = useState<SubleasePost[]>(DEMO_POSTS);
   const [breakPosts, setBreakPosts] = useState<BreakPost[]>(DEMO_BREAKS);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -357,6 +387,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const storedSubleases = await AsyncStorage.getItem("@popmatch_subleases");
         const storedBreaks = await AsyncStorage.getItem("@popmatch_breaks");
         const storedFriends = await AsyncStorage.getItem("@popmatch_friends");
+        const storedConvos = await AsyncStorage.getItem("@popmatch_conversations");
+        const storedChatMsgs = await AsyncStorage.getItem("@popmatch_chatmessages");
 
         if (stored) setCurrentUserState(JSON.parse(stored));
         if (onboarded === "true") setIsOnboardedState(true);
@@ -367,6 +399,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (storedSubleases) setSubleases(JSON.parse(storedSubleases));
         if (storedBreaks) setBreakPosts(JSON.parse(storedBreaks));
         if (storedFriends) setFriends(JSON.parse(storedFriends));
+        if (storedConvos) setConversations(JSON.parse(storedConvos));
+        if (storedChatMsgs) setChatMessages(JSON.parse(storedChatMsgs));
       } catch {}
     })();
   }, []);
@@ -450,6 +484,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_friends", JSON.stringify(updated));
   };
 
+  const startConversation = (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number): string => {
+    if (!currentUser) return "";
+    const existing = conversations.find(c =>
+      c.listingId === listingId &&
+      ((c.participant1Id === currentUser.id && c.participant2Id === targetUserId) ||
+       (c.participant1Id === targetUserId && c.participant2Id === currentUser.id))
+    );
+    if (existing) return existing.id;
+
+    const newConvo: Conversation = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+      participant1Id: currentUser.id,
+      participant2Id: targetUserId,
+      listingId,
+      listingBuilding,
+      listingPrice,
+      otherUserName: targetName,
+      otherUserAvatar: targetAvatar,
+      otherUserEmail: targetEmail,
+    };
+    const updated = [newConvo, ...conversations];
+    setConversations(updated);
+    AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updated));
+    return newConvo.id;
+  };
+
+  const sendMessage = (conversationId: string, content: string) => {
+    if (!currentUser) return;
+    const msg: ChatMessage = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+      conversationId,
+      senderId: currentUser.id,
+      content,
+      createdAt: Date.now(),
+    };
+    const updatedMsgs = [...chatMessages, msg];
+    setChatMessages(updatedMsgs);
+    AsyncStorage.setItem("@popmatch_chatmessages", JSON.stringify(updatedMsgs));
+
+    const updatedConvos = conversations.map(c =>
+      c.id === conversationId ? { ...c, lastMessage: content, lastMessageAt: Date.now() } : c
+    );
+    setConversations(updatedConvos);
+    AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updatedConvos));
+  };
+
+  const getMessages = (conversationId: string): ChatMessage[] => {
+    return chatMessages.filter(m => m.conversationId === conversationId).sort((a, b) => a.createdAt - b.createdAt);
+  };
+
   const getTrustInfo = (userEmail: string): TrustInfo => {
     const directFriend = friends.find(f => f.email === userEmail);
     if (directFriend) {
@@ -518,9 +602,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
     subleases, addSublease, removeSublease, breakPosts, addBreakPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
+    conversations, startConversation, sendMessage, getMessages,
   }), [
     currentUser, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
-    likedUserIds, passedUserIds, subleases, breakPosts, friends
+    likedUserIds, passedUserIds, subleases, breakPosts, friends,
+    conversations, chatMessages
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

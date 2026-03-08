@@ -14,9 +14,9 @@ function NativeTabLayout() {
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Browse</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="matches">
-        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
-        <Label>My Circle</Label>
+      <NativeTabs.Trigger name="inbox">
+        <Icon sf={{ default: "bubble.left.and.bubble.right", selected: "bubble.left.and.bubble.right.fill" }} />
+        <Label>Inbox</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
@@ -64,10 +64,10 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="matches"
+        name="inbox"
         options={{
-          title: "My Circle",
-          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} />,
+          title: "Inbox",
+          tabBarIcon: ({ color }) => <Ionicons name="chatbubbles-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
