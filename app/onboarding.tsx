@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, Animated, Easing, ActivityIndicator
+  KeyboardAvoidingView, Platform, Animated, Easing, ActivityIndicator, Dimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -329,7 +329,10 @@ export default function OnboardingScreen() {
     setBudget(b => Math.min(2000, Math.max(400, b + dir * 50)));
   };
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const onbWidth = Dimensions.get("window").width;
+  const isDesktopOnb = Platform.OS === "web" && onbWidth >= 1024;
+  const contentMaxWidthOnb = isDesktopOnb ? 720 : onbWidth;
+  const topPadding = Platform.OS === "web" ? (isDesktopOnb ? 24 : 67) : insets.top;
 
   if (step === 0 && otpSent) {
     return (

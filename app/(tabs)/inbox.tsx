@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApp, Conversation } from "@/context/AppContext";
+import { useResponsive } from "@/hooks/useResponsive";
 
 function formatTime(ts?: number) {
   if (!ts) return "";
@@ -56,31 +57,34 @@ function ConversationRow({ convo }: { convo: Conversation }) {
 
 export default function InboxScreen() {
   const insets = useSafeAreaInsets();
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const { isDesktop, contentMaxWidth } = useResponsive();
+  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
   const { conversations } = useApp();
 
   const sorted = [...conversations].sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
 
   return (
     <View style={[styles.container, { paddingTop: topPadding + 12 }]}>
-      <Text style={styles.headerTitle}>Inbox</Text>
-      {sorted.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="chatbubbles-outline" size={52} color={Colors.textLight} />
-          <Text style={styles.emptyTitle}>No conversations yet</Text>
-          <Text style={styles.emptySub}>
-            Message someone about a listing to start a conversation.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={sorted}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => <ConversationRow convo={item} />}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 90 }}
-        />
-      )}
+      <View style={{ maxWidth: contentMaxWidth, alignSelf: "center" as const, width: "100%", flex: 1 }}>
+        <Text style={styles.headerTitle}>Inbox</Text>
+        {sorted.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="chatbubbles-outline" size={52} color={Colors.textLight} />
+            <Text style={styles.emptyTitle}>No conversations yet</Text>
+            <Text style={styles.emptySub}>
+              Message someone about a listing to start a conversation.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={sorted}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => <ConversationRow convo={item} />}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + (isDesktop ? 40 : 90) }}
+          />
+        )}
+      </View>
     </View>
   );
 }

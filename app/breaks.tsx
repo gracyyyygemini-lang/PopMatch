@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
-  Platform, Modal, KeyboardAvoidingView
+  Platform, Modal, KeyboardAvoidingView, Dimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -200,14 +200,16 @@ export default function BreaksScreen() {
   const { breakPosts } = useApp();
   const [activeBreak, setActiveBreak] = useState<BreakType | "all">("all");
   const [showPostModal, setShowPostModal] = useState(false);
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const isDesktopBr = Platform.OS === "web" && Dimensions.get("window").width >= 1024;
+  const contentMaxWidthBr = isDesktopBr ? 720 : Dimensions.get("window").width;
+  const topPadding = Platform.OS === "web" ? (isDesktopBr ? 24 : 67) : insets.top;
 
   const filtered = activeBreak === "all"
     ? breakPosts
     : breakPosts.filter(p => p.breakType === activeBreak);
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors.sandLight }]}>
+    <View style={[styles.container, { backgroundColor: Colors.sandLight }, isDesktopBr && { maxWidth: contentMaxWidthBr, alignSelf: "center" as const, width: "100%" }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={20} color={Colors.ocean} />

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, Dimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -50,7 +50,8 @@ function BarChart({ value, max, color }: { value: number; max: number; color: st
 
 export default function AdminScreen() {
   const insets = useSafeAreaInsets();
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const isDesktopAdm = Platform.OS === "web" && Dimensions.get("window").width >= 1024;
+  const topPadding = Platform.OS === "web" ? (isDesktopAdm ? 24 : 67) : insets.top;
   const [data, setData] = useState<AdminData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

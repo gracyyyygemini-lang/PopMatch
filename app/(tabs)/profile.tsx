@@ -9,6 +9,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
+import { useResponsive } from "@/hooks/useResponsive";
 
 const LEASE_LABELS: Record<string, string> = {
   full_year: "Full Year (Aug – Jul)",
@@ -57,7 +58,8 @@ function InfoRow({ icon, label, value, color }: { icon: keyof typeof Ionicons.gl
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, matches, likedUserIds, subleases, friends, setCurrentUser, setIsOnboarded } = useApp();
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const { isDesktop, contentMaxWidth } = useResponsive();
+  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
   const mySubleases = subleases.filter(s => s.userId === currentUser?.id);
   const [versionTaps, setVersionTaps] = useState(0);
   const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,7 +147,10 @@ export default function ProfileScreen() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, {
-        paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 90
+        paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + (isDesktop ? 40 : 90),
+        maxWidth: contentMaxWidth,
+        alignSelf: "center" as const,
+        width: "100%",
       }]} showsVerticalScrollIndicator={false}>
 
         <View style={styles.profileCard}>

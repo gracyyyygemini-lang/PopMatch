@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -8,7 +8,8 @@ import Colors from "@/constants/colors";
 
 export default function LinkListingScreen() {
   const insets = useSafeAreaInsets();
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const isDesktopLl = Platform.OS === "web" && Dimensions.get("window").width >= 1024;
+  const topPadding = Platform.OS === "web" ? (isDesktopLl ? 24 : 67) : insets.top;
 
   return (
     <View style={[styles.container, { paddingTop: topPadding + 20 }]}>

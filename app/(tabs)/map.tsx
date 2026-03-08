@@ -126,7 +126,8 @@ export default function MapScreen() {
   const zone = ZONES.find(z => z.key === selectedZone)!;
   const zoneUsers = mockUsers.filter(u => u.zone === selectedZone && u.id !== currentUser?.id);
   const zoneListings = subleases.filter(s => s.zone === selectedZone);
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const isDesktopMap = Platform.OS === "web" && Dimensions.get("window").width >= 1024;
+  const topPadding = Platform.OS === "web" ? (isDesktopMap ? 24 : 67) : insets.top;
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>

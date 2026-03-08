@@ -227,10 +227,12 @@ export default function MatchmakerScreen() {
     await addPassed(user.id);
   }, []);
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const isDesktopMm = Platform.OS === "web" && Dimensions.get("window").width >= 1024;
+  const contentMaxWidthMm = isDesktopMm ? 720 : Dimensions.get("window").width;
+  const topPadding = Platform.OS === "web" ? (isDesktopMm ? 24 : 67) : insets.top;
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors.sand }]}>
+    <View style={[styles.container, { backgroundColor: Colors.sand }, isDesktopMm && { maxWidth: contentMaxWidthMm, alignSelf: "center" as const, width: "100%" }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}>
           <Ionicons name="arrow-back" size={20} color={Colors.ocean} />

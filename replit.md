@@ -20,7 +20,9 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - `constants/colors.ts` — single source of truth
 - Foam: #F8F9F3, Teal/Ocean: #005F73, Ponyo Orange: #FF6B4E, Bucket Yellow: #FFD966
 - Charcoal: #1A2E35, Card: #FFFFFF, Border: #DDE0D8
-- Web: max-width 500px centered layout
+- Responsive web: mobile (<768px) uses 500px max-width centered + bottom tabs; desktop (≥1024px) uses sidebar nav + 720px content max-width
+- `hooks/useResponsive.ts` — shared breakpoint hook (mobile/tablet/desktop), exports contentMaxWidth, sidebarWidth, columns
+- `components/WebSidebar.tsx` — left sidebar navigation for desktop web (Browse, Inbox, Profile + Marketplace, Matchmaker)
 
 ## Navigation
 

@@ -9,6 +9,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, ChatMessage } from "@/context/AppContext";
+import { useResponsive } from "@/hooks/useResponsive";
 
 function formatTimestamp(ts: number) {
   const d = new Date(ts);
@@ -37,7 +38,8 @@ export default function ChatScreen() {
   const messages = getMessages(params.conversationId || "");
   const invertedMessages = [...messages].reverse();
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const { isDesktop, contentMaxWidth } = useResponsive();
+  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
 
   const handleSend = useCallback(() => {
     if (!text.trim() || !params.conversationId) return;
@@ -63,7 +65,7 @@ export default function ChatScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container]}
+      style={[styles.container, isDesktop && { maxWidth: contentMaxWidth, alignSelf: "center" as const, width: "100%" }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={0}
     >

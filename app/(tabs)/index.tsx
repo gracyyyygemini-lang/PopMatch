@@ -10,6 +10,7 @@ import Colors from "@/constants/colors";
 import { useApp, Zone } from "@/context/AppContext";
 import { ScamBanner } from "@/components/ScamBanner";
 import ZonePicker from "@/components/ZonePicker";
+import { useResponsive } from "@/hooks/useResponsive";
 
 const CATEGORIES = [
   {
@@ -75,29 +76,41 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, friends, subleases, breakPosts } = useApp();
   const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const { isDesktop, isTablet, contentMaxWidth } = useResponsive();
+  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
 
   const firstName = currentUser?.name.split(" ")[0] ?? "there";
 
+  const catCardWidth = isDesktop ? "31%" : "48%";
+
   return (
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
-      <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
-        <View>
-          <Text style={styles.greeting}>Hey, {firstName}</Text>
-          <Text style={styles.tagline}>UIUC Housing — Find your match</Text>
-        </View>
-        <View style={styles.logoMark}>
-          <Ionicons name="home" size={22} color={Colors.ocean} />
-        </View>
-      </View>
-
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, {
-          paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 90
-        }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + (isDesktop ? 40 : 90),
+            maxWidth: contentMaxWidth,
+            alignSelf: "center" as const,
+            width: "100%",
+            paddingHorizontal: isDesktop ? 32 : 16,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={[styles.header, { paddingTop: topPadding + 12, paddingHorizontal: 0 }]}>
+          <View>
+            <Text style={styles.greeting}>Hey, {firstName}</Text>
+            <Text style={styles.tagline}>UIUC Housing — Find your match</Text>
+          </View>
+          {!isDesktop && (
+            <View style={styles.logoMark}>
+              <Ionicons name="home" size={22} color={Colors.ocean} />
+            </View>
+          )}
+        </View>
+
         <ScamBanner />
 
         <ZonePicker selected={zoneFilter} onSelect={z => {
@@ -110,7 +123,7 @@ export default function HomeScreen() {
           {CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat.id}
-              style={styles.categoryCard}
+              style={[styles.categoryCard, { width: catCardWidth as any }]}
               activeOpacity={0.82}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -128,61 +141,126 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionLabel}>Other features</Text>
-
-        {FEATURES.map((f) => (
-          <TouchableOpacity
-            key={f.route}
-            style={styles.featureCard}
-            activeOpacity={0.85}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push(f.route);
-            }}
-          >
-            <View style={[styles.featureIcon, { backgroundColor: f.color }]}>
-              <Ionicons name={f.icon} size={22} color={Colors.white} />
+        {isDesktop ? (
+          <View style={styles.desktopFeaturesRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionLabel}>Other features</Text>
+              {FEATURES.map((f) => (
+                <TouchableOpacity
+                  key={f.route}
+                  style={[styles.featureCard, { marginBottom: 10 }]}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    router.push(f.route);
+                  }}
+                >
+                  <View style={[styles.featureIcon, { backgroundColor: f.color }]}>
+                    <Ionicons name={f.icon} size={22} color={Colors.white} />
+                  </View>
+                  <View style={styles.featureText}>
+                    <Text style={styles.featureTitle}>{f.title}</Text>
+                    <Text style={styles.featureSub}>{f.subtitle}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color={Colors.textLight} />
+                </TouchableOpacity>
+              ))}
             </View>
-            <View style={styles.featureText}>
-              <Text style={styles.featureTitle}>{f.title}</Text>
-              <Text style={styles.featureSub}>{f.subtitle}</Text>
+            <View style={{ width: 20 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionLabel}>Your stats</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statNum}>{friends.length}</Text>
+                  <Text style={styles.statLabel}>Circle</Text>
+                </View>
+                <View style={[styles.statBox, styles.statBoxMid]}>
+                  <Text style={styles.statNum}>{subleases.length}</Text>
+                  <Text style={styles.statLabel}>Listings</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statNum}>{breakPosts.length}</Text>
+                  <Text style={styles.statLabel}>Break Posts</Text>
+                </View>
+              </View>
+              <View style={[styles.trustCard, { marginTop: 10 }]}>
+                <View style={styles.trustHeader}>
+                  <Ionicons name="shield-checkmark" size={16} color={Colors.ocean} />
+                  <Text style={styles.trustTitle}>PopMatch Protection</Text>
+                </View>
+                {[
+                  "Only @illinois.edu verified students",
+                  "Social Trust Graph — see mutual connections",
+                  "Landlord-specific warnings (JSM, UGroup, Bailey, American)",
+                  "Weighted Euclidean matching for compatibility",
+                ].map((tip) => (
+                  <View key={tip} style={styles.tipRow}>
+                    <View style={styles.tipDot} />
+                    <Text style={styles.tipText}>{tip}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-            <Ionicons name="chevron-forward" size={17} color={Colors.textLight} />
-          </TouchableOpacity>
-        ))}
+          </View>
+        ) : (
+          <>
+            <Text style={styles.sectionLabel}>Other features</Text>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statNum}>{friends.length}</Text>
-            <Text style={styles.statLabel}>Circle</Text>
-          </View>
-          <View style={[styles.statBox, styles.statBoxMid]}>
-            <Text style={styles.statNum}>{subleases.length}</Text>
-            <Text style={styles.statLabel}>Listings</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statNum}>{breakPosts.length}</Text>
-            <Text style={styles.statLabel}>Break Posts</Text>
-          </View>
-        </View>
+            {FEATURES.map((f) => (
+              <TouchableOpacity
+                key={f.route}
+                style={styles.featureCard}
+                activeOpacity={0.85}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  router.push(f.route);
+                }}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: f.color }]}>
+                  <Ionicons name={f.icon} size={22} color={Colors.white} />
+                </View>
+                <View style={styles.featureText}>
+                  <Text style={styles.featureTitle}>{f.title}</Text>
+                  <Text style={styles.featureSub}>{f.subtitle}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={Colors.textLight} />
+              </TouchableOpacity>
+            ))}
 
-        <View style={styles.trustCard}>
-          <View style={styles.trustHeader}>
-            <Ionicons name="shield-checkmark" size={16} color={Colors.ocean} />
-            <Text style={styles.trustTitle}>PopMatch Protection</Text>
-          </View>
-          {[
-            "Only @illinois.edu verified students",
-            "Social Trust Graph — see mutual connections",
-            "Landlord-specific warnings (JSM, UGroup, Bailey, American)",
-            "Weighted Euclidean matching for compatibility",
-          ].map((tip) => (
-            <View key={tip} style={styles.tipRow}>
-              <View style={styles.tipDot} />
-              <Text style={styles.tipText}>{tip}</Text>
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statNum}>{friends.length}</Text>
+                <Text style={styles.statLabel}>Circle</Text>
+              </View>
+              <View style={[styles.statBox, styles.statBoxMid]}>
+                <Text style={styles.statNum}>{subleases.length}</Text>
+                <Text style={styles.statLabel}>Listings</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={styles.statNum}>{breakPosts.length}</Text>
+                <Text style={styles.statLabel}>Break Posts</Text>
+              </View>
             </View>
-          ))}
-        </View>
+
+            <View style={styles.trustCard}>
+              <View style={styles.trustHeader}>
+                <Ionicons name="shield-checkmark" size={16} color={Colors.ocean} />
+                <Text style={styles.trustTitle}>PopMatch Protection</Text>
+              </View>
+              {[
+                "Only @illinois.edu verified students",
+                "Social Trust Graph — see mutual connections",
+                "Landlord-specific warnings (JSM, UGroup, Bailey, American)",
+                "Weighted Euclidean matching for compatibility",
+              ].map((tip) => (
+                <View key={tip} style={styles.tipRow}>
+                  <View style={styles.tipDot} />
+                  <Text style={styles.tipText}>{tip}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -211,8 +289,12 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row", flexWrap: "wrap", gap: 10,
   },
+  desktopFeaturesRow: {
+    flexDirection: "row",
+    marginTop: 8,
+  },
   categoryCard: {
-    width: "48%", backgroundColor: Colors.cardBg, borderRadius: 18,
+    backgroundColor: Colors.cardBg, borderRadius: 18,
     borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 14, gap: 5,
     shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,

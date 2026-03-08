@@ -6,6 +6,8 @@ import { Platform, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import Colors from "@/constants/colors";
+import { useResponsive } from "@/hooks/useResponsive";
+import WebSidebar from "@/components/WebSidebar";
 
 function NativeTabLayout() {
   return (
@@ -26,7 +28,7 @@ function NativeTabLayout() {
   );
 }
 
-function ClassicTabLayout() {
+function ClassicTabLayout({ hideTabBar }: { hideTabBar?: boolean }) {
   const isWeb = Platform.OS === "web";
   const isIOS = Platform.OS === "ios";
 
@@ -36,15 +38,18 @@ function ClassicTabLayout() {
         headerShown: false,
         tabBarActiveTintColor: Colors.ocean,
         tabBarInactiveTintColor: Colors.textMuted,
-        tabBarStyle: {
-          position: "absolute",
-          backgroundColor: isIOS ? "transparent" : Colors.sand,
-          borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: Colors.borderSoft,
-          elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
-        },
+        tabBarStyle: hideTabBar
+          ? { display: "none" }
+          : {
+              position: "absolute",
+              backgroundColor: isIOS ? "transparent" : Colors.sand,
+              borderTopWidth: isWeb ? 1 : 0,
+              borderTopColor: Colors.borderSoft,
+              elevation: 0,
+              ...(isWeb ? { height: 84 } : {}),
+            },
         tabBarBackground: () =>
+          hideTabBar ? null :
           isIOS ? (
             <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
           ) : isWeb ? (
@@ -88,8 +93,32 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
+  const { isDesktop } = useResponsive();
+
+  if (!isDesktop && isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }
+
+  if (isDesktop) {
+    return (
+      <View style={desktopStyles.container}>
+        <WebSidebar />
+        <View style={desktopStyles.content}>
+          <ClassicTabLayout hideTabBar />
+        </View>
+      </View>
+    );
+  }
+
   return <ClassicTabLayout />;
 }
+
+const desktopStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  content: {
+    flex: 1,
+  },
+});

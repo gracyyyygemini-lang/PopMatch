@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  Platform, KeyboardAvoidingView, Image, Alert
+  Platform, KeyboardAvoidingView, Image, Alert, useWindowDimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -239,7 +239,10 @@ export default function PostSubleaseScreen() {
     }
   };
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const { width: winWidth } = useWindowDimensions();
+  const isDesktopPs = Platform.OS === "web" && winWidth >= 1024;
+  const contentMaxWidthPs = isDesktopPs ? 720 : winWidth;
+  const topPadding = Platform.OS === "web" ? (isDesktopPs ? 24 : 67) : insets.top;
 
   const goNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -263,7 +266,7 @@ export default function PostSubleaseScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor: Colors.sand }]}
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: Colors.sand }, isDesktopPs && { maxWidth: contentMaxWidthPs, alignSelf: "center" as const, width: "100%" }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={goBack}>

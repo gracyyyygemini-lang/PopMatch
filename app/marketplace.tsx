@@ -13,6 +13,7 @@ import FacePile from "@/components/FacePile";
 import MicroFeedback from "@/components/MicroFeedback";
 import ZonePicker from "@/components/ZonePicker";
 import { getApiUrl } from "@/lib/query-client";
+import { useResponsive } from "@/hooks/useResponsive";
 
 const CATEGORY_LABELS: Record<string, string> = {
   all: "All",
@@ -469,7 +470,8 @@ export default function MarketplaceScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category?: string; zone?: string }>();
   const { subleases, removeSublease, currentUser } = useApp();
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const { isDesktop, contentMaxWidth } = useResponsive();
+  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
 
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
   const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
@@ -580,7 +582,10 @@ export default function MarketplaceScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, {
-          paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20
+          paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20,
+          maxWidth: contentMaxWidth,
+          alignSelf: "center" as const,
+          width: "100%",
         }]}
         showsVerticalScrollIndicator={false}
       >
