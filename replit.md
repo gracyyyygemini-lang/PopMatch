@@ -2,7 +2,7 @@
 
 ## Overview
 PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Expo/React Native).
-@illinois.edu email gate enforced via real OTP verification. PostgreSQL backend for social trust graph (friendships, vouches), OTP codes, feedback, and stats.
+@illinois.edu domain gate enforced via Microsoft Entra ID (Azure AD) OAuth. PostgreSQL backend for social trust graph (friendships, vouches), feedback, and stats.
 
 ## Architecture
 
@@ -41,14 +41,17 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 
 ## Features
 
-### Email OTP Authentication
-- Onboarding Step 0: email-only input → "Send Verification Code" button
-- OTP screen: 6 individual digit boxes, countdown timer (60s resend), error handling
-- Backend: POST /api/auth/send-otp (rate limited, 10min expiry), POST /api/auth/verify-otp (5 attempts max)
-- After verification → name/housing steps (Steps 1–4)
-- `otpVerifiedEmail` stored in AppContext
-- Resend email: uses `RESEND_API_KEY` env var; falls back to console.log in dev
-  - **NOTE**: Resend integration was dismissed by user. To enable real emails, set `RESEND_API_KEY` env secret.
+### Microsoft Entra ID (Azure AD) OAuth
+- Onboarding Step 0: "Sign in with UIUC" button using `expo-auth-session`
+- Uses PKCE flow (authorization code + code_verifier)
+- Backend exchanges auth code for tokens at Microsoft's token endpoint
+- Server-side @illinois.edu domain bouncer: rejects non-UIUC emails with 403
+- Secrets: `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET`, `AUTH_SECRET`
+- Config endpoint: GET /api/auth/microsoft/config (returns clientId for frontend)
+- Token exchange: POST /api/auth/microsoft (code + redirectUri + codeVerifier)
+- After auth → name/housing steps (Steps 1–4), name pre-filled from Microsoft
+- `otpVerifiedEmail` in AppContext still stores the verified email
+- Legacy OTP routes still exist but are not used by the UI
 
 ### Face Pile UI (components/FacePile.tsx)
 - Overlapping circular avatar initials for mutual friends

@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import { query } from "./db";
 import { sendOtp } from "./email";
+import { exchangeCodeForUser } from "./auth";
 
 async function initDb() {
   await query(`
@@ -197,6 +198,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("POST /api/auth/verify-otp", err);
       return res.status(500).json({ error: "Failed to verify code" });
+    }
+  });
+
+  // ─── MICROSOFT OAUTH ─────────────────────────────────────────────────────────
+
+  app.get("/api/auth/microsoft/config", (_req: Request, res: Response) => {
+    const clientId = process.env.AZURE_AD_CLIENT_ID || "";
+    res.json({ clientId });
+  });
+
+  app.post("/api/auth/microsoft", async (req: Request, res: Response) => {
+    try {
+      const { code, redirectUri, codeVerifier } = req.body;
+      if (!code || !redirectUri || !codeVerifier) {
+        return res.status(400).json({ error: "code, redirectUri, and codeVerifier are required" });
+      }
+
+      const result = await exchangeCodeForUser(code, redirectUri, codeVerifier);
+
+      if ("error" in result) {
+        const status = result.error.includes("@illinois.edu") ? 403 : 400;
+        return res.status(status).json({ error: result.error });
+      }
+
+      const { email, name, sub } = result.user;
+
+      const existingRows = await query<{ id: string; name: string }>(
+        "SELECT id, name FROM users WHERE email = $1", [email]
+      );
+
+      return res.json({
+        success: true,
+        email,
+        name,
+        microsoftSub: sub,
+        isExistingUser: existingRows.length > 0,
+        existingProfile: existingRows.length > 0 ? existingRows[0] : null,
+      });
+    } catch (err) {
+      console.error("POST /api/auth/microsoft", err);
+      return res.status(500).json({ error: "Authentication failed. Please try again." });
     }
   });
 
