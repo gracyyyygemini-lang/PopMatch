@@ -30,6 +30,7 @@ function RootLayoutNav() {
       <Stack.Screen name="admin" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="create-group" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="chat/[id]" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="listing/[id]" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="+not-found" />
     </Stack>
   );
