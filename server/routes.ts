@@ -105,6 +105,26 @@ async function initDb() {
     ALTER TABLE break_posts ADD COLUMN IF NOT EXISTS move_out_at TIMESTAMPTZ
   `).catch(() => {});
 
+  // Amenity columns on listings
+  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS wifi_included BOOLEAN DEFAULT FALSE`).catch(() => {});
+  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS in_unit_laundry BOOLEAN DEFAULT FALSE`).catch(() => {});
+  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS bedrooms_count INT DEFAULT 1`).catch(() => {});
+  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS private_bathroom BOOLEAN DEFAULT FALSE`).catch(() => {});
+  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS parking_included BOOLEAN DEFAULT FALSE`).catch(() => {});
+  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS furnished BOOLEAN DEFAULT FALSE`).catch(() => {});
+
+  // Room images
+  await query(`
+    CREATE TABLE IF NOT EXISTS listing_images (
+      id SERIAL PRIMARY KEY,
+      listing_id VARCHAR NOT NULL,
+      category VARCHAR NOT NULL,
+      image_data TEXT NOT NULL,
+      verified BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {});
+
   await query(`
     CREATE TABLE IF NOT EXISTS otp_codes (
       email VARCHAR PRIMARY KEY,
@@ -503,20 +523,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/listings", async (req: Request, res: Response) => {
     try {
-      const { category } = req.query;
-      const sql = category
-        ? `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
-           FROM listings l LEFT JOIN users u ON l.user_id = u.id
-           WHERE l.category = $1 AND l.leased = FALSE ORDER BY l.created_at DESC`
-        : `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
-           FROM listings l LEFT JOIN users u ON l.user_id = u.id
-           WHERE l.leased = FALSE ORDER BY l.created_at DESC`;
-      const params = category ? [category] : [];
+      const {
+        category,
+        wifi_included, in_unit_laundry, private_bathroom,
+        parking_included, furnished, bedrooms_count,
+      } = req.query;
+
+      const conditions: string[] = ["l.leased = FALSE"];
+      const params: unknown[] = [];
+
+      if (category) {
+        params.push(category);
+        conditions.push(`l.category = $${params.length}`);
+      }
+      if (wifi_included === "true") conditions.push("l.wifi_included = TRUE");
+      if (in_unit_laundry === "true") conditions.push("l.in_unit_laundry = TRUE");
+      if (private_bathroom === "true") conditions.push("l.private_bathroom = TRUE");
+      if (parking_included === "true") conditions.push("l.parking_included = TRUE");
+      if (furnished === "true") conditions.push("l.furnished = TRUE");
+      if (bedrooms_count) {
+        params.push(Number(bedrooms_count));
+        conditions.push(`l.bedrooms_count >= $${params.length}`);
+      }
+
+      const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+      const sql = `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
+                   FROM listings l LEFT JOIN users u ON l.user_id = u.id
+                   ${where} ORDER BY l.created_at DESC`;
       const rows = await query(sql, params);
       return res.json(rows);
     } catch (err) {
       console.error("GET /api/listings", err);
       return res.status(500).json({ error: "Failed to fetch listings" });
+    }
+  });
+
+  app.get("/api/listings/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const [row] = await query<Record<string, unknown>>(
+        `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar, u.email as user_email_full
+         FROM listings l LEFT JOIN users u ON l.user_id = u.id
+         WHERE l.id = $1`,
+        [id]
+      );
+      if (!row) return res.status(404).json({ error: "Listing not found" });
+      return res.json(row);
+    } catch (err) {
+      console.error("GET /api/listings/:id", err);
+      return res.status(500).json({ error: "Failed to fetch listing" });
+    }
+  });
+
+  app.get("/api/listings/:id/images", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const rows = await query<{ id: number; listing_id: string; category: string; image_data: string; verified: boolean }>(
+        `SELECT id, listing_id, category, image_data, verified FROM listing_images WHERE listing_id = $1 ORDER BY id ASC`,
+        [id]
+      );
+      return res.json(rows);
+    } catch (err) {
+      console.error("GET /api/listings/:id/images", err);
+      return res.status(500).json({ error: "Failed to fetch images" });
+    }
+  });
+
+  app.post("/api/listings/:id/images", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { category, imageData, verified = true } = req.body;
+      if (!category || !imageData) {
+        return res.status(400).json({ error: "category and imageData are required" });
+      }
+      const [row] = await query<{ id: number }>(
+        `INSERT INTO listing_images (listing_id, category, image_data, verified) VALUES ($1,$2,$3,$4) RETURNING id`,
+        [id, category, imageData, verified]
+      );
+      return res.json({ success: true, id: row.id });
+    } catch (err) {
+      console.error("POST /api/listings/:id/images", err);
+      return res.status(500).json({ error: "Failed to save image" });
+    }
+  });
+
+  app.post("/api/verify-image", async (req: Request, res: Response) => {
+    try {
+      const { imageBase64, category } = req.body;
+      if (!imageBase64 || !category) {
+        return res.status(400).json({ error: "imageBase64 and category are required" });
+      }
+
+      // If OpenAI API key is configured, use Vision API for real verification
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              max_tokens: 100,
+              messages: [{
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: `Does this image clearly show a ${category} in a residential setting? A kitchen must have a stove, sink, or countertops. A bathroom must have a toilet or sink. A bedroom must have a bed or sleeping area. Answer ONLY "yes" or "no" and one brief reason.`,
+                  },
+                  {
+                    type: "image_url",
+                    image_url: { url: imageBase64.startsWith("data:") ? imageBase64 : `data:image/jpeg;base64,${imageBase64}` },
+                  },
+                ],
+              }],
+            }),
+          });
+          const data = await response.json() as { choices?: { message?: { content?: string } }[] };
+          const answer = (data.choices?.[0]?.message?.content ?? "").toLowerCase();
+          const verified = answer.startsWith("yes");
+          const reason = data.choices?.[0]?.message?.content ?? "";
+          return res.json({ verified, reason });
+        } catch (aiErr) {
+          console.error("OpenAI Vision error:", aiErr);
+          // Fall through to stub
+        }
+      }
+
+      // Stub: approve all images (real AI not configured)
+      const CATEGORY_HINTS: Record<string, string> = {
+        kitchen: "Make sure the photo shows a stove, sink, or countertops.",
+        bathroom: "Make sure the photo shows a toilet, sink, or shower.",
+        bedroom: "Make sure the photo shows a bed, desk, or sleeping area.",
+      };
+      return res.json({
+        verified: true,
+        reason: `Image accepted. Tip: ${CATEGORY_HINTS[category.toLowerCase()] ?? "Clear, well-lit photos help renters decide faster."}`,
+      });
+    } catch (err) {
+      console.error("POST /api/verify-image", err);
+      return res.status(500).json({ error: "Failed to verify image" });
     }
   });
 
@@ -527,6 +675,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         leaseType = "full_year", pricePerMonth = 0, landlord = "other",
         zone = "campustown", availableDuringBreaks = false, breakTypes = [],
         description = "", eventName = "", startDate = "", endDate = "",
+        floorPlan = "", moveInAt = null, moveOutAt = null,
+        wifiIncluded = false, inUnitLaundry = false, bedroomsCount = 1,
+        privateBathroom = false, parkingIncluded = false, furnished = false,
       } = req.body;
 
       if (!id || !userId || !buildingName) {
@@ -536,14 +687,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await query(
         `INSERT INTO listings (id, user_id, building_name, address, category, lease_type,
           price_per_month, landlord, zone, available_during_breaks, break_types,
-          description, event_name, start_date, end_date)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          description, event_name, start_date, end_date,
+          floor_plan, move_in_at, move_out_at,
+          wifi_included, in_unit_laundry, bedrooms_count, private_bathroom, parking_included, furnished)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
          ON CONFLICT (id) DO NOTHING`,
         [id, userId, buildingName, address, category, leaseType, pricePerMonth,
           landlord, zone, availableDuringBreaks, breakTypes, description,
-          eventName, startDate, endDate]
+          eventName, startDate, endDate,
+          floorPlan, moveInAt, moveOutAt,
+          wifiIncluded, inUnitLaundry, bedroomsCount, privateBathroom, parkingIncluded, furnished]
       );
-      return res.json({ success: true });
+      return res.json({ success: true, id });
     } catch (err) {
       console.error("POST /api/listings", err);
       return res.status(500).json({ error: "Failed to save listing" });

@@ -1,15 +1,30 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  Platform, KeyboardAvoidingView
+  Platform, KeyboardAvoidingView, Image, ActivityIndicator, Alert
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
-import { useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType } from "@/context/AppContext";
+import { useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType, ListingImage } from "@/context/AppContext";
 import DateTimePicker, { formatDateRange } from "@/components/DateTimePicker";
+import { getApiUrl } from "@/lib/query-client";
+
+const REQUIRED_ROOM_CATEGORIES = [
+  { key: "kitchen", label: "Kitchen", icon: "restaurant-outline" as const },
+  { key: "bathroom", label: "Bathroom", icon: "water-outline" as const },
+  { key: "bedroom", label: "Bedroom", icon: "bed-outline" as const },
+] as const;
+
+interface RoomImage {
+  uri: string;
+  base64: string;
+  status: "verifying" | "verified" | "rejected";
+  reason: string;
+}
 
 const LEASE_OPTIONS: { key: LeaseType; label: string; desc: string }[] = [
   { key: "full_year", label: "Full Year", desc: "Aug – Jul (12 months)" },
@@ -83,6 +98,19 @@ export default function PostSubleaseScreen() {
   const [showMoveIn, setShowMoveIn] = useState(false);
   const [showMoveOut, setShowMoveOut] = useState(false);
 
+  const [roomImages, setRoomImages] = useState<Record<string, RoomImage | null>>({
+    kitchen: null, bathroom: null, bedroom: null,
+  });
+
+  const [wifiIncluded, setWifiIncluded] = useState(false);
+  const [inUnitLaundry, setInUnitLaundry] = useState(false);
+  const [bedroomsCount, setBedroomsCount] = useState(1);
+  const [privateBathroom, setPrivateBathroom] = useState(false);
+  const [parkingIncluded, setParkingIncluded] = useState(false);
+  const [furnished, setFurnished] = useState(false);
+
+  const [submitting, setSubmitting] = useState(false);
+
   const warning = LANDLORD_WARNINGS[landlord];
 
   const toggleBreak = (b: BreakType) => {
@@ -90,22 +118,68 @@ export default function PostSubleaseScreen() {
     Haptics.selectionAsync();
   };
 
+  const pickImage = async (category: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Allow photo library access to upload room photos.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    const base64Data = `data:image/jpeg;base64,${asset.base64}`;
+
+    setRoomImages(prev => ({ ...prev, [category]: { uri: asset.uri, base64: base64Data, status: "verifying", reason: "" } }));
+
+    try {
+      const url = new URL("/api/verify-image", getApiUrl()).toString();
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64Data, category }),
+      });
+      const data: { verified: boolean; reason: string } = await res.json();
+      setRoomImages(prev => ({
+        ...prev,
+        [category]: { uri: asset.uri, base64: base64Data, status: data.verified ? "verified" : "rejected", reason: data.reason },
+      }));
+      if (!data.verified) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      setRoomImages(prev => ({ ...prev, [category]: { uri: asset.uri, base64: base64Data, status: "verified", reason: "" } }));
+    }
+  };
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (!buildingName.trim()) e.buildingName = "Building name is required";
     if (!price.trim() || isNaN(Number(price)) || Number(price) <= 0) e.price = "Enter a valid price";
+    if (!moveInDate) e.moveIn = "Move-in date & time is required";
+    if (!moveOutDate) e.moveOut = "Move-out date & time is required";
+    const rejectedRoom = REQUIRED_ROOM_CATEGORIES.find(c => roomImages[c.key]?.status === "rejected");
+    if (rejectedRoom) e.images = `Re-upload a valid ${rejectedRoom.label} photo`;
+    const missingRoom = REQUIRED_ROOM_CATEGORIES.find(c => !roomImages[c.key]);
+    if (missingRoom) e.images = `Upload a photo of the ${missingRoom.label}`;
+    const verifyingRoom = REQUIRED_ROOM_CATEGORIES.find(c => roomImages[c.key]?.status === "verifying");
+    if (verifyingRoom) e.images = "Please wait for image verification to complete";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    setSubmitting(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     const publicDesc = roomLetter !== "None" ? `${roomLetter} — ${description.trim()}` : description.trim();
+    const postId = Date.now().toString() + Math.random().toString(36).substr(2, 6);
 
     const post: SubleasePost = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+      id: postId,
       userId: currentUser?.id || "guest",
       userName: currentUser?.name || "Anonymous",
       userEmail: currentUser?.email || "student@illinois.edu",
@@ -123,9 +197,56 @@ export default function PostSubleaseScreen() {
       timestamp: Date.now(),
       moveInAt: moveInDate?.toISOString() ?? null,
       moveOutAt: moveOutDate?.toISOString() ?? null,
+      wifiIncluded, inUnitLaundry, bedroomsCount, privateBathroom, parkingIncluded, furnished,
+      images: Object.entries(roomImages).filter(([, v]) => v !== null).map(([k, v]) => ({
+        category: k, imageData: v!.base64, verified: v!.status === "verified",
+      } as ListingImage)),
     };
 
     await addSublease(post);
+
+    // Save listing + images to backend
+    try {
+      const apiBase = getApiUrl();
+      await fetch(new URL("/api/listings", apiBase).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: postId,
+          userId: post.userId,
+          buildingName: post.buildingName,
+          address: post.address,
+          category: post.category ?? "semester_takeover",
+          leaseType: post.leaseType,
+          pricePerMonth: post.pricePerMonth,
+          landlord: post.landlord,
+          zone: post.zone,
+          availableDuringBreaks: post.availableDuringBreaks,
+          breakTypes: post.breakTypes,
+          description: post.description,
+          floorPlan: post.floorPlan ?? "",
+          moveInAt: post.moveInAt,
+          moveOutAt: post.moveOutAt,
+          wifiIncluded: post.wifiIncluded ?? false,
+          inUnitLaundry: post.inUnitLaundry ?? false,
+          bedroomsCount: post.bedroomsCount ?? 1,
+          privateBathroom: post.privateBathroom ?? false,
+          parkingIncluded: post.parkingIncluded ?? false,
+          furnished: post.furnished ?? false,
+        }),
+      });
+      const imgUrl = new URL(`/api/listings/${postId}/images`, apiBase).toString();
+      for (const [category, img] of Object.entries(roomImages)) {
+        if (!img) continue;
+        await fetch(imgUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category, imageData: img.base64, verified: img.status === "verified" }),
+        });
+      }
+    } catch {}
+
+    setSubmitting(false);
     router.back();
   };
 
@@ -201,30 +322,85 @@ export default function PostSubleaseScreen() {
 
         {/* Move-In / Move-Out Pickers */}
         <View style={styles.field}>
-          <Text style={styles.label}>Move-In Date & Time</Text>
-          <TouchableOpacity style={styles.datePicker} onPress={() => setShowMoveIn(true)}>
-            <Ionicons name="calendar-outline" size={18} color={Colors.ocean} />
+          <Text style={styles.label}>Move-In Date & Time <Text style={{ color: Colors.ponyo }}>*</Text></Text>
+          <TouchableOpacity style={[styles.datePicker, errors.moveIn && styles.inputError]} onPress={() => { setShowMoveIn(true); setErrors(e => ({ ...e, moveIn: "" })); }}>
+            <Ionicons name="calendar-outline" size={18} color={errors.moveIn ? Colors.ponyo : Colors.ocean} />
             <Text style={[styles.datePickerText, !moveInDate && styles.datePickerPlaceholder]}>
               {moveInDate ? formatDateRange(moveInDate.toISOString(), null) : "Select move-in date & time"}
             </Text>
             <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
           </TouchableOpacity>
+          {errors.moveIn ? <Text style={styles.errorText}>{errors.moveIn}</Text> : null}
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Move-Out Date & Time</Text>
-          <TouchableOpacity style={styles.datePicker} onPress={() => setShowMoveOut(true)}>
-            <Ionicons name="calendar-outline" size={18} color={Colors.ocean} />
+          <Text style={styles.label}>Move-Out Date & Time <Text style={{ color: Colors.ponyo }}>*</Text></Text>
+          <TouchableOpacity style={[styles.datePicker, errors.moveOut && styles.inputError]} onPress={() => { setShowMoveOut(true); setErrors(e => ({ ...e, moveOut: "" })); }}>
+            <Ionicons name="calendar-outline" size={18} color={errors.moveOut ? Colors.ponyo : Colors.ocean} />
             <Text style={[styles.datePickerText, !moveOutDate && styles.datePickerPlaceholder]}>
               {moveOutDate ? formatDateRange(null, moveOutDate.toISOString()) : "Select move-out date & time"}
             </Text>
             <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
           </TouchableOpacity>
+          {errors.moveOut ? <Text style={styles.errorText}>{errors.moveOut}</Text> : null}
           {dateRangeDisplay && (
             <View style={styles.datePreview}>
               <Text style={styles.datePreviewText}>🗓️ {dateRangeDisplay}</Text>
             </View>
           )}
+        </View>
+
+        {/* ─── Room Photos ─── */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Room Photos <Text style={{ color: Colors.ponyo }}>*</Text></Text>
+          <Text style={styles.hintText}>Upload at least one photo of each room to help renters trust your listing</Text>
+          {errors.images ? <Text style={styles.errorText}>{errors.images}</Text> : null}
+          {REQUIRED_ROOM_CATEGORIES.map(({ key, label, icon }) => {
+            const img = roomImages[key];
+            return (
+              <View key={key} style={styles.imageUploadRow}>
+                <View style={styles.imageUploadLeft}>
+                  <Ionicons name={icon} size={18} color={Colors.ocean} />
+                  <View>
+                    <Text style={styles.imageUploadLabel}>{label}</Text>
+                    {img?.status === "verifying" && (
+                      <Text style={[styles.imageUploadStatus, { color: Colors.ocean }]}>Verifying…</Text>
+                    )}
+                    {img?.status === "verified" && (
+                      <Text style={[styles.imageUploadStatus, { color: Colors.grassGreen }]}>✓ Verified</Text>
+                    )}
+                    {img?.status === "rejected" && (
+                      <Text style={[styles.imageUploadStatus, { color: Colors.ponyo }]}>✗ Rejected — re-upload</Text>
+                    )}
+                    {!img && <Text style={[styles.imageUploadStatus, { color: Colors.textMuted }]}>Required</Text>}
+                  </View>
+                </View>
+                <View style={styles.imageUploadRight}>
+                  {img && (
+                    <Image source={{ uri: img.uri }} style={styles.imageThumbnail} />
+                  )}
+                  {img?.status === "verifying" ? (
+                    <ActivityIndicator size="small" color={Colors.ocean} />
+                  ) : (
+                    <TouchableOpacity style={[styles.uploadBtn,
+                      img?.status === "verified" && styles.uploadBtnVerified,
+                      img?.status === "rejected" && styles.uploadBtnRejected,
+                    ]} onPress={() => pickImage(key)}>
+                      <Ionicons
+                        name={img?.status === "verified" ? "checkmark-circle" : "camera-outline"}
+                        size={16}
+                        color={img?.status === "verified" ? Colors.grassGreen : img?.status === "rejected" ? Colors.ponyo : Colors.ocean}
+                      />
+                      <Text style={[styles.uploadBtnText,
+                        img?.status === "verified" && { color: Colors.grassGreen },
+                        img?.status === "rejected" && { color: Colors.ponyo },
+                      ]}>{img ? "Replace" : "Upload"}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            );
+          })}
         </View>
 
         <View style={styles.field}>
@@ -322,6 +498,38 @@ export default function PostSubleaseScreen() {
           )}
         </View>
 
+        {/* ─── Amenities ─── */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Amenities</Text>
+          <View style={styles.amenityGrid}>
+            {([
+              { key: "wifi", label: "WiFi Included", icon: "wifi-outline", value: wifiIncluded, setter: setWifiIncluded },
+              { key: "laundry", label: "In-Unit Laundry", icon: "shirt-outline", value: inUnitLaundry, setter: setInUnitLaundry },
+              { key: "bath", label: "Private Bathroom", icon: "water-outline", value: privateBathroom, setter: setPrivateBathroom },
+              { key: "parking", label: "Parking Included", icon: "car-outline", value: parkingIncluded, setter: setParkingIncluded },
+              { key: "furnished", label: "Furnished", icon: "bed-outline", value: furnished, setter: setFurnished },
+            ] as const).map(({ key, label, icon, value, setter }) => (
+              <TouchableOpacity key={key}
+                style={[styles.amenityChip, value && styles.amenityChipActive]}
+                onPress={() => { setter(!value); Haptics.selectionAsync(); }}>
+                <Ionicons name={icon as never} size={15} color={value ? Colors.white : Colors.ocean} />
+                <Text style={[styles.amenityChipText, value && styles.amenityChipTextActive]}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={styles.bedroomRow}>
+            <Ionicons name="business-outline" size={16} color={Colors.ocean} />
+            <Text style={styles.bedroomLabel}>Bedrooms:</Text>
+            <TouchableOpacity style={styles.stepperBtn} onPress={() => { if (bedroomsCount > 1) setBedroomsCount(b => b - 1); Haptics.selectionAsync(); }}>
+              <Ionicons name="remove" size={16} color={Colors.ocean} />
+            </TouchableOpacity>
+            <Text style={styles.stepperValue}>{bedroomsCount}</Text>
+            <TouchableOpacity style={styles.stepperBtn} onPress={() => { if (bedroomsCount < 6) setBedroomsCount(b => b + 1); Haptics.selectionAsync(); }}>
+              <Ionicons name="add" size={16} color={Colors.ocean} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <View style={styles.field}>
           <Text style={styles.label}>Description</Text>
           <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription}
@@ -331,9 +539,9 @@ export default function PostSubleaseScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 12 }]}>
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-          <Ionicons name="checkmark" size={20} color={Colors.white} />
-          <Text style={styles.submitBtnText}>Post Sublease</Text>
+        <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting}>
+          {submitting ? <ActivityIndicator size="small" color={Colors.white} /> : <Ionicons name="checkmark" size={20} color={Colors.white} />}
+          <Text style={styles.submitBtnText}>{submitting ? "Posting…" : "Post Sublease"}</Text>
         </TouchableOpacity>
       </View>
 
@@ -477,4 +685,44 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.orange, borderRadius: 14, paddingVertical: 14,
   },
   submitBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
+
+  imageUploadRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
+    borderColor: Colors.borderSoft, padding: 12,
+  },
+  imageUploadLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  imageUploadLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
+  imageUploadStatus: { fontFamily: "Nunito_400Regular", fontSize: 11, marginTop: 1 },
+  imageUploadRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  imageThumbnail: { width: 44, height: 34, borderRadius: 6 },
+  uploadBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    borderRadius: 10, borderWidth: 1.5, borderColor: Colors.ocean,
+    paddingHorizontal: 10, paddingVertical: 6,
+  },
+  uploadBtnVerified: { borderColor: Colors.grassGreen, backgroundColor: Colors.grassGreen + "10" },
+  uploadBtnRejected: { borderColor: Colors.ponyo, backgroundColor: Colors.ponyo + "10" },
+  uploadBtnText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.ocean },
+
+  amenityGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  amenityChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.ocean + "50",
+  },
+  amenityChipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
+  amenityChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.ocean },
+  amenityChipTextActive: { color: Colors.white },
+  bedroomRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
+    borderColor: Colors.borderSoft, paddingHorizontal: 14, paddingVertical: 10, marginTop: 4,
+  },
+  bedroomLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal, flex: 1 },
+  stepperBtn: {
+    width: 32, height: 32, borderRadius: 10, backgroundColor: Colors.ocean + "15",
+    alignItems: "center", justifyContent: "center",
+  },
+  stepperValue: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: Colors.ocean, minWidth: 28, textAlign: "center" },
 });

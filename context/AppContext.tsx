@@ -45,6 +45,14 @@ export interface MutualFriend {
   avatarColor: string;
 }
 
+export interface ListingImage {
+  id?: number;
+  listingId?: string;
+  category: string;
+  imageData: string;
+  verified?: boolean;
+}
+
 export interface SubleasePost {
   id: string;
   userId: string;
@@ -65,6 +73,13 @@ export interface SubleasePost {
   category?: string;
   moveInAt?: string | null;
   moveOutAt?: string | null;
+  wifiIncluded?: boolean;
+  inUnitLaundry?: boolean;
+  bedroomsCount?: number;
+  privateBathroom?: boolean;
+  parkingIncluded?: boolean;
+  furnished?: boolean;
+  images?: ListingImage[];
 }
 
 export interface BreakPost {

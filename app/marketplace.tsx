@@ -147,7 +147,14 @@ function SubleaseCard({ post, onMarkLeased, onMessage }: {
     : CATEGORY_LABELS[cat];
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.92}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push({ pathname: "/listing/[id]", params: { id: post.id } });
+      }}
+    >
       {/* ── Hero Image Block ── */}
       <View style={[styles.hero, { backgroundColor: catColor }]}>
         <View style={styles.heroOverlay} />
@@ -264,7 +271,7 @@ function SubleaseCard({ post, onMarkLeased, onMessage }: {
           )}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -278,6 +285,16 @@ export default function MarketplaceScreen() {
   const [showCongrats, setShowCongrats] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [leasedPost, setLeasedPost] = useState<SubleasePost | null>(null);
+  const [showAmenityFilter, setShowAmenityFilter] = useState(false);
+
+  const [filterWifi, setFilterWifi] = useState(false);
+  const [filterLaundry, setFilterLaundry] = useState(false);
+  const [filterBath, setFilterBath] = useState(false);
+  const [filterParking, setFilterParking] = useState(false);
+  const [filterFurnished, setFilterFurnished] = useState(false);
+  const [filterMinBedrooms, setFilterMinBedrooms] = useState(0);
+
+  const activeAmenityCount = [filterWifi, filterLaundry, filterBath, filterParking, filterFurnished].filter(Boolean).length + (filterMinBedrooms > 0 ? 1 : 0);
 
   useEffect(() => {
     if (params.category && Object.keys(CATEGORY_LABELS).includes(params.category)) {
@@ -285,9 +302,16 @@ export default function MarketplaceScreen() {
     }
   }, [params.category]);
 
-  const filtered = activeFilter === "all"
-    ? subleases
-    : subleases.filter(s => (s.category || "semester_takeover") === activeFilter);
+  const filtered = subleases.filter(s => {
+    if (activeFilter !== "all" && (s.category || "semester_takeover") !== activeFilter) return false;
+    if (filterWifi && !s.wifiIncluded) return false;
+    if (filterLaundry && !s.inUnitLaundry) return false;
+    if (filterBath && !s.privateBathroom) return false;
+    if (filterParking && !s.parkingIncluded) return false;
+    if (filterFurnished && !s.furnished) return false;
+    if (filterMinBedrooms > 0 && (s.bedroomsCount ?? 1) < filterMinBedrooms) return false;
+    return true;
+  });
 
   const headerCatColor = activeFilter !== "all" ? CATEGORY_COLORS[activeFilter] : Colors.ocean;
 
@@ -356,6 +380,12 @@ export default function MarketplaceScreen() {
             {activeFilter !== "all" && CATEGORY_DATES[activeFilter] ? ` · ${CATEGORY_DATES[activeFilter]}` : ""}
           </Text>
         </View>
+        <TouchableOpacity style={styles.filterIconBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowAmenityFilter(true); }}>
+          <Ionicons name="options-outline" size={20} color={activeAmenityCount > 0 ? Colors.white : Colors.ocean} />
+          {activeAmenityCount > 0 && (
+            <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{activeAmenityCount}</Text></View>
+          )}
+        </TouchableOpacity>
         <TouchableOpacity style={[styles.postBtn, { backgroundColor: headerCatColor }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/post-sublease"); }}>
           <Ionicons name="add" size={20} color={Colors.white} />
@@ -422,6 +452,57 @@ export default function MarketplaceScreen() {
           ))
         )}
       </ScrollView>
+
+      {/* ─── Amenity Filter Modal ─── */}
+      <Modal visible={showAmenityFilter} transparent animationType="slide" onRequestClose={() => setShowAmenityFilter(false)}>
+        <TouchableOpacity style={styles.amenityOverlay} activeOpacity={1} onPress={() => setShowAmenityFilter(false)} />
+        <View style={[styles.amenitySheet, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 16 }]}>
+          <View style={styles.amenitySheetHandle} />
+          <View style={styles.amenitySheetHeader}>
+            <Text style={styles.amenitySheetTitle}>Filter by Amenity</Text>
+            {activeAmenityCount > 0 && (
+              <TouchableOpacity onPress={() => { setFilterWifi(false); setFilterLaundry(false); setFilterBath(false); setFilterParking(false); setFilterFurnished(false); setFilterMinBedrooms(0); }}>
+                <Text style={styles.amenityClear}>Clear all</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.amenityFilterGrid}>
+            {([
+              { key: "wifi", label: "WiFi Included", icon: "wifi-outline", value: filterWifi, setter: setFilterWifi },
+              { key: "laundry", label: "In-Unit Laundry", icon: "shirt-outline", value: filterLaundry, setter: setFilterLaundry },
+              { key: "bath", label: "Private Bathroom", icon: "water-outline", value: filterBath, setter: setFilterBath },
+              { key: "parking", label: "Parking Included", icon: "car-outline", value: filterParking, setter: setFilterParking },
+              { key: "furnished", label: "Furnished", icon: "bed-outline", value: filterFurnished, setter: setFilterFurnished },
+            ] as const).map(({ key, label, icon, value, setter }) => (
+              <TouchableOpacity key={key}
+                style={[styles.amenityFilterChip, value && styles.amenityFilterChipActive]}
+                onPress={() => { setter(!value); Haptics.selectionAsync(); }}>
+                <Ionicons name={icon as never} size={16} color={value ? Colors.white : Colors.ocean} />
+                <Text style={[styles.amenityFilterChipText, value && styles.amenityFilterChipTextActive]}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={styles.bedroomFilterRow}>
+            <Text style={styles.bedroomFilterLabel}>Min. Bedrooms</Text>
+            <View style={styles.bedroomSteppers}>
+              {[0,1,2,3,4].map(n => (
+                <TouchableOpacity key={n}
+                  style={[styles.bedroomPill, filterMinBedrooms === n && styles.bedroomPillActive]}
+                  onPress={() => { setFilterMinBedrooms(n); Haptics.selectionAsync(); }}>
+                  <Text style={[styles.bedroomPillText, filterMinBedrooms === n && styles.bedroomPillTextActive]}>
+                    {n === 0 ? "Any" : `${n}+`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <TouchableOpacity style={styles.amenityApplyBtn} onPress={() => setShowAmenityFilter(false)}>
+            <Text style={styles.amenityApplyBtnText}>
+              {activeAmenityCount > 0 ? `Show ${filtered.length} listings` : "Apply Filters"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
 
       <CongratsSheet visible={showCongrats} onDone={handleCongratsClose} />
 
@@ -545,4 +626,51 @@ const styles = StyleSheet.create({
   emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center", paddingHorizontal: 20 },
   postFirstBtn: { backgroundColor: Colors.orange, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
   postFirstBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
+
+  filterIconBtn: {
+    width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.cardBg,
+    alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: Colors.borderSoft,
+  },
+  filterBadge: {
+    position: "absolute", top: -4, right: -4,
+    backgroundColor: Colors.ponyo, borderRadius: 8, minWidth: 16, height: 16,
+    alignItems: "center", justifyContent: "center",
+  },
+  filterBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 9, color: Colors.white },
+
+  amenityOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  amenitySheet: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 12, gap: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 10,
+  },
+  amenitySheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.borderSoft, alignSelf: "center", marginBottom: 4 },
+  amenitySheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  amenitySheetTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: Colors.charcoal },
+  amenityClear: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.ponyo },
+  amenityFilterGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  amenityFilterChip: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20,
+    backgroundColor: Colors.sand, borderWidth: 1.5, borderColor: Colors.ocean + "50",
+  },
+  amenityFilterChipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
+  amenityFilterChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.ocean },
+  amenityFilterChipTextActive: { color: Colors.white },
+  bedroomFilterRow: { gap: 10 },
+  bedroomFilterLabel: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
+  bedroomSteppers: { flexDirection: "row", gap: 8 },
+  bedroomPill: {
+    flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 12,
+    backgroundColor: Colors.sand, borderWidth: 1.5, borderColor: Colors.borderSoft,
+  },
+  bedroomPillActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
+  bedroomPillText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.textMuted },
+  bedroomPillTextActive: { color: Colors.white },
+  amenityApplyBtn: {
+    backgroundColor: Colors.ocean, borderRadius: 14, paddingVertical: 14,
+    alignItems: "center",
+  },
+  amenityApplyBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 15, color: Colors.white },
 });
