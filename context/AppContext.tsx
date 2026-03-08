@@ -6,6 +6,7 @@ export type GenderPref = "girls_only" | "boys_only" | "mixed";
 export type Zone = "campustown" | "north" | "south" | "urbana" | "downtown";
 export type Landlord = "jsm" | "ugroup" | "bailey" | "american" | "smile" | "other";
 export type BreakType = "thanksgiving" | "spring_break" | "winter";
+export type HousingStatus = "host" | "joiner" | "co_seeker" | "sublessor" | "sublessee";
 
 export interface UserProfile {
   id: string;
@@ -24,6 +25,8 @@ export interface UserProfile {
   staysThanksgiving: boolean;
   staysSpringBreak: boolean;
   avatarColor: string;
+  housingStatus: HousingStatus;
+  linkedListingId?: string;
   college?: string;
   organizations?: string[];
 }
@@ -203,6 +206,7 @@ export const MOCK_USERS: UserProfile[] = [
     budget: 850, gender: "female", genderPref: "girls_only", cleanliness: 5, noise: 2,
     leaseType: "fall_sublease", zone: "north", landlord: "jsm",
     staysThanksgiving: false, staysSpringBreak: true, avatarColor: "#1A7AAF",
+    housingStatus: "host", linkedListingId: "sp2",
     college: "Grainger", organizations: ["ACM@UIUC", "WCS"],
   },
   {
@@ -211,6 +215,7 @@ export const MOCK_USERS: UserProfile[] = [
     budget: 950, gender: "female", genderPref: "girls_only", cleanliness: 4, noise: 3,
     leaseType: "spring_sublease", zone: "campustown", landlord: "bailey",
     staysThanksgiving: true, staysSpringBreak: true, avatarColor: "#CC5500",
+    housingStatus: "joiner",
     college: "Gies", organizations: ["Illini Finance Club", "DECA"],
   },
   {
@@ -219,6 +224,7 @@ export const MOCK_USERS: UserProfile[] = [
     budget: 750, gender: "male", genderPref: "mixed", cleanliness: 3, noise: 4,
     leaseType: "full_year", zone: "north", landlord: "ugroup",
     staysThanksgiving: true, staysSpringBreak: false, avatarColor: "#5A8A5A",
+    housingStatus: "co_seeker",
     college: "Grainger", organizations: ["SWE", "Tau Beta Pi"],
   },
   {
@@ -227,6 +233,7 @@ export const MOCK_USERS: UserProfile[] = [
     budget: 800, gender: "female", genderPref: "girls_only", cleanliness: 5, noise: 2,
     leaseType: "full_year", zone: "urbana", landlord: "other",
     staysThanksgiving: false, staysSpringBreak: false, avatarColor: "#E07B00",
+    housingStatus: "joiner",
     college: "LAS", organizations: ["BSA", "Illini 4000"],
   },
   {
@@ -235,6 +242,7 @@ export const MOCK_USERS: UserProfile[] = [
     budget: 900, gender: "male", genderPref: "boys_only", cleanliness: 4, noise: 2,
     leaseType: "fall_sublease", zone: "downtown", landlord: "american",
     staysThanksgiving: false, staysSpringBreak: false, avatarColor: "#9B59B6",
+    housingStatus: "sublessor", linkedListingId: "sp3",
     college: "FAA", organizations: ["AIAS"],
   },
   {
@@ -243,6 +251,7 @@ export const MOCK_USERS: UserProfile[] = [
     budget: 700, gender: "female", genderPref: "girls_only", cleanliness: 4, noise: 2,
     leaseType: "spring_sublease", zone: "south", landlord: "jsm",
     staysThanksgiving: true, staysSpringBreak: true, avatarColor: "#5A8A5A",
+    housingStatus: "sublessee",
     college: "LAS", organizations: ["Illini Pre-Med", "Phi Delta Epsilon"],
   },
   {
@@ -251,6 +260,7 @@ export const MOCK_USERS: UserProfile[] = [
     budget: 850, gender: "male", genderPref: "mixed", cleanliness: 3, noise: 3,
     leaseType: "full_year", zone: "campustown", landlord: "ugroup",
     staysThanksgiving: false, staysSpringBreak: true, avatarColor: "#E0BC00",
+    housingStatus: "host", linkedListingId: "sp5",
     college: "LAS", organizations: ["Korean Cultural Association", "DataSci@UIUC"],
   },
   {
@@ -259,6 +269,7 @@ export const MOCK_USERS: UserProfile[] = [
     budget: 780, gender: "female", genderPref: "girls_only", cleanliness: 4, noise: 1,
     leaseType: "spring_sublease", zone: "urbana", landlord: "other",
     staysThanksgiving: true, staysSpringBreak: false, avatarColor: "#CC5500",
+    housingStatus: "co_seeker",
     college: "Media", organizations: ["Daily Illini", "SPJ"],
   },
 ];
@@ -269,10 +280,10 @@ function computeScore(a: UserProfile, b: UserProfile): number {
   const noiseDiff = (a.noise - b.noise) / 4;
   const zoneDiff = a.zone === b.zone ? 0 : 1;
   const D = Math.sqrt(
-    0.35 * budgetDiff * budgetDiff +
-    0.25 * cleanDiff * cleanDiff +
-    0.20 * noiseDiff * noiseDiff +
-    0.20 * zoneDiff * zoneDiff
+    0.25 * budgetDiff * budgetDiff +
+    0.20 * cleanDiff * cleanDiff +
+    0.15 * noiseDiff * noiseDiff +
+    0.40 * zoneDiff * zoneDiff
   );
   return Math.max(0, Math.round((1 - D) * 100));
 }

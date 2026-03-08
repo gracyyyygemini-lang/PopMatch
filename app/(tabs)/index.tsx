@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform
 } from "react-native";
@@ -7,8 +7,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp } from "@/context/AppContext";
+import { useApp, Zone } from "@/context/AppContext";
 import { ScamBanner } from "@/components/ScamBanner";
+
+const ZONE_FILTERS: { key: Zone | "all"; label: string }[] = [
+  { key: "all", label: "All Zones" },
+  { key: "campustown", label: "Campustown" },
+  { key: "north", label: "North" },
+  { key: "south", label: "South" },
+  { key: "urbana", label: "Urbana" },
+  { key: "downtown", label: "Champaign" },
+];
 
 const CATEGORIES = [
   {
@@ -49,7 +58,7 @@ const FEATURES = [
   {
     route: "/matchmaker" as const,
     title: "Year-Long Matchmaker",
-    subtitle: "Swipe & match for a full 12-month lease",
+    subtitle: "Swipe & match based on your housing intent",
     icon: "heart" as const,
     color: Colors.ocean,
   },
@@ -62,19 +71,38 @@ const FEATURES = [
   },
 ];
 
+const STATUS_LABELS: Record<string, string> = {
+  host: "Host",
+  joiner: "Joiner",
+  co_seeker: "Co-Seeker",
+  sublessor: "Sublessor",
+  sublessee: "Sublessee",
+};
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, friends, subleases, breakPosts } = useApp();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const [selectedZone, setSelectedZone] = useState<Zone | "all">("all");
 
   const firstName = currentUser?.name.split(" ")[0] ?? "there";
+  const userStatus = currentUser?.housingStatus ?? "joiner";
+
+  const filteredListings = selectedZone === "all"
+    ? subleases
+    : subleases.filter(s => s.zone === selectedZone);
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
         <View>
           <Text style={styles.greeting}>Hey, {firstName}</Text>
-          <Text style={styles.tagline}>UIUC Housing — Find your match</Text>
+          <View style={styles.statusRow}>
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusBadgeText}>{STATUS_LABELS[userStatus]}</Text>
+            </View>
+            <Text style={styles.tagline}>UIUC Housing — Find your match</Text>
+          </View>
         </View>
         <View style={styles.logoMark}>
           <Ionicons name="home" size={22} color={Colors.ocean} />
@@ -90,6 +118,20 @@ export default function HomeScreen() {
       >
         <ScamBanner />
 
+        <Text style={styles.sectionLabel}>Zone Filter</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.zoneFilterRow}>
+          {ZONE_FILTERS.map(z => (
+            <TouchableOpacity key={z.key}
+              style={[styles.zoneChip, selectedZone === z.key && styles.zoneChipActive]}
+              onPress={() => { setSelectedZone(z.key); Haptics.selectionAsync(); }}>
+              <Text style={[styles.zoneChipText, selectedZone === z.key && styles.zoneChipTextActive]}>
+                {z.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
         <Text style={styles.sectionLabel}>Browse by housing type</Text>
 
         <View style={styles.grid}>
@@ -100,7 +142,8 @@ export default function HomeScreen() {
               activeOpacity={0.82}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                router.push(`/marketplace?category=${cat.id}` as any);
+                const zoneParam = selectedZone !== "all" ? `&zone=${selectedZone}` : "";
+                router.push(`/marketplace?category=${cat.id}${zoneParam}` as any);
               }}
             >
               <View style={[styles.catIconWrap, { backgroundColor: cat.color }]}>
@@ -142,7 +185,7 @@ export default function HomeScreen() {
             <Text style={styles.statLabel}>Circle</Text>
           </View>
           <View style={[styles.statBox, styles.statBoxMid]}>
-            <Text style={styles.statNum}>{subleases.length}</Text>
+            <Text style={styles.statNum}>{filteredListings.length}</Text>
             <Text style={styles.statLabel}>Listings</Text>
           </View>
           <View style={styles.statBox}>
@@ -180,6 +223,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingBottom: 16, backgroundColor: Colors.sand,
   },
   greeting: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
+  statusBadge: {
+    backgroundColor: Colors.ponyo, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  statusBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 11, color: Colors.white },
   tagline: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
   logoMark: {
     width: 44, height: 44, borderRadius: 14,
@@ -193,6 +242,14 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted,
     textTransform: "uppercase", letterSpacing: 0.8, marginTop: 4,
   },
+  zoneFilterRow: { gap: 8, paddingVertical: 2 },
+  zoneChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.borderSoft,
+  },
+  zoneChipActive: { backgroundColor: Colors.teal, borderColor: Colors.teal },
+  zoneChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  zoneChipTextActive: { color: Colors.white },
   grid: {
     flexDirection: "row", flexWrap: "wrap", gap: 10,
   },

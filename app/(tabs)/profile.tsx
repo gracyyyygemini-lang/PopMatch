@@ -8,7 +8,23 @@ import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
-import { useApp } from "@/context/AppContext";
+import { useApp, HousingStatus } from "@/context/AppContext";
+
+const STATUS_LABELS: Record<HousingStatus, string> = {
+  host: "Host",
+  joiner: "Joiner",
+  co_seeker: "Co-Seeker",
+  sublessor: "Sublessor",
+  sublessee: "Sublessee",
+};
+
+const STATUS_COLORS: Record<HousingStatus, string> = {
+  host: "#005F73",
+  joiner: "#2E8B57",
+  co_seeker: "#FF6B4E",
+  sublessor: "#B8860B",
+  sublessee: "#008080",
+};
 
 const LEASE_LABELS: Record<string, string> = {
   full_year: "Full Year (Aug – Jul)",
@@ -158,6 +174,14 @@ export default function ProfileScreen() {
             <View style={styles.majorTag}>
               <Ionicons name="school-outline" size={12} color={Colors.ocean} />
               <Text style={styles.majorTagText}>{currentUser.major}</Text>
+            </View>
+          ) : null}
+          {currentUser.housingStatus ? (
+            <View style={[styles.majorTag, { backgroundColor: (STATUS_COLORS[currentUser.housingStatus] || Colors.ocean) + "18" }]}>
+              <Ionicons name="home-outline" size={12} color={STATUS_COLORS[currentUser.housingStatus] || Colors.ocean} />
+              <Text style={[styles.majorTagText, { color: STATUS_COLORS[currentUser.housingStatus] || Colors.ocean }]}>
+                {STATUS_LABELS[currentUser.housingStatus]}
+              </Text>
             </View>
           ) : null}
           {currentUser.bio ? (
