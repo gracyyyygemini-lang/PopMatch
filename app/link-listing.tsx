@@ -12,7 +12,7 @@ export default function LinkListingScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: topPadding + 20 }]}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+      <TouchableOpacity style={styles.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}>
         <Ionicons name="arrow-back" size={20} color={Colors.ocean} />
       </TouchableOpacity>
 
@@ -41,7 +41,7 @@ export default function LinkListingScreen() {
 
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
         >
           <Text style={styles.secondaryBtnText}>Maybe Later</Text>
         </TouchableOpacity>

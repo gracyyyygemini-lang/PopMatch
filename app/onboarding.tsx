@@ -302,7 +302,26 @@ export default function OnboardingScreen() {
     };
     await setCurrentUser(user);
     await setIsOnboarded(true);
-    router.replace("/(tabs)");
+    switch (intent) {
+      case "host":
+        router.replace("/link-listing");
+        break;
+      case "joiner":
+        router.replace("/marketplace?category=semester_takeover");
+        break;
+      case "co_seeker":
+        router.replace("/matchmaker");
+        break;
+      case "sublessor":
+        router.replace("/post-sublease");
+        break;
+      case "sublessee":
+        router.replace("/marketplace?category=short_term");
+        break;
+      default:
+        router.replace("/(tabs)");
+        break;
+    }
   };
 
   const budgetStep = (dir: number) => {

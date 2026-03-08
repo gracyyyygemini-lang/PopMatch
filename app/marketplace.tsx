@@ -361,7 +361,7 @@ export default function MarketplaceScreen() {
   return (
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}>
           <Ionicons name="arrow-back" size={20} color={Colors.ocean} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>

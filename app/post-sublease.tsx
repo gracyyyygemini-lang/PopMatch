@@ -215,7 +215,7 @@ export default function PostSubleaseScreen() {
     setStep(s => Math.min(s + 1, TOTAL_STEPS - 1));
   };
   const goBack = () => {
-    if (step === 0) { router.back(); return; }
+    if (step === 0) { router.canGoBack() ? router.back() : router.replace("/(tabs)"); return; }
     setStep(s => s - 1);
   };
 
