@@ -22,31 +22,65 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen
+        name="onboarding"
+        options={{ headerShown: false, gestureEnabled: false }}
+      />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="matchmaker" options={{ headerShown: false, presentation: "card" }} />
-      <Stack.Screen name="marketplace" options={{ headerShown: false, presentation: "card" }} />
-      <Stack.Screen name="post-sublease" options={{ headerShown: false, presentation: "modal" }} />
-      <Stack.Screen name="link-listing" options={{ headerShown: false, presentation: "card" }} />
-      <Stack.Screen name="breaks" options={{ headerShown: false, presentation: "card" }} />
-      <Stack.Screen name="chat" options={{ headerShown: false, presentation: "card" }} />
-      <Stack.Screen name="admin" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen
+        name="matchmaker"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="marketplace"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="post-sublease"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
+      <Stack.Screen
+        name="link-listing"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="breaks"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="chat"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="admin"
+        options={{ headerShown: false, presentation: "card" }}
+      />
       <Stack.Screen name="+not-found" />
     </Stack>
   );
 }
 
 function WebContainer({ children }: { children: React.ReactNode }) {
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
-
-  if (isDesktop) {
-    return <View style={{ flex: 1, width: "100%" }}>{children}</View>;
-  }
-
   return (
-    <View style={{ flex: 1, maxWidth: 500, marginLeft: "auto", marginRight: "auto", width: "100%" }}>
-      {children}
+    <View
+      style={{
+        flex: 1,
+        width: "100%",
+        alignItems: "center",
+        backgroundColor: "#FDFBF7",
+      }}
+    >
+      <View
+        style={{
+          flex: 1,
+          width: "100%",
+          maxWidth: 500,
+          backgroundColor: "white",
+          overflow: "hidden",
+        }}
+      >
+        {children}
+      </View>
     </View>
   );
 }
