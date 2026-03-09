@@ -25,10 +25,10 @@ const GENDER_LABELS: Record<string, string> = {
 };
 
 const ZONE_LABELS: Record<string, string> = {
-  campustown: "Campustown",
-  north: "North Campus",
-  south: "South Campus",
-  urbana: "Urbana",
+  campustown: "Campustown (Central Campus)",
+  north: "North Campus (Engineering / Midtown)",
+  south: "South Campus (Ikenberry / Seniorland)",
+  urbana: "Urbana (Gradland)",
   downtown: "Downtown Champaign",
 };
 

@@ -19,10 +19,10 @@ const MAJORS = [
 ];
 
 const ZONES: { key: Zone; label: string; icon: keyof typeof Ionicons.glyphMap; desc: string }[] = [
-  { key: "campustown", label: "Campustown", icon: "storefront-outline", desc: "Green St buzz & Main Quad" },
-  { key: "north", label: "North Campus", icon: "hardware-chip-outline", desc: "Engineering & STEM hub" },
-  { key: "south", label: "South Campus", icon: "football-outline", desc: "Ikenberry, ARC, Stadium" },
-  { key: "urbana", label: "Urbana", icon: "leaf-outline", desc: "Quiet, trees, budget-friendly" },
+  { key: "campustown", label: "Campustown (Central Campus)", icon: "storefront-outline", desc: "Green St buzz & Main Quad" },
+  { key: "north", label: "North Campus (Engineering / Midtown)", icon: "hardware-chip-outline", desc: "Engineering & STEM hub" },
+  { key: "south", label: "South Campus (Ikenberry / Seniorland)", icon: "football-outline", desc: "Ikenberry, ARC, Stadium" },
+  { key: "urbana", label: "Urbana (Gradland)", icon: "leaf-outline", desc: "Quiet, trees, budget-friendly" },
   { key: "downtown", label: "Downtown Champaign", icon: "business-outline", desc: "Professional & dining scene" },
 ];
 

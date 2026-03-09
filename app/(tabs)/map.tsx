@@ -16,25 +16,25 @@ const ZONES: {
   pros: string[]; cons: string[];
 }[] = [
   {
-    key: "campustown", label: "Campustown", icon: "storefront-outline",
+    key: "campustown", label: "Campustown (Central Campus)", icon: "storefront-outline",
     color: Colors.zones.campustown, avgRent: "$800–1,100", vibe: "Social & Lively",
     pros: ["Steps from Main Quad", "Green St dining & bars", "Best bus access", "CUMTD hub"],
     cons: ["Noisy on weekends", "Higher rent", "Crowded game days"],
   },
   {
-    key: "north", label: "North Campus", icon: "hardware-chip-outline",
+    key: "north", label: "North Campus (Engineering / Midtown)", icon: "hardware-chip-outline",
     color: Colors.zones.north, avgRent: "$700–950", vibe: "Academic & Focused",
     pros: ["Near Siebel & Grainger", "Quieter streets", "Reasonable rent", "Close to ECE"],
     cons: ["Far from Green St", "Limited late-night food", "Less social scene"],
   },
   {
-    key: "south", label: "South Campus", icon: "football-outline",
+    key: "south", label: "South Campus (Ikenberry / Seniorland)", icon: "football-outline",
     color: Colors.zones.south, avgRent: "$650–900", vibe: "Athletic & Community",
     pros: ["Next to ARC gym", "Ikenberry dining", "Game day energy", "More space"],
     cons: ["Far from central campus", "Bus dependent", "Feels spread out"],
   },
   {
-    key: "urbana", label: "Urbana", icon: "leaf-outline",
+    key: "urbana", label: "Urbana (Gradland)", icon: "leaf-outline",
     color: Colors.zones.urbana, avgRent: "$550–800", vibe: "Peaceful & Grad-Friendly",
     pros: ["Lowest rent", "Beautiful neighborhoods", "Great for studying", "Tight community"],
     cons: ["Need car or bus", "Away from campus buzz", "Limited late-night"],

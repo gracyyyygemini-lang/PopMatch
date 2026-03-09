@@ -15,11 +15,11 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
 
 const ZONE_LABELS: Record<string, string> = {
-  campustown: "Campustown",
-  north: "North Campus",
-  south: "South Campus",
-  urbana: "Urbana",
-  downtown: "Downtown",
+  campustown: "Campustown (Central Campus)",
+  north: "North Campus (Engineering / Midtown)",
+  south: "South Campus (Ikenberry / Seniorland)",
+  urbana: "Urbana (Gradland)",
+  downtown: "Downtown Champaign",
 };
 
 const LEASE_LABELS: Record<string, string> = {

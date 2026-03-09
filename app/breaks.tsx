@@ -17,11 +17,11 @@ const BREAK_CONFIG: Record<BreakType, { label: string; dates: string; color: str
 };
 
 const ZONE_OPTIONS: { key: Zone; label: string }[] = [
-  { key: "campustown", label: "Campustown" },
-  { key: "north", label: "North Campus" },
-  { key: "south", label: "South Campus" },
-  { key: "urbana", label: "Urbana" },
-  { key: "downtown", label: "Downtown" },
+  { key: "campustown", label: "Campustown (Central Campus)" },
+  { key: "north", label: "North Campus (Engineering / Midtown)" },
+  { key: "south", label: "South Campus (Ikenberry / Seniorland)" },
+  { key: "urbana", label: "Urbana (Gradland)" },
+  { key: "downtown", label: "Downtown Champaign" },
 ];
 
 const STICKY_COLORS = [

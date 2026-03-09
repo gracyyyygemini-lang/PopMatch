@@ -40,7 +40,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 ### Stack Screens
 - `app/matchmaker.tsx` — Year-Long swipe discovery with ZonePicker + Message button + intent bridge
 - `app/marketplace.tsx` — Sublease listings with 60% photo cards, amenity overlay, Message button, FacePile, Mark as Leased
-- `app/post-sublease.tsx` — Multi-step listing form (4 steps: Basic → Unit Details/Photos → Amenities → Cleanliness/Dates)
+- `app/post-sublease.tsx` — Multi-step listing form (5 steps: Basic → Unit Details/Photos → Amenities → Cleanliness → Calendar Dates). Calendar uses custom month-view picker with year selector (supports up to 3000), move-out must be after move-in.
 - `app/chat.tsx` — Chat room with listing preview header, timestamped bubbles, send input
 - `app/link-listing.tsx` — Bridge screen for Host/Sublessor users without listings
 - `app/breaks.tsx` — Break Stay bulletin board (sticky-note grid)
@@ -59,7 +59,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - Intent types: Host, Joiner, Co-Seeker, Sublessor, Sublessee
 - Selected during onboarding Step 1 (after email verification)
 - Post-registration routing:
-  - Host → /post-sublease?mode=host (Post My Apartment form, redirects to Profile after posting)
+  - Host → /post-sublease?mode=host (Post My Apartment form, redirects to Roommate Openings feed after posting; own listing pinned to top with "Your Listing" badge)
   - Joiner → /marketplace?category=roommate_openings (Roommate Openings filter)
   - Co-Seeker → /matchmaker
   - Sublessor → /post-sublease

@@ -7,11 +7,11 @@ import { Zone } from "@/context/AppContext";
 
 const ZONES: { key: Zone | "all"; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "all", label: "All Zones", icon: "apps-outline" },
-  { key: "campustown", label: "Campustown", icon: "storefront-outline" },
-  { key: "north", label: "North", icon: "hardware-chip-outline" },
-  { key: "south", label: "South", icon: "football-outline" },
-  { key: "urbana", label: "Urbana", icon: "leaf-outline" },
-  { key: "downtown", label: "Champaign", icon: "business-outline" },
+  { key: "campustown", label: "Campustown (Central Campus)", icon: "storefront-outline" },
+  { key: "north", label: "North Campus (Engineering / Midtown)", icon: "hardware-chip-outline" },
+  { key: "south", label: "South Campus (Ikenberry / Seniorland)", icon: "football-outline" },
+  { key: "urbana", label: "Urbana (Gradland)", icon: "leaf-outline" },
+  { key: "downtown", label: "Downtown Champaign", icon: "business-outline" },
 ];
 
 interface ZonePickerProps {

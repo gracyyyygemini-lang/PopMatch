@@ -40,10 +40,10 @@ const LANDLORD_WARNINGS: Record<Landlord, { level: "info" | "warn" | "danger"; m
 };
 
 const ZONE_OPTIONS: { key: Zone; label: string }[] = [
-  { key: "campustown", label: "Campustown" },
-  { key: "north", label: "North Campus" },
-  { key: "south", label: "South Campus" },
-  { key: "urbana", label: "Urbana" },
+  { key: "campustown", label: "Campustown (Central Campus)" },
+  { key: "north", label: "North Campus (Engineering / Midtown)" },
+  { key: "south", label: "South Campus (Ikenberry / Seniorland)" },
+  { key: "urbana", label: "Urbana (Gradland)" },
   { key: "downtown", label: "Downtown Champaign" },
 ];
 
@@ -132,6 +132,167 @@ export default function PostSubleaseScreen() {
   const [showMoveInPicker, setShowMoveInPicker] = useState(false);
   const [showMoveOutPicker, setShowMoveOutPicker] = useState(false);
 
+  const now = new Date();
+  const [calMoveInMonth, setCalMoveInMonth] = useState(now.getMonth());
+  const [calMoveInYear, setCalMoveInYear] = useState(now.getFullYear());
+  const [calMoveOutMonth, setCalMoveOutMonth] = useState(now.getMonth());
+  const [calMoveOutYear, setCalMoveOutYear] = useState(now.getFullYear());
+  const [showMoveInYearPicker, setShowMoveInYearPicker] = useState(false);
+  const [showMoveOutYearPicker, setShowMoveOutYearPicker] = useState(false);
+
+  const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const DAY_HEADERS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  const MIN_YEAR = now.getFullYear();
+  const MAX_YEAR = 3000;
+
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfWeek = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const calendarPrevMonth = (type: "moveIn" | "moveOut") => {
+    if (type === "moveIn") {
+      if (calMoveInMonth === 0) { setCalMoveInMonth(11); setCalMoveInYear(y => y - 1); }
+      else setCalMoveInMonth(m => m - 1);
+    } else {
+      if (calMoveOutMonth === 0) { setCalMoveOutMonth(11); setCalMoveOutYear(y => y - 1); }
+      else setCalMoveOutMonth(m => m - 1);
+    }
+  };
+
+  const calendarNextMonth = (type: "moveIn" | "moveOut") => {
+    if (type === "moveIn") {
+      if (calMoveInMonth === 11) { setCalMoveInMonth(0); setCalMoveInYear(y => y + 1); }
+      else setCalMoveInMonth(m => m + 1);
+    } else {
+      if (calMoveOutMonth === 11) { setCalMoveOutMonth(0); setCalMoveOutYear(y => y + 1); }
+      else setCalMoveOutMonth(m => m + 1);
+    }
+  };
+
+  const isDateDisabled = (day: number, month: number, year: number, type: "moveIn" | "moveOut") => {
+    const d = new Date(year, month, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (d < today) return true;
+    if (type === "moveOut" && moveInDate) {
+      return d <= moveInDate;
+    }
+    return false;
+  };
+
+  const handleDayPress = (day: number, month: number, year: number, type: "moveIn" | "moveOut") => {
+    const selected = new Date(year, month, day, type === "moveIn" ? 14 : 12, 0, 0);
+    Haptics.selectionAsync();
+    if (type === "moveIn") {
+      setMoveInDate(selected);
+      setShowMoveInPicker(false);
+      if (moveOutDate && moveOutDate <= selected) {
+        setMoveOutDate(null);
+      }
+    } else {
+      setMoveOutDate(selected);
+      setShowMoveOutPicker(false);
+    }
+  };
+
+  const renderCalendar = (type: "moveIn" | "moveOut") => {
+    const cMonth = type === "moveIn" ? calMoveInMonth : calMoveOutMonth;
+    const cYear = type === "moveIn" ? calMoveInYear : calMoveOutYear;
+    const showYearPicker = type === "moveIn" ? showMoveInYearPicker : showMoveOutYearPicker;
+    const setShowYearPicker = type === "moveIn" ? setShowMoveInYearPicker : setShowMoveOutYearPicker;
+    const setYear = type === "moveIn" ? setCalMoveInYear : setCalMoveOutYear;
+    const selectedDate = type === "moveIn" ? moveInDate : moveOutDate;
+    const daysInMonth = getDaysInMonth(cYear, cMonth);
+    const firstDay = getFirstDayOfWeek(cYear, cMonth);
+    const canGoPrev = cYear > MIN_YEAR || (cYear === MIN_YEAR && cMonth > 0);
+    const canGoNext = cYear < MAX_YEAR || (cYear === MAX_YEAR && cMonth < 11);
+
+    if (showYearPicker) {
+      const decades: number[] = [];
+      const startDecade = Math.floor(cYear / 20) * 20;
+      for (let y = startDecade; y < startDecade + 20 && y <= MAX_YEAR; y++) {
+        if (y >= MIN_YEAR) decades.push(y);
+      }
+      return (
+        <View style={styles.calendarContainer}>
+          <View style={styles.calendarHeader}>
+            <TouchableOpacity onPress={() => {
+              const newStart = startDecade - 20;
+              if (newStart >= MIN_YEAR) setYear(newStart);
+            }}>
+              <Ionicons name="chevron-back" size={20} color={startDecade > MIN_YEAR ? Colors.ocean : Colors.borderSoft} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowYearPicker(false)}>
+              <Text style={styles.calendarTitle}>{startDecade} - {Math.min(startDecade + 19, MAX_YEAR)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => {
+              const newStart = startDecade + 20;
+              if (newStart <= MAX_YEAR) setYear(newStart);
+            }}>
+              <Ionicons name="chevron-forward" size={20} color={startDecade + 20 <= MAX_YEAR ? Colors.ocean : Colors.borderSoft} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.yearGrid}>
+            {decades.map(y => {
+              const isSelected = y === cYear;
+              return (
+                <TouchableOpacity key={y} style={[styles.yearCell, isSelected && styles.yearCellActive]}
+                  onPress={() => { setYear(y); setShowYearPicker(false); }}>
+                  <Text style={[styles.yearCellText, isSelected && styles.yearCellTextActive]}>{y}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      );
+    }
+
+    const cells: React.ReactNode[] = [];
+    for (let i = 0; i < firstDay; i++) {
+      cells.push(<View key={`empty-${i}`} style={styles.calendarDayCell} />);
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const disabled = isDateDisabled(d, cMonth, cYear, type);
+      const isSelected = selectedDate &&
+        selectedDate.getDate() === d &&
+        selectedDate.getMonth() === cMonth &&
+        selectedDate.getFullYear() === cYear;
+      const isToday = d === now.getDate() && cMonth === now.getMonth() && cYear === now.getFullYear();
+      cells.push(
+        <TouchableOpacity key={d} style={[styles.calendarDayCell, isSelected && styles.calendarDayCellActive, isToday && !isSelected && styles.calendarDayCellToday]}
+          onPress={() => !disabled && handleDayPress(d, cMonth, cYear, type)} disabled={disabled}>
+          <Text style={[styles.calendarDayText, isSelected && styles.calendarDayTextActive, disabled && styles.calendarDayTextDisabled,
+            isToday && !isSelected && styles.calendarDayTextToday]}>{d}</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <View style={styles.calendarContainer}>
+        <View style={styles.calendarHeader}>
+          <TouchableOpacity onPress={() => canGoPrev && calendarPrevMonth(type)} disabled={!canGoPrev}>
+            <Ionicons name="chevron-back" size={20} color={canGoPrev ? Colors.ocean : Colors.borderSoft} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowYearPicker(true)}>
+            <Text style={styles.calendarTitle}>{MONTH_NAMES[cMonth]} {cYear}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => canGoNext && calendarNextMonth(type)} disabled={!canGoNext}>
+            <Ionicons name="chevron-forward" size={20} color={canGoNext ? Colors.ocean : Colors.borderSoft} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.calendarDayHeaders}>
+          {DAY_HEADERS.map(h => (
+            <View key={h} style={styles.calendarDayHeaderCell}>
+              <Text style={styles.calendarDayHeaderText}>{h}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.calendarGrid}>
+          {cells}
+        </View>
+      </View>
+    );
+  };
+
   const warning = LANDLORD_WARNINGS[landlord];
 
   const toggleBreak = (b: BreakType) => {
@@ -174,19 +335,6 @@ export default function PostSubleaseScreen() {
     if (!result.canceled && result.assets[0]) {
       setFloorPlanImage(result.assets[0].uri);
     }
-  };
-
-  const generateDateOptions = (type: "moveIn" | "moveOut") => {
-    const dates: Date[] = [];
-    const start = new Date();
-    start.setDate(start.getDate() + (type === "moveIn" ? 1 : 30));
-    for (let i = 0; i < 24; i++) {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i * 7);
-      d.setHours(type === "moveIn" ? 14 : 12, 0, 0, 0);
-      dates.push(d);
-    }
-    return dates;
   };
 
   const allImagesUploaded = images.every(img => img !== null);
@@ -233,7 +381,7 @@ export default function PostSubleaseScreen() {
 
     await addSublease(post);
     if (isHostMode) {
-      router.replace("/(tabs)/profile");
+      router.replace("/marketplace?category=roommate_openings");
     } else {
       router.canGoBack() ? router.back() : router.replace("/(tabs)");
     }
@@ -606,60 +754,29 @@ export default function PostSubleaseScreen() {
 
             <View style={styles.field}>
               <Text style={styles.label}>Move-In Date *</Text>
-              <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowMoveInPicker(!showMoveInPicker)}>
+              <TouchableOpacity style={styles.datePickerBtn} onPress={() => { setShowMoveInPicker(!showMoveInPicker); setShowMoveOutPicker(false); }}>
                 <Ionicons name="calendar-outline" size={18} color={moveInDate ? Colors.ocean : Colors.textLight} />
                 <Text style={[styles.datePickerText, !moveInDate && { color: Colors.textLight }]}>
                   {moveInDate ? moveInDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "Select move-in date"}
                 </Text>
                 <Ionicons name={showMoveInPicker ? "chevron-up" : "chevron-down"} size={16} color={Colors.textMuted} />
               </TouchableOpacity>
-              {showMoveInPicker && (
-                <View style={styles.dateGrid}>
-                  {generateDateOptions("moveIn").map(d => {
-                    const isSelected = moveInDate?.toDateString() === d.toDateString();
-                    return (
-                      <TouchableOpacity key={d.toISOString()} style={[styles.dateOption, isSelected && styles.dateOptionActive]}
-                        onPress={() => { setMoveInDate(d); setShowMoveInPicker(false); Haptics.selectionAsync(); }}>
-                        <Text style={[styles.dateOptionMonth, isSelected && { color: Colors.white }]}>
-                          {d.toLocaleDateString("en-US", { month: "short" })}
-                        </Text>
-                        <Text style={[styles.dateOptionDay, isSelected && { color: Colors.white }]}>
-                          {d.getDate()}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
+              {showMoveInPicker && renderCalendar("moveIn")}
               <Text style={styles.fieldHint}>Date for key handoff</Text>
             </View>
 
             <View style={styles.field}>
               <Text style={styles.label}>Move-Out Date *</Text>
-              <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowMoveOutPicker(!showMoveOutPicker)}>
+              <TouchableOpacity style={styles.datePickerBtn} onPress={() => { setShowMoveOutPicker(!showMoveOutPicker); setShowMoveInPicker(false); }}>
                 <Ionicons name="calendar-outline" size={18} color={moveOutDate ? Colors.ocean : Colors.textLight} />
                 <Text style={[styles.datePickerText, !moveOutDate && { color: Colors.textLight }]}>
                   {moveOutDate ? moveOutDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "Select move-out date"}
                 </Text>
                 <Ionicons name={showMoveOutPicker ? "chevron-up" : "chevron-down"} size={16} color={Colors.textMuted} />
               </TouchableOpacity>
-              {showMoveOutPicker && (
-                <View style={styles.dateGrid}>
-                  {generateDateOptions("moveOut").map(d => {
-                    const isSelected = moveOutDate?.toDateString() === d.toDateString();
-                    return (
-                      <TouchableOpacity key={d.toISOString()} style={[styles.dateOption, isSelected && styles.dateOptionActive]}
-                        onPress={() => { setMoveOutDate(d); setShowMoveOutPicker(false); Haptics.selectionAsync(); }}>
-                        <Text style={[styles.dateOptionMonth, isSelected && { color: Colors.white }]}>
-                          {d.toLocaleDateString("en-US", { month: "short" })}
-                        </Text>
-                        <Text style={[styles.dateOptionDay, isSelected && { color: Colors.white }]}>
-                          {d.getDate()}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+              {showMoveOutPicker && renderCalendar("moveOut")}
+              {moveInDate && !moveOutDate && showMoveOutPicker && (
+                <Text style={[styles.fieldHint, { color: Colors.alertOrange }]}>Must be after {moveInDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</Text>
               )}
               <Text style={styles.fieldHint}>Date for key return</Text>
             </View>
@@ -813,18 +930,54 @@ const styles = StyleSheet.create({
   datePickerText: {
     flex: 1, fontFamily: "Nunito_600SemiBold", fontSize: 15, color: Colors.ocean,
   },
-  dateGrid: {
-    flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4,
-    backgroundColor: Colors.cardBg, borderRadius: 12, padding: 12,
+  calendarContainer: {
+    backgroundColor: Colors.cardBg, borderRadius: 14, padding: 12, marginTop: 4,
     borderWidth: 1, borderColor: Colors.borderSoft,
   },
-  dateOption: {
-    width: 52, height: 52, borderRadius: 12, alignItems: "center", justifyContent: "center",
+  calendarHeader: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginBottom: 12, paddingHorizontal: 4,
+  },
+  calendarTitle: {
+    fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.ocean,
+  },
+  calendarDayHeaders: {
+    flexDirection: "row",
+  },
+  calendarDayHeaderCell: {
+    flex: 1, alignItems: "center", paddingVertical: 4,
+  },
+  calendarDayHeaderText: {
+    fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted,
+  },
+  calendarGrid: {
+    flexDirection: "row", flexWrap: "wrap",
+  },
+  calendarDayCell: {
+    width: "14.28%" as any, aspectRatio: 1, alignItems: "center" as const, justifyContent: "center" as const,
+  },
+  calendarDayCellActive: {
+    backgroundColor: Colors.ocean, borderRadius: 20,
+  },
+  calendarDayCellToday: {
+    borderWidth: 1.5, borderColor: Colors.ocean, borderRadius: 20,
+  },
+  calendarDayText: {
+    fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal,
+  },
+  calendarDayTextActive: { color: Colors.white },
+  calendarDayTextDisabled: { color: Colors.borderSoft },
+  calendarDayTextToday: { color: Colors.ocean },
+  yearGrid: {
+    flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center",
+  },
+  yearCell: {
+    width: 70, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center",
     backgroundColor: Colors.sand, borderWidth: 1, borderColor: Colors.borderSoft,
   },
-  dateOptionActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
-  dateOptionMonth: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.textMuted },
-  dateOptionDay: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.charcoal },
+  yearCellActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
+  yearCellText: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
+  yearCellTextActive: { color: Colors.white },
   footer: {
     paddingHorizontal: 16, paddingTop: 12,
     backgroundColor: Colors.sand, borderTopWidth: 1, borderTopColor: Colors.borderSoft,

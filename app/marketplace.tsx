@@ -50,11 +50,11 @@ const CATEGORY_DATES: Record<string, string> = {
 };
 
 const ZONE_LABELS: Record<string, string> = {
-  campustown: "Campustown",
-  north: "North Campus",
-  south: "South Campus",
-  urbana: "Urbana",
-  downtown: "Downtown",
+  campustown: "Campustown (Central Campus)",
+  north: "North Campus (Engineering / Midtown)",
+  south: "South Campus (Ikenberry / Seniorland)",
+  urbana: "Urbana (Gradland)",
+  downtown: "Downtown Champaign",
 };
 
 const LANDLORD_LABELS: Record<Landlord, string> = {
@@ -135,8 +135,13 @@ const cg = StyleSheet.create({
 
 const PLACEHOLDER_COLORS = ["#1A7AAF", "#5A8A5A", "#9B59B6", "#CC5500", "#E0BC00", "#4A8A5A"];
 
+function isValidImageUri(uri: string): boolean {
+  if (!uri || typeof uri !== "string") return false;
+  const trimmed = uri.trim();
+  return trimmed.length > 0 && (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("file://") || trimmed.startsWith("data:image"));
+}
+
 function CardPhotoSection({ post, onImagePress }: { post: SubleasePost; onImagePress?: () => void }) {
-  const hasImage = post.images && post.images.length > 0 && post.images[0] !== "";
   const placeholderColor = post.avatarColor || PLACEHOLDER_COLORS[post.buildingName.length % PLACEHOLDER_COLORS.length];
   const amenities = post.amenities;
   const [activeIdx, setActiveIdx] = useState(0);
@@ -144,9 +149,10 @@ function CardPhotoSection({ post, onImagePress }: { post: SubleasePost; onImageP
 
   const allImages: string[] = [];
   if (post.images) {
-    post.images.forEach(img => { if (img) allImages.push(img); });
+    post.images.forEach(img => { if (isValidImageUri(img)) allImages.push(img); });
   }
-  if (post.floorPlanUrl) allImages.push(post.floorPlanUrl);
+  if (isValidImageUri(post.floorPlanUrl ?? "")) allImages.push(post.floorPlanUrl!);
+  const hasImage = allImages.length > 0;
   const hasMultiple = allImages.length > 1;
 
   const amenityItems = amenities ? [
@@ -188,7 +194,7 @@ function CardPhotoSection({ post, onImagePress }: { post: SubleasePost; onImageP
                 <View key={idx} style={[styles.galleryDot, idx === activeIdx && styles.galleryDotActive]} />
               ))}
             </View>
-            {post.floorPlanUrl && activeIdx === allImages.length - 1 && (
+            {isValidImageUri(post.floorPlanUrl ?? "") && activeIdx === allImages.length - 1 && (
               <View style={styles.floorPlanLabel}>
                 <Ionicons name="map-outline" size={10} color={Colors.white} />
                 <Text style={styles.floorPlanLabelText}>Floor Plan</Text>
@@ -239,16 +245,18 @@ function FullScreenGallery({ images, visible, onClose, buildingName }: {
   const [activeIdx, setActiveIdx] = useState(0);
   const screenW = Dimensions.get("window").width;
 
-  if (!visible) return null;
+  const validImages = images.filter(isValidImageUri);
+
+  if (!visible || validImages.length === 0) return null;
   return (
-    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent>
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={onClose}>
       <View style={fsStyles.overlay}>
         <View style={[fsStyles.header, { paddingTop: (Platform.OS === "web" ? 67 : insets.top) + 8 }]}>
-          <TouchableOpacity onPress={onClose} style={fsStyles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={fsStyles.closeBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={24} color={Colors.white} />
           </TouchableOpacity>
           <Text style={fsStyles.title} numberOfLines={1}>{buildingName}</Text>
-          <Text style={fsStyles.counter}>{activeIdx + 1} / {images.length}</Text>
+          <Text style={fsStyles.counter}>{activeIdx + 1} / {validImages.length}</Text>
         </View>
         <ScrollView
           horizontal pagingEnabled
@@ -260,12 +268,12 @@ function FullScreenGallery({ images, visible, onClose, buildingName }: {
           style={fsStyles.scroll}
           contentContainerStyle={fsStyles.scrollContent}
         >
-          {images.map((uri, idx) => (
+          {validImages.map((uri, idx) => (
             <Image key={idx} source={{ uri }} style={{ width: screenW, height: "100%" }} resizeMode="contain" />
           ))}
         </ScrollView>
         <View style={[fsStyles.dots, { paddingBottom: insets.bottom + 16 }]}>
-          {images.map((_, idx) => (
+          {validImages.map((_, idx) => (
             <View key={idx} style={[fsStyles.dot, idx === activeIdx && fsStyles.dotActive]} />
           ))}
         </View>
@@ -307,12 +315,19 @@ function SubleaseCard({ post, onMarkLeased }: {
   const [galleryVisible, setGalleryVisible] = useState(false);
 
   const allImages: string[] = [];
-  if (post.images) post.images.forEach(img => { if (img) allImages.push(img); });
-  if (post.floorPlanUrl) allImages.push(post.floorPlanUrl);
+  if (post.images) post.images.forEach(img => { if (isValidImageUri(img)) allImages.push(img); });
+  if (isValidImageUri(post.floorPlanUrl ?? "")) allImages.push(post.floorPlanUrl!);
+  const hasValidImages = allImages.length > 0;
 
   return (
-    <View style={styles.card}>
-      <CardPhotoSection post={post} onImagePress={allImages.length > 0 ? () => setGalleryVisible(true) : undefined} />
+    <View style={[styles.card, isOwner && styles.ownerCard]}>
+      {isOwner && (
+        <View style={styles.ownerBanner}>
+          <Ionicons name="star" size={12} color={Colors.ocean} />
+          <Text style={styles.ownerBannerText}>Your Listing</Text>
+        </View>
+      )}
+      <CardPhotoSection post={post} onImagePress={hasValidImages ? () => setGalleryVisible(true) : undefined} />
       <FullScreenGallery
         images={allImages}
         visible={galleryVisible}
@@ -337,12 +352,6 @@ function SubleaseCard({ post, onMarkLeased }: {
             <View style={styles.breakAvailTag}>
               <Ionicons name="home" size={10} color={Colors.grassGreen} />
               <Text style={styles.breakAvailText}>Break-Friendly</Text>
-            </View>
-          )}
-          {isOwner && (
-            <View style={styles.ownerTag}>
-              <Ionicons name="person" size={10} color={Colors.ocean} />
-              <Text style={styles.ownerTagText}>Your Post</Text>
             </View>
           )}
           <Text style={styles.cardTime}>
@@ -497,6 +506,11 @@ export default function MarketplaceScreen() {
     }
     if (zoneFilter !== "all" && s.zone !== zoneFilter) return false;
     return true;
+  }).sort((a, b) => {
+    const aOwn = currentUser?.email === a.userEmail ? 1 : 0;
+    const bOwn = currentUser?.email === b.userEmail ? 1 : 0;
+    if (aOwn !== bOwn) return bOwn - aOwn;
+    return b.timestamp - a.timestamp;
   });
 
   const headerCatColor = activeFilter !== "all" ? CATEGORY_COLORS[activeFilter] : Colors.ocean;
@@ -753,6 +767,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.grassGreen + "20",
   },
   breakAvailText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: Colors.grassGreen },
+  ownerCard: {
+    borderColor: Colors.ocean + "40",
+    borderWidth: 2,
+    backgroundColor: Colors.ocean + "06",
+  },
+  ownerBanner: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: Colors.ocean + "12", paddingVertical: 8,
+    borderTopLeftRadius: 16, borderTopRightRadius: 16,
+  },
+  ownerBannerText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.ocean },
   ownerTag: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
