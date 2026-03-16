@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform
+  View, Text, StyleSheet, ScrollView, Pressable, Platform
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,46 +12,54 @@ import { ScamBanner } from "@/components/ScamBanner";
 import ZonePicker from "@/components/ZonePicker";
 import { useResponsive } from "@/hooks/useResponsive";
 
-const CATEGORIES = [
+const DARK_TEAL = "#2C555C";
+const SUBTITLE_GREY = "#6B8A8F";
+const SCREEN_BG = "#FBFBF9";
+
+const CATEGORIES: {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  iconBg: string;
+  layout: "half" | "full";
+}[] = [
   {
     id: "roommate_openings",
-    title: "Roommate Openings",
-    dates: "Join an existing lease",
-    icon: "people-outline" as const,
+    title: "Find a Roommate",
+    subtitle: "Join an existing lease & meet housemates",
+    icon: "people",
     color: "#8B5CF6",
-    desc: "Hosts looking for roommates — move into an open spot",
-  },
-  {
-    id: "summer_only",
-    title: "Summer Only",
-    dates: "Mid-May – Early August",
-    icon: "sunny" as const,
-    color: Colors.orange,
-    desc: "May 15 – Aug 10 subleases",
-  },
-  {
-    id: "august_gap",
-    title: "The August Gap",
-    dates: "1–2 weeks in August",
-    icon: "time-outline" as const,
-    color: Colors.ocean,
-    desc: "Short handoff stays before fall lease starts",
+    iconBg: "#EDE9FE",
+    layout: "half",
   },
   {
     id: "semester_takeover",
-    title: "Semester / Full Year",
-    dates: "Fall, Spring, or 12 months",
-    icon: "calendar-outline" as const,
+    title: "Semester & Year",
+    subtitle: "Fall, Spring, or Full-Year subleases",
+    icon: "calendar",
     color: Colors.grassGreen,
-    desc: "Full takeovers — Aug–Dec, Jan–May, or Aug–Jul",
+    iconBg: "#DCFCE7",
+    layout: "half",
+  },
+  {
+    id: "summer_only",
+    title: "Summer Subleases",
+    subtitle: "Mid-May to early August",
+    icon: "sunny",
+    color: Colors.orange,
+    iconBg: "#FFF1EC",
+    layout: "full",
   },
   {
     id: "short_term",
-    title: "Short-Term & Events",
-    dates: "1–14 days",
-    icon: "ticket-outline" as const,
-    color: Colors.goldDark,
-    desc: "Moms Weekend, Thanksgiving, graduation stays",
+    title: "Short-Term & Gaps",
+    subtitle: "August gaps, Spring Break, Thanksgiving Break & event weekends",
+    icon: "timer",
+    color: Colors.ocean,
+    iconBg: "#E0F4F8",
+    layout: "full",
   },
 ];
 
@@ -81,10 +89,17 @@ export default function HomeScreen() {
 
   const firstName = currentUser?.name.split(" ")[0] ?? "there";
 
-  const catCardWidth = isDesktop ? "31%" : "48%";
+  const navigateToCategory = (catId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const zoneParam = zoneFilter !== "all" ? `&zone=${zoneFilter}` : "";
+    router.push(`/marketplace?category=${catId}${zoneParam}` as any);
+  };
+
+  const halfCards = CATEGORIES.filter(c => c.layout === "half");
+  const fullCards = CATEGORIES.filter(c => c.layout === "full");
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors.sand }]}>
+    <View style={[styles.container, { backgroundColor: SCREEN_BG }]}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -119,25 +134,44 @@ export default function HomeScreen() {
 
         <Text style={styles.sectionLabel}>Browse by housing type</Text>
 
-        <View style={styles.grid}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
+        <View style={styles.catColumn}>
+          <View style={styles.catTopRow}>
+            {halfCards.map((cat) => (
+              <Pressable
+                key={cat.id}
+                style={{ flex: 1 }}
+                onPress={() => navigateToCategory(cat.id)}
+              >
+                {({ pressed }) => (
+                  <View style={[styles.categoryCard, styles.halfCard, pressed && styles.cardPressed]}>
+                    <View style={[styles.catIconWrap, { backgroundColor: cat.iconBg }]}>
+                      <Ionicons name={cat.icon} size={20} color={cat.color} />
+                    </View>
+                    <Text style={styles.catTitle}>{cat.title}</Text>
+                    <Text style={styles.catSubtitle}>{cat.subtitle}</Text>
+                  </View>
+                )}
+              </Pressable>
+            ))}
+          </View>
+
+          {fullCards.map((cat) => (
+            <Pressable
               key={cat.id}
-              style={[styles.categoryCard, { width: catCardWidth as any }]}
-              activeOpacity={0.82}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                const zoneParam = zoneFilter !== "all" ? `&zone=${zoneFilter}` : "";
-                router.push(`/marketplace?category=${cat.id}${zoneParam}` as any);
-              }}
+              onPress={() => navigateToCategory(cat.id)}
             >
-              <View style={[styles.catIconWrap, { backgroundColor: cat.color }]}>
-                <Ionicons name={cat.icon} size={24} color={Colors.white} />
-              </View>
-              <Text style={styles.catTitle}>{cat.title}</Text>
-              <Text style={styles.catDates}>{cat.dates}</Text>
-              <Text style={styles.catDesc} numberOfLines={2}>{cat.desc}</Text>
-            </TouchableOpacity>
+              {({ pressed }) => (
+                <View style={[styles.categoryCard, styles.fullCard, pressed && styles.cardPressed]}>
+                  <View style={[styles.catIconWrap, { backgroundColor: cat.iconBg }]}>
+                    <Ionicons name={cat.icon} size={20} color={cat.color} />
+                  </View>
+                  <View style={styles.fullCardText}>
+                    <Text style={styles.catTitle}>{cat.title}</Text>
+                    <Text style={styles.catSubtitle}>{cat.subtitle}</Text>
+                  </View>
+                </View>
+              )}
+            </Pressable>
           ))}
         </View>
 
@@ -146,24 +180,26 @@ export default function HomeScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.sectionLabel}>Other features</Text>
               {FEATURES.map((f) => (
-                <TouchableOpacity
+                <Pressable
                   key={f.route}
-                  style={[styles.featureCard, { marginBottom: 10 }]}
-                  activeOpacity={0.85}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     router.push(f.route);
                   }}
                 >
-                  <View style={[styles.featureIcon, { backgroundColor: f.color }]}>
-                    <Ionicons name={f.icon} size={22} color={Colors.white} />
-                  </View>
-                  <View style={styles.featureText}>
-                    <Text style={styles.featureTitle}>{f.title}</Text>
-                    <Text style={styles.featureSub}>{f.subtitle}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={17} color={Colors.textLight} />
-                </TouchableOpacity>
+                  {({ pressed }) => (
+                    <View style={[styles.featureCard, { marginBottom: 10 }, pressed && styles.cardPressed]}>
+                      <View style={[styles.featureIcon, { backgroundColor: f.color }]}>
+                        <Ionicons name={f.icon} size={22} color={Colors.white} />
+                      </View>
+                      <View style={styles.featureText}>
+                        <Text style={styles.featureTitle}>{f.title}</Text>
+                        <Text style={styles.featureSub}>{f.subtitle}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={17} color={Colors.textLight} />
+                    </View>
+                  )}
+                </Pressable>
               ))}
             </View>
             <View style={{ width: 20 }} />
@@ -207,24 +243,26 @@ export default function HomeScreen() {
             <Text style={styles.sectionLabel}>Other features</Text>
 
             {FEATURES.map((f) => (
-              <TouchableOpacity
+              <Pressable
                 key={f.route}
-                style={styles.featureCard}
-                activeOpacity={0.85}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   router.push(f.route);
                 }}
               >
-                <View style={[styles.featureIcon, { backgroundColor: f.color }]}>
-                  <Ionicons name={f.icon} size={22} color={Colors.white} />
-                </View>
-                <View style={styles.featureText}>
-                  <Text style={styles.featureTitle}>{f.title}</Text>
-                  <Text style={styles.featureSub}>{f.subtitle}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={17} color={Colors.textLight} />
-              </TouchableOpacity>
+                {({ pressed }) => (
+                  <View style={[styles.featureCard, pressed && styles.cardPressed]}>
+                    <View style={[styles.featureIcon, { backgroundColor: f.color }]}>
+                      <Ionicons name={f.icon} size={22} color={Colors.white} />
+                    </View>
+                    <View style={styles.featureText}>
+                      <Text style={styles.featureTitle}>{f.title}</Text>
+                      <Text style={styles.featureSub}>{f.subtitle}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={17} color={Colors.textLight} />
+                  </View>
+                )}
+              </Pressable>
             ))}
 
             <View style={styles.statsRow}>
@@ -270,7 +308,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
-    paddingHorizontal: 20, paddingBottom: 16, backgroundColor: Colors.sand,
+    paddingHorizontal: 20, paddingBottom: 16, backgroundColor: SCREEN_BG,
   },
   greeting: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
   tagline: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
@@ -286,49 +324,73 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted,
     textTransform: "uppercase", letterSpacing: 0.8, marginTop: 4,
   },
-  grid: {
-    flexDirection: "row", flexWrap: "wrap", gap: 10,
+  catColumn: {
+    gap: 16,
+  },
+  catTopRow: {
+    flexDirection: "row", gap: 16,
   },
   desktopFeaturesRow: {
     flexDirection: "row",
     marginTop: 8,
   },
   categoryCard: {
-    backgroundColor: Colors.cardBg, borderRadius: 18,
-    borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 14, gap: 5,
-    shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: "#8FAFB2",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  halfCard: {
+    gap: 8,
+  },
+  fullCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  fullCardText: {
+    flex: 1,
+  },
+  cardPressed: {
+    backgroundColor: "#F2F7F7",
+    transform: [{ scale: 0.98 }],
   },
   catIconWrap: {
-    width: 44, height: 44, borderRadius: 14,
-    alignItems: "center", justifyContent: "center", marginBottom: 2,
+    width: 40, height: 40, borderRadius: 12,
+    alignItems: "center", justifyContent: "center",
   },
-  catTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  catDates: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.textMuted },
-  catDesc: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight, lineHeight: 16 },
+  catTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: DARK_TEAL },
+  catSubtitle: { fontFamily: "Nunito_400Regular", fontSize: 12, color: SUBTITLE_GREY, lineHeight: 17 },
   featureCard: {
     flexDirection: "row", alignItems: "center", gap: 14,
-    backgroundColor: Colors.cardBg, borderRadius: 18,
-    borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 14,
-    shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 6, elevation: 1,
+    backgroundColor: "#FFFFFF", borderRadius: 20,
+    padding: 14,
+    shadowColor: "#8FAFB2",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08, shadowRadius: 10, elevation: 2,
   },
   featureIcon: { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   featureText: { flex: 1 },
-  featureTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal },
-  featureSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, lineHeight: 17, marginTop: 2 },
+  featureTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: DARK_TEAL },
+  featureSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: SUBTITLE_GREY, lineHeight: 17, marginTop: 2 },
   statsRow: { flexDirection: "row", gap: 10 },
   statBox: {
-    flex: 1, backgroundColor: Colors.cardBg, borderRadius: 14,
-    borderWidth: 1.5, borderColor: Colors.borderSoft,
+    flex: 1, backgroundColor: "#FFFFFF", borderRadius: 14,
     padding: 14, alignItems: "center", gap: 2,
+    shadowColor: "#8FAFB2",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 1,
   },
-  statBoxMid: { backgroundColor: Colors.ocean + "12", borderColor: Colors.ocean + "30" },
+  statBoxMid: { backgroundColor: Colors.ocean + "12" },
   statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 24, color: Colors.ocean },
   statLabel: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
   trustCard: {
     backgroundColor: Colors.ocean + "10",
-    borderRadius: 16, borderWidth: 1.5, borderColor: Colors.ocean + "25",
+    borderRadius: 16,
     padding: 16, gap: 10,
   },
   trustHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
