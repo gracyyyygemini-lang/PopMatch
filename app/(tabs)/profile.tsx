@@ -1,7 +1,7 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform,
-  TextInput, FlatList,
+  TextInput, FlatList, Animated, Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -112,8 +112,8 @@ function InfoRow({
   color?: string;
   onPress?: () => void;
 }) {
-  const content = (
-    <View style={styles.infoRow}>
+  const inner = (pressed: boolean) => (
+    <View style={[styles.infoRow, pressed && { backgroundColor: SEAFOAM_BG }]}>
       <View style={[styles.infoIcon, { backgroundColor: (color || Colors.ocean) + "18" }]}>
         <Ionicons name={icon} size={15} color={color || Colors.ocean} />
       </View>
@@ -127,18 +127,72 @@ function InfoRow({
 
   if (onPress) {
     return (
-      <TouchableOpacity
+      <Pressable
         onPress={onPress}
-        activeOpacity={0.7}
-        style={{ backgroundColor: "transparent" }}
         accessibilityRole="button"
         accessibilityLabel={`Edit ${label}`}
       >
-        {content}
-      </TouchableOpacity>
+        {({ pressed }) => inner(pressed)}
+      </Pressable>
     );
   }
-  return content;
+  return inner(false);
+}
+
+function BreakBadgeRow({
+  icon,
+  label,
+  staying,
+  onToggle,
+  accessLabel,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  staying: boolean;
+  onToggle: () => void;
+  accessLabel: string;
+}) {
+  const animVal = useRef(new Animated.Value(staying ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(animVal, {
+      toValue: staying ? 1 : 0,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+  }, [staying]);
+
+  const badgeBg = animVal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [CORAL + "20", SEAFOAM],
+  });
+  const badgeColor = animVal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [CORAL, Colors.grassGreen],
+  });
+
+  return (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="switch"
+      accessibilityLabel={accessLabel}
+      accessibilityState={{ checked: staying }}
+    >
+      {({ pressed }) => (
+        <View style={[styles.breakRow, pressed && { backgroundColor: SEAFOAM_BG }]}>
+          <View style={styles.breakLeft}>
+            <Ionicons name={icon} size={15} color={staying ? Colors.grassGreen : Colors.textLight} />
+            <Text style={styles.breakLabel}>{label}</Text>
+          </View>
+          <Animated.View style={[styles.breakBadge, { backgroundColor: badgeBg }]}>
+            <Animated.Text style={[styles.breakBadgeText, { color: badgeColor }]}>
+              {staying ? "Staying" : "Leaving"}
+            </Animated.Text>
+          </Animated.View>
+        </View>
+      )}
+    </Pressable>
+  );
 }
 
 export default function ProfileScreen() {
@@ -459,49 +513,65 @@ export default function ProfileScreen() {
       }]} showsVerticalScrollIndicator={false}>
 
         <View style={styles.profileCard}>
-          <TouchableOpacity onPress={() => openSheet("avatar")} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Change avatar color">
-            <View style={[styles.avatar, { backgroundColor: currentUser.avatarColor }]}>
-              <Text style={styles.avatarText}>{initials}</Text>
-              <View style={styles.editBadge}>
-                <Ionicons name="color-palette-outline" size={10} color={Colors.white} />
+          <Pressable onPress={() => openSheet("avatar")} accessibilityRole="button" accessibilityLabel="Change avatar color">
+            {({ pressed }) => (
+              <View style={[styles.avatar, { backgroundColor: currentUser.avatarColor }, pressed && { opacity: 0.8 }]}>
+                <Text style={styles.avatarText}>{initials}</Text>
+                <View style={styles.editBadge}>
+                  <Ionicons name="color-palette-outline" size={10} color={Colors.white} />
+                </View>
               </View>
-            </View>
-          </TouchableOpacity>
+            )}
+          </Pressable>
 
-          <TouchableOpacity onPress={() => openSheet("name")} activeOpacity={0.7} style={styles.editableRow}>
-            <Text style={styles.profileName}>{currentUser.name}</Text>
-            <Ionicons name="pencil-outline" size={12} color={Colors.textLight} />
-          </TouchableOpacity>
+          <Pressable onPress={() => openSheet("name")} style={styles.editableRow}>
+            {({ pressed }) => (
+              <View style={[styles.editableRow, pressed && { backgroundColor: SEAFOAM_BG, borderRadius: 8 }]}>
+                <Text style={styles.profileName}>{currentUser.name}</Text>
+                <Ionicons name="pencil-outline" size={12} color={Colors.textLight} />
+              </View>
+            )}
+          </Pressable>
 
           <Text style={styles.profileEmail}>{currentUser.email}</Text>
 
-          <TouchableOpacity onPress={() => openSheet("major")} activeOpacity={0.7}>
-            <View style={styles.majorTag}>
-              <Ionicons name="school-outline" size={12} color={Colors.ocean} />
-              <Text style={styles.majorTagText}>{currentUser.major || "Add major"}</Text>
-              <Ionicons name="chevron-forward" size={11} color={Colors.ocean} />
-            </View>
-          </TouchableOpacity>
+          <Pressable onPress={() => openSheet("major")}>
+            {({ pressed }) => (
+              <View style={[styles.majorTag, pressed && { backgroundColor: SEAFOAM_BG }]}>
+                <Ionicons name="school-outline" size={12} color={Colors.ocean} />
+                <Text style={styles.majorTagText}>{currentUser.major || "Add major"}</Text>
+                <Ionicons name="chevron-forward" size={11} color={Colors.ocean} />
+              </View>
+            )}
+          </Pressable>
 
-          <TouchableOpacity onPress={() => openSheet("bio")} activeOpacity={0.7} style={{ width: "100%" }}>
-            <Text style={styles.bio}>
-              {currentUser.bio || "Tap to add a bio..."}
-            </Text>
-            <View style={styles.editHint}>
-              <Ionicons name="pencil-outline" size={10} color={Colors.textLight} />
-            </View>
-          </TouchableOpacity>
+          <Pressable onPress={() => openSheet("bio")} style={{ width: "100%" }}>
+            {({ pressed }) => (
+              <View style={[pressed && { backgroundColor: SEAFOAM_BG, borderRadius: 8 }]}>
+                <Text style={styles.bio}>
+                  {currentUser.bio || "Tap to add a bio..."}
+                </Text>
+                <View style={styles.editHint}>
+                  <Ionicons name="pencil-outline" size={10} color={Colors.textLight} />
+                </View>
+              </View>
+            )}
+          </Pressable>
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statNum}>{friends.length}</Text>
               <Text style={styles.statLabel}>Circle</Text>
             </View>
-            <TouchableOpacity style={[styles.statBox, styles.statBoxMid]} onPress={() => openSheet("budget")} activeOpacity={0.7}>
-              <Text style={[styles.statNum, { color: Colors.ocean }]}>${currentUser.budget}</Text>
-              <Text style={styles.statLabel}>Budget/mo</Text>
-              <Ionicons name="pencil-outline" size={9} color={Colors.textLight} style={{ position: "absolute", top: 6, right: 6 }} />
-            </TouchableOpacity>
+            <Pressable style={[styles.statBox, styles.statBoxMid]} onPress={() => openSheet("budget")}>
+              {({ pressed }) => (
+                <View style={[styles.statBox, styles.statBoxMid, pressed && { backgroundColor: SEAFOAM_BG }]}>
+                  <Text style={[styles.statNum, { color: Colors.ocean }]}>${currentUser.budget}</Text>
+                  <Text style={styles.statLabel}>Budget/mo</Text>
+                  <Ionicons name="pencil-outline" size={9} color={Colors.textLight} style={{ position: "absolute", top: 6, right: 6 }} />
+                </View>
+              )}
+            </Pressable>
             <View style={styles.statBox}>
               <Text style={styles.statNum}>{mySubleases.length}</Text>
               <Text style={styles.statLabel}>Listings</Text>
@@ -569,97 +639,73 @@ export default function ProfileScreen() {
               </View>
             </View>
             <View style={styles.divider} />
-            <TouchableOpacity onPress={() => openSheet("gender")} activeOpacity={0.6} style={styles.ratingRow}>
-              <Text style={styles.ratingLabel}>I identify as</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={styles.ratingValue}>
-                  {currentUser.gender === "female" ? "Woman" : currentUser.gender === "male" ? "Man" : "Non-binary"}
-                </Text>
-                <Ionicons name="chevron-forward" size={12} color={Colors.textLight} />
-              </View>
-            </TouchableOpacity>
+            <Pressable onPress={() => openSheet("gender")} accessibilityRole="button" accessibilityLabel="Edit gender identity">
+              {({ pressed }) => (
+                <View style={[styles.ratingRow, pressed && { backgroundColor: SEAFOAM_BG }]}>
+                  <Text style={styles.ratingLabel}>I identify as</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={styles.ratingValue}>
+                      {currentUser.gender === "female" ? "Woman" : currentUser.gender === "male" ? "Man" : "Non-binary"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={12} color={Colors.textLight} />
+                  </View>
+                </View>
+              )}
+            </Pressable>
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Break Plans</Text>
           <View style={styles.detailCard}>
-            <TouchableOpacity
-              style={styles.breakRow}
-              activeOpacity={0.6}
-              onPress={() => {
+            <BreakBadgeRow
+              icon="home-outline"
+              label="Thanksgiving Break"
+              staying={currentUser.staysThanksgiving}
+              accessLabel="Thanksgiving Break"
+              onToggle={() => {
                 updateField("staysThanksgiving", !currentUser.staysThanksgiving);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
-              accessibilityRole="switch"
-              accessibilityLabel="Thanksgiving Break"
-              accessibilityState={{ checked: currentUser.staysThanksgiving }}
-            >
-              <View style={styles.breakLeft}>
-                <Ionicons name="home-outline" size={15} color={currentUser.staysThanksgiving ? Colors.grassGreen : Colors.textLight} />
-                <Text style={styles.breakLabel}>Thanksgiving Break</Text>
-              </View>
-              <View style={[styles.breakBadge, {
-                backgroundColor: currentUser.staysThanksgiving ? SEAFOAM : CORAL + "20",
-              }]}>
-                <Text style={[styles.breakBadgeText, {
-                  color: currentUser.staysThanksgiving ? Colors.grassGreen : CORAL,
-                }]}>
-                  {currentUser.staysThanksgiving ? "Staying" : "Leaving"}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            />
             <View style={styles.divider} />
-            <TouchableOpacity
-              style={styles.breakRow}
-              activeOpacity={0.6}
-              onPress={() => {
+            <BreakBadgeRow
+              icon="sunny-outline"
+              label="Spring Break"
+              staying={currentUser.staysSpringBreak}
+              accessLabel="Spring Break"
+              onToggle={() => {
                 updateField("staysSpringBreak", !currentUser.staysSpringBreak);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
-              accessibilityRole="switch"
-              accessibilityLabel="Spring Break"
-              accessibilityState={{ checked: currentUser.staysSpringBreak }}
-            >
-              <View style={styles.breakLeft}>
-                <Ionicons name="sunny-outline" size={15} color={currentUser.staysSpringBreak ? Colors.grassGreen : Colors.textLight} />
-                <Text style={styles.breakLabel}>Spring Break</Text>
-              </View>
-              <View style={[styles.breakBadge, {
-                backgroundColor: currentUser.staysSpringBreak ? SEAFOAM : CORAL + "20",
-              }]}>
-                <Text style={[styles.breakBadgeText, {
-                  color: currentUser.staysSpringBreak ? Colors.grassGreen : CORAL,
-                }]}>
-                  {currentUser.staysSpringBreak ? "Staying" : "Leaving"}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            />
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>How Matching Works</Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => { setAlgoModalVisible(true); Haptics.selectionAsync(); }}>
-            <View style={styles.algoCard}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={styles.algoDesc}>Weighted Euclidean Distance formula</Text>
-                <Ionicons name="information-circle-outline" size={18} color={Colors.ocean} />
-              </View>
-              {[
-                { label: "Budget compatibility", weight: "35%", color: Colors.ocean },
-                { label: "Cleanliness match", weight: "25%", color: Colors.grassGreen },
-                { label: "Noise & social level", weight: "20%", color: Colors.orange },
-                { label: "Zone proximity", weight: "20%", color: Colors.goldDark },
-              ].map(({ label, weight, color }) => (
-                <View key={label} style={styles.algoRow}>
-                  <View style={[styles.algoDot, { backgroundColor: color }]} />
-                  <Text style={styles.algoLabel}>{label}</Text>
-                  <Text style={[styles.algoWeight, { color }]}>{weight}</Text>
+          <Pressable onPress={() => { setAlgoModalVisible(true); Haptics.selectionAsync(); }}>
+            {({ pressed }) => (
+              <View style={[styles.algoCard, pressed && { backgroundColor: SEAFOAM_BG }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={styles.algoDesc}>Weighted Euclidean Distance formula</Text>
+                  <Ionicons name="information-circle-outline" size={18} color={Colors.ocean} />
                 </View>
-              ))}
-            </View>
-          </TouchableOpacity>
+                {[
+                  { label: "Budget compatibility", weight: "35%", color: Colors.ocean },
+                  { label: "Cleanliness match", weight: "25%", color: Colors.grassGreen },
+                  { label: "Noise & social level", weight: "20%", color: Colors.orange },
+                  { label: "Zone proximity", weight: "20%", color: Colors.goldDark },
+                ].map(({ label, weight, color }) => (
+                  <View key={label} style={styles.algoRow}>
+                    <View style={[styles.algoDot, { backgroundColor: color }]} />
+                    <Text style={styles.algoLabel}>{label}</Text>
+                    <Text style={[styles.algoWeight, { color }]}>{weight}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Pressable>
         </View>
 
         <TouchableOpacity style={styles.signOutFullBtn} onPress={handleSignOut}>

@@ -1,7 +1,7 @@
 import React from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, Platform,
-  KeyboardAvoidingView,
+  KeyboardAvoidingView, DimensionValue,
 } from "react-native";
 import Colors from "@/constants/colors";
 
@@ -16,7 +16,7 @@ export default function BottomSheetModal({
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  maxHeight?: string;
+  maxHeight?: DimensionValue;
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -33,7 +33,7 @@ export default function BottomSheetModal({
         >
           <TouchableOpacity
             activeOpacity={1}
-            style={[bsStyles.sheet, maxHeight ? { maxHeight: maxHeight as any } : undefined]}
+            style={[bsStyles.sheet, maxHeight !== undefined ? { maxHeight } : undefined]}
           >
             <View style={bsStyles.handle} />
             <Text style={bsStyles.title} accessibilityRole="header">{title}</Text>
