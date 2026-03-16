@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, Animated, Easing, ActivityIndicator, Dimensions
+  KeyboardAvoidingView, Platform, Animated, Easing, ActivityIndicator, Dimensions, Image
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { useApp, UserProfile, LeaseType, GenderPref, Zone, Landlord, Intent } from "@/context/AppContext";
 import { getApiUrl } from "@/lib/query-client";
@@ -215,6 +216,7 @@ export default function OnboardingScreen() {
   const [staysSpringBreak, setStaysSpringBreak] = useState(false);
   const [showMajorPicker, setShowMajorPicker] = useState(false);
   const [intent, setIntent] = useState<Intent>("joiner");
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const STEPS = 6;
 
@@ -297,8 +299,23 @@ export default function OnboardingScreen() {
     }
   };
 
+  const pickProfileImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setProfileImage(result.assets[0].uri);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const canProceedStep2 = name.trim().length > 0 && !!profileImage;
+
   const handleNext = () => {
-    if (step === 2 && !name.trim()) return;
+    if (step === 2 && !canProceedStep2) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setStep(s => Math.min(s + 1, STEPS - 1));
   };
@@ -313,6 +330,7 @@ export default function OnboardingScreen() {
       major: major || "Undeclared", bio: bio.trim(), budget, gender, genderPref,
       cleanliness, noise, leaseType, zone, landlord,
       staysThanksgiving, staysSpringBreak, avatarColor, intent,
+      ...(profileImage ? { profileImage } : {}),
     };
     await setCurrentUser(user);
     await setIsOnboarded(true);
@@ -324,7 +342,7 @@ export default function OnboardingScreen() {
         router.replace("/marketplace?category=roommate_openings");
         break;
       case "co_seeker":
-        router.replace("/matchmaker");
+        router.replace("/compatibility-setup");
         break;
       case "sublessor":
         router.replace("/post-sublease");
@@ -527,6 +545,18 @@ export default function OnboardingScreen() {
             <Text style={styles.stepTitle}>About You</Text>
             <Text style={styles.stepSubtitle}>Help future roommates get to know you</Text>
 
+            <Text style={styles.label}>Profile Picture</Text>
+            <TouchableOpacity style={styles.avatarPicker} onPress={pickProfileImage} activeOpacity={0.7}>
+              {profileImage ? (
+                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="camera" size={32} color={Colors.teal} />
+                  <Text style={styles.avatarHint}>Tap to add photo</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
             <Text style={styles.label}>Your Name</Text>
             <TextInput style={styles.input} value={name} onChangeText={setName}
               placeholder="Full name" placeholderTextColor={Colors.textLight}
@@ -720,9 +750,9 @@ export default function OnboardingScreen() {
         )}
         {step > 0 && (
           <TouchableOpacity
-            style={[styles.nextBtn, step === 2 && !name.trim() && styles.nextBtnDisabled]}
+            style={[styles.nextBtn, step === 2 && !canProceedStep2 && styles.nextBtnDisabled]}
             onPress={step === STEPS - 1 ? handleFinish : handleNext}
-            disabled={step === 2 && !name.trim()}
+            disabled={step === 2 && !canProceedStep2}
           >
             <Text style={styles.nextBtnText}>{step === STEPS - 1 ? "Find My Match" : "Continue"}</Text>
             <Ionicons name={step === STEPS - 1 ? "heart" : "arrow-forward"} size={17} color={Colors.white} />
@@ -816,6 +846,14 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 5, justifyContent: "center", marginTop: 8,
   },
   changeEmailText: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
+  avatarPicker: { alignSelf: "center", marginVertical: 8 },
+  avatarImage: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#D0F0E0" },
+  avatarPlaceholder: {
+    width: 120, height: 120, borderRadius: 60, backgroundColor: "#D0F0E0",
+    alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: Colors.teal + "30",
+    borderStyle: "dashed",
+  },
+  avatarHint: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.teal, marginTop: 4 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     paddingHorizontal: 16, paddingVertical: 9, borderRadius: 22,

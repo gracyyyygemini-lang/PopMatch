@@ -38,6 +38,29 @@ export const DEFAULT_AMENITIES: Amenities = {
   hasGym: false, hasPool: false, hasElevator: false, hasRooftop: false, hasLockers: false,
 };
 
+export type StarSign = "aries" | "taurus" | "gemini" | "cancer" | "leo" | "virgo" | "libra" | "scorpio" | "sagittarius" | "capricorn" | "aquarius" | "pisces";
+export type MBTI = "INTJ" | "INTP" | "ENTJ" | "ENTP" | "INFJ" | "INFP" | "ENFJ" | "ENFP" | "ISTJ" | "ISFJ" | "ESTJ" | "ESFJ" | "ISTP" | "ISFP" | "ESTP" | "ESFP" | "idk";
+export type CollegeYear = "freshman" | "sophomore" | "junior" | "senior" | "grad_phd";
+export type GreekLife = "independent" | "sorority" | "fraternity" | "prof_frat";
+
+export interface VibeProfile {
+  identity: "girl" | "guy" | "nonbinary";
+  lookingFor: "girls" | "guys" | "coed";
+  starSign?: StarSign;
+  mbti?: MBTI;
+  year?: CollegeYear;
+  greekLife?: GreekLife;
+  vices: string[];
+  pets: string[];
+  sleep?: string;
+  alarms?: string;
+  cleanlinessVibe?: string;
+  groceries?: string;
+  guests?: string;
+  prompt?: string;
+  promptAnswer?: string;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -55,9 +78,11 @@ export interface UserProfile {
   staysThanksgiving: boolean;
   staysSpringBreak: boolean;
   avatarColor: string;
+  profileImage?: string;
   college?: string;
   organizations?: string[];
   intent?: Intent;
+  vibeProfile?: VibeProfile;
 }
 
 export interface FriendRecord {
