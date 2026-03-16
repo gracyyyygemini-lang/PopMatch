@@ -72,13 +72,6 @@ const FEATURES = [
     color: Colors.ocean,
   },
   {
-    route: "/breaks" as const,
-    title: "Break Stay Board",
-    subtitle: "Offer or seek housing over Thanksgiving, Spring & Winter breaks",
-    icon: "partly-sunny-outline" as const,
-    color: Colors.grassGreen,
-  },
-  {
     route: "/crash-cash" as const,
     title: "Crash & Cash",
     subtitle: "Urgent couch for tonight — pay in cash, boba, or Lion cover",
@@ -89,7 +82,7 @@ const FEATURES = [
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, friends, subleases, breakPosts } = useApp();
+  const { currentUser, friends, subleases } = useApp();
   const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
   const { isDesktop, isTablet, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
@@ -221,10 +214,6 @@ export default function HomeScreen() {
                   <Text style={styles.statNum}>{subleases.length}</Text>
                   <Text style={styles.statLabel}>Listings</Text>
                 </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statNum}>{breakPosts.length}</Text>
-                  <Text style={styles.statLabel}>Break Posts</Text>
-                </View>
               </View>
               <View style={[styles.trustCard, { marginTop: 10 }]}>
                 <View style={styles.trustHeader}>
@@ -280,10 +269,6 @@ export default function HomeScreen() {
               <View style={[styles.statBox, styles.statBoxMid]}>
                 <Text style={styles.statNum}>{subleases.length}</Text>
                 <Text style={styles.statLabel}>Listings</Text>
-              </View>
-              <View style={styles.statBox}>
-                <Text style={styles.statNum}>{breakPosts.length}</Text>
-                <Text style={styles.statLabel}>Break Posts</Text>
               </View>
             </View>
 

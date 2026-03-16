@@ -43,7 +43,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - `app/post-sublease.tsx` — Multi-step listing form (5 steps: Basic → Unit Details/Photos → Amenities → Cleanliness → Calendar Dates). Calendar uses custom month-view picker with year selector (supports up to 3000), move-out must be after move-in.
 - `app/chat.tsx` — Chat room with listing preview header, timestamped bubbles, send input
 - `app/link-listing.tsx` — Bridge screen for Host/Sublessor users without listings
-- `app/breaks.tsx` — Break Stay bulletin board (sticky-note grid)
+
 - `app/crash-cash.tsx` — Urgent short-term "Crash & Cash" social feed (SOS/Offering vibes, barter currency, DM to chat)
 - `app/compatibility-setup.tsx` — Gen Z coseeker vibe profile builder (identity, zodiac, MBTI, habits, icebreaker prompts → saves VibeProfile then routes to matchmaker)
 - `app/admin.tsx` — Hidden admin dashboard

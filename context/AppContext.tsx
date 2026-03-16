@@ -6,6 +6,7 @@ export type GenderPref = "girls_only" | "boys_only" | "mixed";
 export type Zone = "campustown" | "north" | "south" | "urbana" | "downtown";
 export type Landlord = "jsm" | "ugroup" | "bailey" | "american" | "smile" | "cpm" | "green_st_realty" | "other";
 export type BreakType = "thanksgiving" | "spring_break" | "winter";
+
 export type Intent = "host" | "joiner" | "co_seeker" | "sublessor" | "sublessee";
 export type CleaningFrequency = "daily" | "weekly" | "monthly";
 export type ShoePolicy = "shoes_off" | "front_door" | "no_policy";
@@ -159,19 +160,6 @@ export interface ChatMessage {
   createdAt: number;
 }
 
-export interface BreakPost {
-  id: string;
-  userId: string;
-  userName: string;
-  userEmail: string;
-  breakType: BreakType;
-  role: "seeking" | "offering";
-  pricePerWeek: number;
-  zone: Zone;
-  description: string;
-  avatarColor: string;
-  timestamp: number;
-}
 
 export type CrashVibe = "sos" | "offering";
 export type CrashCurrency = "cash" | "boba" | "lion_cover" | "food" | "favor";
@@ -319,27 +307,6 @@ const DEMO_CRASH: CrashPost[] = [
   },
 ];
 
-const DEMO_BREAKS: BreakPost[] = [
-  {
-    id: "bp1", userId: "u4", userName: "Aisha Okonkwo", userEmail: "aokonkwo@illinois.edu",
-    breakType: "thanksgiving", role: "seeking", pricePerWeek: 150, zone: "campustown",
-    description: "Flying back late, need a couch or spare room for Thanksgiving week. Very clean, quiet.",
-    avatarColor: "#1A7AAF", timestamp: Date.now() - 43200000
-  },
-  {
-    id: "bp2", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
-    breakType: "spring_break", role: "offering", pricePerWeek: 200, zone: "north",
-    description: "Offering my studio for Spring Break week. North campus, near Siebel. All utilities included.",
-    avatarColor: "#5A8A5A", timestamp: Date.now() - 86400000
-  },
-  {
-    id: "bp3", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
-    breakType: "winter", role: "seeking", pricePerWeek: 175, zone: "urbana",
-    description: "International student looking for 1–2 weeks over winter break. Can pay upfront.",
-    avatarColor: "#CC5500", timestamp: Date.now() - 120000000
-  },
-];
-
 interface AppContextValue {
   currentUser: UserProfile | null;
   setCurrentUser: (user: UserProfile | null) => void;
@@ -360,8 +327,6 @@ interface AppContextValue {
   subleases: SubleasePost[];
   addSublease: (post: SubleasePost) => void;
   removeSublease: (id: string) => void;
-  breakPosts: BreakPost[];
-  addBreakPost: (post: BreakPost) => void;
   crashPosts: CrashPost[];
   addCrashPost: (post: CrashPost) => void;
   friends: FriendRecord[];
@@ -467,7 +432,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
   const [passedUserIds, setPassedUserIds] = useState<string[]>([]);
   const [subleases, setSubleases] = useState<SubleasePost[]>(DEMO_POSTS);
-  const [breakPosts, setBreakPosts] = useState<BreakPost[]>(DEMO_BREAKS);
   const [crashPosts, setCrashPosts] = useState<CrashPost[]>(DEMO_CRASH);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -483,7 +447,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const storedPassed = await AsyncStorage.getItem("@popmatch_passed");
         const scamDismissed = await AsyncStorage.getItem("@popmatch_scam");
         const storedSubleases = await AsyncStorage.getItem("@popmatch_subleases");
-        const storedBreaks = await AsyncStorage.getItem("@popmatch_breaks");
         const storedCrash = await AsyncStorage.getItem("@popmatch_crash");
         const storedFriends = await AsyncStorage.getItem("@popmatch_friends");
         const storedConvos = await AsyncStorage.getItem("@popmatch_conversations");
@@ -496,7 +459,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (storedPassed) setPassedUserIds(JSON.parse(storedPassed));
         if (scamDismissed === "true") setScamBannerDismissed(true);
         if (storedSubleases) setSubleases(JSON.parse(storedSubleases));
-        if (storedBreaks) setBreakPosts(JSON.parse(storedBreaks));
         if (storedCrash) setCrashPosts(JSON.parse(storedCrash));
         if (storedFriends) setFriends(JSON.parse(storedFriends));
         if (storedConvos) setConversations(JSON.parse(storedConvos));
@@ -553,12 +515,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const updated = subleases.filter(s => s.id !== id);
     setSubleases(updated);
     await AsyncStorage.setItem("@popmatch_subleases", JSON.stringify(updated));
-  };
-
-  const addBreakPost = async (post: BreakPost) => {
-    const updated = [post, ...breakPosts];
-    setBreakPosts(updated);
-    await AsyncStorage.setItem("@popmatch_breaks", JSON.stringify(updated));
   };
 
   const addCrashPost = async (post: CrashPost) => {
@@ -707,13 +663,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     otpVerifiedEmail, setOtpVerifiedEmail,
     mockUsers: MOCK_USERS, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
-    subleases, addSublease, removeSublease, breakPosts, addBreakPost,
+    subleases, addSublease, removeSublease,
     crashPosts, addCrashPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
     conversations, startConversation, sendMessage, getMessages,
   }), [
     currentUser, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
-    likedUserIds, passedUserIds, subleases, breakPosts, crashPosts, friends,
+    likedUserIds, passedUserIds, subleases, crashPosts, friends,
     conversations, chatMessages
   ]);
 
