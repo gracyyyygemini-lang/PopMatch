@@ -32,6 +32,8 @@ const LANDLORDS: { key: Landlord; label: string; color: string }[] = [
   { key: "bailey", label: "Bailey", color: Colors.landlords.bailey },
   { key: "american", label: "American Campus", color: Colors.landlords.american },
   { key: "smile", label: "Smile", color: Colors.landlords.smile },
+  { key: "cpm", label: "CPM", color: Colors.landlords.cpm },
+  { key: "green_st_realty", label: "Green St Realty", color: Colors.landlords.green_st_realty },
   { key: "other", label: "Private / Other", color: Colors.landlords.other },
 ];
 

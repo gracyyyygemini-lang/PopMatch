@@ -4,7 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export type LeaseType = "full_year" | "fall_sublease" | "spring_sublease" | "summer_sublease";
 export type GenderPref = "girls_only" | "boys_only" | "mixed";
 export type Zone = "campustown" | "north" | "south" | "urbana" | "downtown";
-export type Landlord = "jsm" | "ugroup" | "bailey" | "american" | "smile" | "other";
+export type Landlord = "jsm" | "ugroup" | "bailey" | "american" | "smile" | "cpm" | "green_st_realty" | "other";
 export type BreakType = "thanksgiving" | "spring_break" | "winter";
 export type Intent = "host" | "joiner" | "co_seeker" | "sublessor" | "sublessee";
 export type CleaningFrequency = "daily" | "weekly" | "monthly";

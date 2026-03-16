@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform,
-  Modal, TextInput, FlatList, KeyboardAvoidingView,
+  TextInput, FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,7 @@ import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import BottomSheetModal from "@/components/BottomSheetModal";
 import type { LeaseType, Zone, Landlord, GenderPref, UserProfile } from "@/context/AppContext";
 
 type SheetType = "avatar" | "name" | "bio" | "budget" | "major" | "leaseType" | "zone" | "landlord" | "genderPref" | "gender" | null;
@@ -21,9 +22,9 @@ const CORAL = "#FF6B4E";
 
 const LEASE_LABELS: Record<string, string> = {
   full_year: "Full Year (Aug – Jul)",
-  fall_sublease: "Fall Sublease (Aug – Dec)",
-  spring_sublease: "Spring Sublease (Jan – May)",
-  summer_sublease: "Summer Sublease (May – Aug)",
+  fall_sublease: "Fall Only (Aug – Dec)",
+  spring_sublease: "Spring Only (Jan – May)",
+  summer_sublease: "Summer Only (May – Aug)",
 };
 
 const GENDER_LABELS: Record<string, string> = {
@@ -46,6 +47,8 @@ const LANDLORD_LABELS: Record<string, string> = {
   bailey: "Bailey",
   american: "American Campus",
   smile: "Smile",
+  cpm: "CPM",
+  green_st_realty: "Green St Realty",
   other: "Private / Other",
 };
 
@@ -67,32 +70,6 @@ const GENDER_OPTIONS: { key: "female" | "male" | "nonbinary"; label: string }[] 
   { key: "male", label: "Man" },
   { key: "nonbinary", label: "Non-binary" },
 ];
-
-function BottomSheet({
-  visible,
-  onClose,
-  title,
-  children,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={sh.overlay} activeOpacity={1} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close sheet">
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ justifyContent: "flex-end" }}>
-          <TouchableOpacity activeOpacity={1} style={sh.sheet}>
-            <View style={sh.handle} />
-            <Text style={sh.title} accessibilityRole="header">{title}</Text>
-            {children}
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </TouchableOpacity>
-    </Modal>
-  );
-}
 
 function OptionRow({
   label,
@@ -150,7 +127,13 @@ function InfoRow({
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.6} style={{ backgroundColor: "transparent" }}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.7}
+        style={{ backgroundColor: "transparent" }}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${label}`}
+      >
         {content}
       </TouchableOpacity>
     );
@@ -270,7 +253,7 @@ export default function ProfileScreen() {
 
     if (sheetType === "avatar") {
       return (
-        <BottomSheet visible title="Avatar Color" onClose={closeSheet}>
+        <BottomSheetModal visible title="Avatar Color" onClose={closeSheet}>
           <View style={sh.colorGrid}>
             {AVATAR_COLORS.map(c => (
               <TouchableOpacity
@@ -280,13 +263,13 @@ export default function ProfileScreen() {
               />
             ))}
           </View>
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
     if (sheetType === "name") {
       return (
-        <BottomSheet visible title="Edit Name" onClose={closeSheet}>
+        <BottomSheetModal visible title="Edit Name" onClose={closeSheet}>
           <TextInput
             style={sh.textInput}
             value={editText}
@@ -301,13 +284,13 @@ export default function ProfileScreen() {
           >
             <Text style={sh.saveBtnText}>Save</Text>
           </TouchableOpacity>
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
     if (sheetType === "bio") {
       return (
-        <BottomSheet visible title="Edit Bio" onClose={closeSheet}>
+        <BottomSheetModal visible title="Edit Bio" onClose={closeSheet}>
           <TextInput
             style={[sh.textInput, { height: 80, textAlignVertical: "top" }]}
             value={editText}
@@ -323,13 +306,13 @@ export default function ProfileScreen() {
           >
             <Text style={sh.saveBtnText}>Save</Text>
           </TouchableOpacity>
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
     if (sheetType === "budget") {
       return (
-        <BottomSheet visible title="Monthly Budget" onClose={closeSheet}>
+        <BottomSheetModal visible title="Monthly Budget" onClose={closeSheet}>
           <TextInput
             style={sh.textInput}
             value={editText}
@@ -348,13 +331,13 @@ export default function ProfileScreen() {
           >
             <Text style={sh.saveBtnText}>Save</Text>
           </TouchableOpacity>
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
     if (sheetType === "major") {
       return (
-        <BottomSheet visible title="Select Major" onClose={closeSheet}>
+        <BottomSheetModal visible title="Select Major" onClose={closeSheet}>
           <TextInput
             style={sh.textInput}
             value={majorSearch}
@@ -374,13 +357,13 @@ export default function ProfileScreen() {
               />
             )}
           />
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
     if (sheetType === "leaseType") {
       return (
-        <BottomSheet visible title="Lease Type" onClose={closeSheet}>
+        <BottomSheetModal visible title="Lease Type" onClose={closeSheet}>
           {(Object.entries(LEASE_LABELS) as [LeaseType, string][]).map(([key, label]) => (
             <OptionRow
               key={key}
@@ -389,13 +372,13 @@ export default function ProfileScreen() {
               onPress={() => { updateField("leaseType", key); closeSheet(); }}
             />
           ))}
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
     if (sheetType === "zone") {
       return (
-        <BottomSheet visible title="Preferred Zone" onClose={closeSheet}>
+        <BottomSheetModal visible title="Preferred Zone" onClose={closeSheet}>
           {(Object.entries(ZONE_LABELS) as [Zone, string][]).map(([key, label]) => (
             <OptionRow
               key={key}
@@ -405,13 +388,13 @@ export default function ProfileScreen() {
               color={Colors.grassGreen}
             />
           ))}
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
     if (sheetType === "landlord") {
       return (
-        <BottomSheet visible title="Landlord" onClose={closeSheet}>
+        <BottomSheetModal visible title="Landlord" onClose={closeSheet}>
           {(Object.entries(LANDLORD_LABELS) as [Landlord, string][]).map(([key, label]) => (
             <OptionRow
               key={key}
@@ -421,13 +404,13 @@ export default function ProfileScreen() {
               color={Colors.orange}
             />
           ))}
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
     if (sheetType === "genderPref") {
       return (
-        <BottomSheet visible title="Roommate Preference" onClose={closeSheet}>
+        <BottomSheetModal visible title="Roommate Preference" onClose={closeSheet}>
           {(Object.entries(GENDER_LABELS) as [GenderPref, string][]).map(([key, label]) => (
             <OptionRow
               key={key}
@@ -437,13 +420,13 @@ export default function ProfileScreen() {
               color={Colors.goldDark}
             />
           ))}
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
     if (sheetType === "gender") {
       return (
-        <BottomSheet visible title="Gender Identity" onClose={closeSheet}>
+        <BottomSheetModal visible title="Gender Identity" onClose={closeSheet}>
           {GENDER_OPTIONS.map(({ key, label }) => (
             <OptionRow
               key={key}
@@ -452,7 +435,7 @@ export default function ProfileScreen() {
               onPress={() => { updateField("gender", key); closeSheet(); }}
             />
           ))}
-        </BottomSheet>
+        </BottomSheetModal>
       );
     }
 
@@ -698,60 +681,42 @@ export default function ProfileScreen() {
 
       {renderSheet()}
 
-      <Modal visible={algoModalVisible} transparent animationType="fade" onRequestClose={() => setAlgoModalVisible(false)}>
-        <TouchableOpacity style={sh.overlay} activeOpacity={1} onPress={() => setAlgoModalVisible(false)}>
-          <TouchableOpacity activeOpacity={1} style={sh.algoModal}>
-            <View style={sh.handle} />
-            <Text style={sh.algoModalTitle}>How PopMatch Finds Your Roommate</Text>
-            <Text style={sh.algoModalBody}>
-              We use a Weighted Euclidean Distance formula to calculate how compatible two students are. Think of it like measuring "distance" between your preferences — the closer you are, the better the match!
-            </Text>
-            <View style={sh.algoModalSection}>
-              <Text style={sh.algoModalSubtitle}>Weight Breakdown</Text>
-              {[
-                { label: "Budget", pct: "35%", desc: "Financial compatibility is the biggest factor — you need to agree on rent.", color: Colors.ocean },
-                { label: "Cleanliness", pct: "25%", desc: "Living with someone at a similar tidiness level avoids daily friction.", color: Colors.grassGreen },
-                { label: "Noise & Social", pct: "20%", desc: "Night owl vs. early bird? Party vs. quiet? This matters.", color: Colors.orange },
-                { label: "Zone", pct: "20%", desc: "Preferring the same neighborhood makes apartment hunting easier.", color: Colors.goldDark },
-              ].map(({ label, pct, desc, color }) => (
-                <View key={label} style={sh.algoModalRow}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View style={[sh.algoModalDot, { backgroundColor: color }]} />
-                    <Text style={sh.algoModalLabel}>{label}</Text>
-                    <Text style={[sh.algoModalPct, { color }]}>{pct}</Text>
-                  </View>
-                  <Text style={sh.algoModalDesc}>{desc}</Text>
+      <BottomSheetModal visible={algoModalVisible} title="How PopMatch Finds Your Roommate" onClose={() => setAlgoModalVisible(false)} maxHeight="85%">
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <Text style={sh.algoModalBody}>
+            We use a Weighted Euclidean Distance formula to calculate how compatible two students are. Think of it like measuring "distance" between your preferences — the closer you are, the better the match!
+          </Text>
+          <View style={sh.algoModalSection}>
+            <Text style={sh.algoModalSubtitle}>Weight Breakdown</Text>
+            {[
+              { label: "Budget", pct: "35%", desc: "Financial compatibility is the biggest factor — you need to agree on rent.", color: Colors.ocean },
+              { label: "Cleanliness", pct: "25%", desc: "Living with someone at a similar tidiness level avoids daily friction.", color: Colors.grassGreen },
+              { label: "Noise & Social", pct: "20%", desc: "Night owl vs. early bird? Party vs. quiet? This matters.", color: Colors.orange },
+              { label: "Zone", pct: "20%", desc: "Preferring the same neighborhood makes apartment hunting easier.", color: Colors.goldDark },
+            ].map(({ label, pct, desc, color }) => (
+              <View key={label} style={sh.algoModalRow}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View style={[sh.algoModalDot, { backgroundColor: color }]} />
+                  <Text style={sh.algoModalLabel}>{label}</Text>
+                  <Text style={[sh.algoModalPct, { color }]}>{pct}</Text>
                 </View>
-              ))}
-            </View>
-            <Text style={sh.algoModalFooter}>
-              Lower distance = higher compatibility. A 95%+ match means you and your potential roommate are really in sync!
-            </Text>
-            <TouchableOpacity style={sh.saveBtn} onPress={() => setAlgoModalVisible(false)}>
-              <Text style={sh.saveBtnText}>Got It</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
+                <Text style={sh.algoModalDesc}>{desc}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={sh.algoModalFooter}>
+            Lower distance = higher compatibility. A 95%+ match means you and your potential roommate are really in sync!
+          </Text>
+        </ScrollView>
+        <TouchableOpacity style={sh.saveBtn} onPress={() => setAlgoModalVisible(false)}>
+          <Text style={sh.saveBtnText}>Got It</Text>
         </TouchableOpacity>
-      </Modal>
+      </BottomSheetModal>
     </View>
   );
 }
 
 const sh = StyleSheet.create({
-  overlay: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 20, paddingBottom: 36, maxHeight: "75%",
-  },
-  handle: {
-    width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.borderSoft,
-    alignSelf: "center", marginBottom: 16,
-  },
-  title: {
-    fontFamily: "Nunito_700Bold", fontSize: 18, color: Colors.charcoal, marginBottom: 16,
-  },
   optionRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, marginBottom: 4,
@@ -779,13 +744,6 @@ const sh = StyleSheet.create({
   },
   colorCircleActive: {
     borderWidth: 3, borderColor: Colors.charcoal,
-  },
-  algoModal: {
-    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 20, paddingBottom: 36, maxHeight: "85%",
-  },
-  algoModalTitle: {
-    fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal, marginBottom: 10,
   },
   algoModalBody: {
     fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted, lineHeight: 21, marginBottom: 16,

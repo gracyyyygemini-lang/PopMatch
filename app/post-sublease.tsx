@@ -27,6 +27,8 @@ const LANDLORD_OPTIONS: { key: Landlord; label: string; color: string }[] = [
   { key: "bailey", label: "Bailey", color: Colors.landlords.bailey },
   { key: "american", label: "American Campus", color: Colors.landlords.american },
   { key: "smile", label: "Smile", color: Colors.landlords.smile },
+  { key: "cpm", label: "CPM", color: Colors.landlords.cpm },
+  { key: "green_st_realty", label: "Green St Realty", color: Colors.landlords.green_st_realty },
   { key: "other", label: "Private / Other", color: Colors.landlords.other },
 ];
 
@@ -36,6 +38,8 @@ const LANDLORD_WARNINGS: Record<Landlord, { level: "info" | "warn" | "danger"; m
   bailey: { level: "warn", message: "Walk into the Bailey office TOGETHER with your replacement tenant — never separately. Landlord may try to cut you out." },
   american: { level: "danger", message: "ALERT: American Campus (Latitude, 212, Tower) charges up to $600 in Relet fees. Get everything in writing first." },
   smile: { level: "info", message: "Smile Properties: Verify sublease approval in writing before proceeding. Keep a copy of all agreements." },
+  cpm: { level: "info", message: "CPM requires written approval for subleases. Contact their office directly to start the transfer process." },
+  green_st_realty: { level: "info", message: "Green St Realty: Confirm sublease terms with management. Some properties have restrictions on subletting." },
   other: null,
 };
 

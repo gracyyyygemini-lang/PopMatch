@@ -63,6 +63,8 @@ const LANDLORD_LABELS: Record<Landlord, string> = {
   bailey: "Bailey",
   american: "American Campus",
   smile: "Smile",
+  cpm: "CPM",
+  green_st_realty: "Green St Realty",
   other: "Private",
 };
 

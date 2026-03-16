@@ -38,6 +38,8 @@ const Colors = {
     bailey: "#E06800",
     american: "#C62828",
     smile: "#9B59B6",
+    cpm: "#2E86AB",
+    green_st_realty: "#6AAB7A",
     other: "#5A7A82",
   },
   zones: {
