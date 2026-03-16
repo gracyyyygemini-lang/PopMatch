@@ -211,7 +211,7 @@ export default function OnboardingScreen() {
   const [noise, setNoise] = useState(3);
   const [leaseType, setLeaseType] = useState<LeaseType>("full_year");
   const [zone, setZone] = useState<Zone>("campustown");
-  const [landlord, setLandlord] = useState<Landlord>("other");
+  const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [staysThanksgiving, setStaysThanksgiving] = useState(false);
   const [staysSpringBreak, setStaysSpringBreak] = useState(false);
   const [showMajorPicker, setShowMajorPicker] = useState(false);
@@ -312,12 +312,34 @@ export default function OnboardingScreen() {
     }
   };
 
-  const canProceedStep2 = name.trim().length > 0 && !!profileImage;
+  const DISABLED_BG = "#E0E8E9";
+  const DISABLED_TEXT = "#8A9FA3";
+  const ACTIVE_BG = Colors.ponyo;
+
+  const isStepComplete = (s: number): boolean => {
+    switch (s) {
+      case 1: return !!intent;
+      case 2: return name.trim().length > 0 && !!profileImage && !!major && bio.trim().length > 0;
+      case 3: return true;
+      case 4: return true;
+      case 5: return landlords.length > 0;
+      default: return true;
+    }
+  };
+
+  const isFormComplete = isStepComplete(step);
 
   const handleNext = () => {
-    if (step === 2 && !canProceedStep2) return;
+    if (!isFormComplete) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setStep(s => Math.min(s + 1, STEPS - 1));
+  };
+
+  const toggleLandlord = (key: Landlord) => {
+    setLandlords(prev =>
+      prev.includes(key) ? prev.filter(l => l !== key) : [...prev, key]
+    );
+    Haptics.selectionAsync();
   };
 
   const handleFinish = async () => {
@@ -328,7 +350,7 @@ export default function OnboardingScreen() {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
       name: name.trim(), email: email.toLowerCase().trim(),
       major: major || "Undeclared", bio: bio.trim(), budget, gender, genderPref,
-      cleanliness, noise, leaseType, zone, landlord,
+      cleanliness, noise, leaseType, zone, landlords,
       staysThanksgiving, staysSpringBreak, avatarColor, intent,
       ...(profileImage ? { profileImage } : {}),
     };
@@ -729,15 +751,19 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Your Landlord</Text>
-            {LANDLORDS.map(l => (
-              <TouchableOpacity key={l.key} style={[styles.optionCard, landlord === l.key && styles.optionCardActive]}
-                onPress={() => { setLandlord(l.key); Haptics.selectionAsync(); }}>
-                <View style={[styles.landlordDot, { backgroundColor: l.color }]} />
-                <Text style={[styles.optionLabel, landlord === l.key && styles.optionLabelActive]}>{l.label}</Text>
-                {landlord === l.key && <Ionicons name="checkmark-circle" size={18} color={Colors.teal} />}
-              </TouchableOpacity>
-            ))}
+            <Text style={styles.label}>Your Landlord(s)</Text>
+            <Text style={styles.fieldHint}>Select all that apply</Text>
+            {LANDLORDS.map(l => {
+              const isSelected = landlords.includes(l.key);
+              return (
+                <TouchableOpacity key={l.key} style={[styles.optionCard, isSelected && styles.optionCardActive]}
+                  onPress={() => toggleLandlord(l.key)}>
+                  <View style={[styles.landlordDot, { backgroundColor: l.color }]} />
+                  <Text style={[styles.optionLabel, isSelected && styles.optionLabelActive]}>{l.label}</Text>
+                  {isSelected && <Ionicons name="checkmark-circle" size={18} color={Colors.teal} />}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -750,12 +776,17 @@ export default function OnboardingScreen() {
         )}
         {step > 0 && (
           <TouchableOpacity
-            style={[styles.nextBtn, step === 2 && !canProceedStep2 && styles.nextBtnDisabled]}
+            style={[
+              styles.nextBtn,
+              !isFormComplete && { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 },
+            ]}
             onPress={step === STEPS - 1 ? handleFinish : handleNext}
-            disabled={step === 2 && !canProceedStep2}
+            disabled={!isFormComplete}
           >
-            <Text style={styles.nextBtnText}>{step === STEPS - 1 ? "Find My Match" : "Continue"}</Text>
-            <Ionicons name={step === STEPS - 1 ? "heart" : "arrow-forward"} size={17} color={Colors.white} />
+            <Text style={[styles.nextBtnText, !isFormComplete && { color: DISABLED_TEXT }]}>
+              {step === STEPS - 1 ? "Find My Match" : "Continue"}
+            </Text>
+            <Ionicons name={step === STEPS - 1 ? "heart" : "arrow-forward"} size={17} color={isFormComplete ? Colors.white : DISABLED_TEXT} />
           </TouchableOpacity>
         )}
       </View>
@@ -922,6 +953,5 @@ const styles = StyleSheet.create({
     flex: 1, height: 54, borderRadius: 15, backgroundColor: Colors.ponyo,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
   },
-  nextBtnDisabled: { opacity: 0.5 },
   nextBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
 });

@@ -230,7 +230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id, name, email, major = "", bio = "", budget = 800,
         gender = "nonbinary", genderPref = "mixed", cleanliness = 3,
         noise = 3, leaseType = "full_year", zone = "campustown",
-        landlord = "other", staysThanksgiving = false, staysSpringBreak = false,
+        landlords = ["other"], staysThanksgiving = false, staysSpringBreak = false,
         avatarColor = "#005F73", college = "", organizations = [],
       } = req.body;
 
@@ -241,6 +241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Must use a .edu email address" });
       }
 
+      const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
       await query(
         `INSERT INTO users (id, name, email, major, bio, budget, gender, gender_pref,
           cleanliness, noise, lease_type, zone, landlord, stays_thanksgiving,
@@ -257,7 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
            avatar_color = EXCLUDED.avatar_color, college = EXCLUDED.college,
            organizations = EXCLUDED.organizations`,
         [id, name, email, major, bio, budget, gender, genderPref, cleanliness,
-          noise, leaseType, zone, landlord, staysThanksgiving, staysSpringBreak,
+          noise, leaseType, zone, landlordJson, staysThanksgiving, staysSpringBreak,
           avatarColor, college, organizations]
       );
 
@@ -482,7 +483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const {
         id, userId, buildingName, address = "", category = "semester_takeover",
-        leaseType = "full_year", pricePerMonth = 0, landlord = "other",
+        leaseType = "full_year", pricePerMonth = 0, landlords = ["other"],
         zone = "campustown", availableDuringBreaks = false, breakTypes = [],
         description = "", eventName = "", startDate = "", endDate = "",
       } = req.body;
@@ -491,6 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "id, userId, and buildingName are required" });
       }
 
+      const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
       await query(
         `INSERT INTO listings (id, user_id, building_name, address, category, lease_type,
           price_per_month, landlord, zone, available_during_breaks, break_types,
@@ -498,7 +500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
          ON CONFLICT (id) DO NOTHING`,
         [id, userId, buildingName, address, category, leaseType, pricePerMonth,
-          landlord, zone, availableDuringBreaks, breakTypes, description,
+          landlordJson, zone, availableDuringBreaks, breakTypes, description,
           eventName, startDate, endDate]
       );
       return res.json({ success: true });

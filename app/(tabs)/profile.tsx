@@ -460,13 +460,17 @@ export default function ProfileScreen() {
 
     if (sheetType === "landlord") {
       return (
-        <BottomSheetModal visible title="Landlord" onClose={closeSheet}>
+        <BottomSheetModal visible title="Landlord(s)" onClose={closeSheet}>
           {(Object.entries(LANDLORD_LABELS) as [Landlord, string][]).map(([key, label]) => (
             <OptionRow
               key={key}
               label={label}
-              selected={currentUser.landlord === key}
-              onPress={() => { updateField("landlord", key); closeSheet(); }}
+              selected={(currentUser.landlords || []).includes(key)}
+              onPress={() => {
+                const current = currentUser.landlords || [];
+                const updated = current.includes(key) ? current.filter(l => l !== key) : [...current, key];
+                updateField("landlords", updated);
+              }}
               color={Colors.orange}
             />
           ))}
@@ -598,7 +602,7 @@ export default function ProfileScreen() {
             <View style={styles.divider} />
             <InfoRow icon="location-outline" label="Preferred Zone" value={ZONE_LABELS[currentUser.zone]} color={Colors.grassGreen} onPress={() => openSheet("zone")} />
             <View style={styles.divider} />
-            <InfoRow icon="business-outline" label="Landlord" value={LANDLORD_LABELS[currentUser.landlord]} color={Colors.orange} onPress={() => openSheet("landlord")} />
+            <InfoRow icon="business-outline" label="Landlord" value={(currentUser.landlords || []).map(l => LANDLORD_LABELS[l]).join(", ") || "Not set"} color={Colors.orange} onPress={() => openSheet("landlord")} />
             <View style={styles.divider} />
             <InfoRow icon="people-outline" label="Roommate Pref" value={GENDER_LABELS[currentUser.genderPref]} color={Colors.goldDark} onPress={() => openSheet("genderPref")} />
           </View>

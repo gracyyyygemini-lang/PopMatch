@@ -75,7 +75,7 @@ export interface UserProfile {
   noise: number;
   leaseType: LeaseType;
   zone: Zone;
-  landlord: Landlord;
+  landlords: Landlord[];
   staysThanksgiving: boolean;
   staysSpringBreak: boolean;
   avatarColor: string;
@@ -112,7 +112,7 @@ export interface SubleasePost {
   address: string;
   leaseType: LeaseType;
   pricePerMonth: number;
-  landlord: Landlord;
+  landlords: Landlord[];
   zone: Zone;
   availableDuringBreaks: boolean;
   breakTypes: BreakType[];
@@ -199,7 +199,7 @@ const DEMO_POSTS: SubleasePost[] = [
   {
     id: "sp1", userId: "u1", userName: "Mei Lin", userEmail: "meilin2@illinois.edu",
     buildingName: "Hub Champaign", address: "210 E Green St", leaseType: "fall_sublease",
-    pricePerMonth: 950, landlord: "american", zone: "campustown",
+    pricePerMonth: 950, landlords: ["american"], zone: "campustown",
     availableDuringBreaks: false, breakTypes: [],
     description: "Cozy 1BR/1BA in Hub, fully furnished. Floor-to-ceiling windows, great view.",
     avatarColor: "#1A7AAF", timestamp: Date.now() - 86400000, category: "semester_takeover",
@@ -210,7 +210,7 @@ const DEMO_POSTS: SubleasePost[] = [
   {
     id: "sp2", userId: "u3", userName: "Jake Torres", userEmail: "jtorres6@illinois.edu",
     buildingName: "707 S Mathews", address: "707 S Mathews Ave", leaseType: "spring_sublease",
-    pricePerMonth: 750, landlord: "jsm", zone: "north",
+    pricePerMonth: 750, landlords: ["jsm"], zone: "north",
     availableDuringBreaks: true, breakTypes: ["spring_break"],
     description: "Studio apartment near Siebel. Quiet building, laundry in unit.",
     avatarColor: "#5A8A5A", timestamp: Date.now() - 172800000, category: "semester_takeover",
@@ -221,7 +221,7 @@ const DEMO_POSTS: SubleasePost[] = [
   {
     id: "sp3", userId: "u5", userName: "Marcus Webb", userEmail: "mwebb3@illinois.edu",
     buildingName: "Fairview Apts", address: "505 E Fairview", leaseType: "summer_sublease",
-    pricePerMonth: 620, landlord: "ugroup", zone: "urbana",
+    pricePerMonth: 620, landlords: ["ugroup"], zone: "urbana",
     availableDuringBreaks: true, breakTypes: ["thanksgiving", "spring_break"],
     description: "1BR in quiet Urbana neighborhood. Perfect for grad students or summer research.",
     avatarColor: "#9B59B6", timestamp: Date.now() - 259200000, category: "summer_only",
@@ -232,7 +232,7 @@ const DEMO_POSTS: SubleasePost[] = [
   {
     id: "sp4", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
     buildingName: "The Orchard", address: "301 S Race St", leaseType: "summer_sublease",
-    pricePerMonth: 540, landlord: "other", zone: "urbana",
+    pricePerMonth: 540, landlords: ["other"], zone: "urbana",
     availableDuringBreaks: false, breakTypes: [],
     description: "Sunny studio, available May 15 – Aug 10. Furnished, near MTD bus stop.",
     avatarColor: "#5A8A5A", timestamp: Date.now() - 345600000, category: "summer_only",
@@ -243,7 +243,7 @@ const DEMO_POSTS: SubleasePost[] = [
   {
     id: "sp5", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
     buildingName: "Campustown Flats", address: "512 E Green St", leaseType: "fall_sublease",
-    pricePerMonth: 890, landlord: "bailey", zone: "campustown",
+    pricePerMonth: 890, landlords: ["bailey"], zone: "campustown",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
     description: "1-2 weeks available in early August before fall lease starts. Great location.",
     avatarColor: "#E0BC00", timestamp: Date.now() - 432000000, category: "august_gap",
@@ -254,7 +254,7 @@ const DEMO_POSTS: SubleasePost[] = [
   {
     id: "sp6", userId: "u8", userName: "Zoe Mitchell", userEmail: "zmitchell@illinois.edu",
     buildingName: "Stadium Terrace", address: "1001 S Cottage Grove", leaseType: "full_year",
-    pricePerMonth: 760, landlord: "smile", zone: "south",
+    pricePerMonth: 760, landlords: ["smile"], zone: "south",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
     description: "Moms Weekend & graduation weekend stay available. Great for families visiting!",
     avatarColor: "#CC5500", timestamp: Date.now() - 518400000, category: "short_term",
@@ -347,7 +347,7 @@ export const MOCK_USERS: UserProfile[] = [
     id: "u1", name: "Mei Lin", email: "meilin2@illinois.edu", major: "Computer Science",
     bio: "Early riser, love cooking Asian food. Looking for a quiet study buddy!",
     budget: 850, gender: "female", genderPref: "girls_only", cleanliness: 5, noise: 2,
-    leaseType: "fall_sublease", zone: "north", landlord: "jsm",
+    leaseType: "fall_sublease", zone: "north", landlords: ["jsm"],
     staysThanksgiving: false, staysSpringBreak: true, avatarColor: "#1A7AAF",
     college: "Grainger", organizations: ["ACM@UIUC", "WCS"],
   },
@@ -355,7 +355,7 @@ export const MOCK_USERS: UserProfile[] = [
     id: "u2", name: "Priya Sharma", email: "psharma4@illinois.edu", major: "Finance",
     bio: "Coffee addict, gym rat. Weekend brunches and casual hangouts.",
     budget: 950, gender: "female", genderPref: "girls_only", cleanliness: 4, noise: 3,
-    leaseType: "spring_sublease", zone: "campustown", landlord: "bailey",
+    leaseType: "spring_sublease", zone: "campustown", landlords: ["bailey"],
     staysThanksgiving: true, staysSpringBreak: true, avatarColor: "#CC5500",
     college: "Gies", organizations: ["Illini Finance Club", "DECA"],
   },
@@ -363,7 +363,7 @@ export const MOCK_USERS: UserProfile[] = [
     id: "u3", name: "Jake Torres", email: "jtorres6@illinois.edu", major: "Mechanical Engineering",
     bio: "Night owl who loves gaming and pizza runs at 2am. Very chill.",
     budget: 750, gender: "male", genderPref: "mixed", cleanliness: 3, noise: 4,
-    leaseType: "full_year", zone: "north", landlord: "ugroup",
+    leaseType: "full_year", zone: "north", landlords: ["ugroup"],
     staysThanksgiving: true, staysSpringBreak: false, avatarColor: "#5A8A5A",
     college: "Grainger", organizations: ["SWE", "Tau Beta Pi"],
   },
@@ -371,7 +371,7 @@ export const MOCK_USERS: UserProfile[] = [
     id: "u4", name: "Aisha Okonkwo", email: "aokonkwo@illinois.edu", major: "Psychology",
     bio: "Plant mom, sunset chaser, and podcast listener. Clean and organized.",
     budget: 800, gender: "female", genderPref: "girls_only", cleanliness: 5, noise: 2,
-    leaseType: "full_year", zone: "urbana", landlord: "other",
+    leaseType: "full_year", zone: "urbana", landlords: ["other"],
     staysThanksgiving: false, staysSpringBreak: false, avatarColor: "#E07B00",
     college: "LAS", organizations: ["BSA", "Illini 4000"],
   },
@@ -379,7 +379,7 @@ export const MOCK_USERS: UserProfile[] = [
     id: "u5", name: "Marcus Webb", email: "mwebb3@illinois.edu", major: "Architecture",
     bio: "Studio hours are late but I keep my space spotless. Love jazz.",
     budget: 900, gender: "male", genderPref: "boys_only", cleanliness: 4, noise: 2,
-    leaseType: "fall_sublease", zone: "downtown", landlord: "american",
+    leaseType: "fall_sublease", zone: "downtown", landlords: ["american"],
     staysThanksgiving: false, staysSpringBreak: false, avatarColor: "#9B59B6",
     college: "FAA", organizations: ["AIAS"],
   },
@@ -387,7 +387,7 @@ export const MOCK_USERS: UserProfile[] = [
     id: "u6", name: "Sofia Reyes", email: "sreyes2@illinois.edu", major: "Biology",
     bio: "Pre-med grind, but I make time for friends. Quiet during finals week!",
     budget: 700, gender: "female", genderPref: "girls_only", cleanliness: 4, noise: 2,
-    leaseType: "spring_sublease", zone: "south", landlord: "jsm",
+    leaseType: "spring_sublease", zone: "south", landlords: ["jsm"],
     staysThanksgiving: true, staysSpringBreak: true, avatarColor: "#5A8A5A",
     college: "LAS", organizations: ["Illini Pre-Med", "Phi Delta Epsilon"],
   },
@@ -395,7 +395,7 @@ export const MOCK_USERS: UserProfile[] = [
     id: "u7", name: "Liam Park", email: "lpark9@illinois.edu", major: "Statistics",
     bio: "Data nerd by day, chef by night. My bibimbap will change your life.",
     budget: 850, gender: "male", genderPref: "mixed", cleanliness: 3, noise: 3,
-    leaseType: "full_year", zone: "campustown", landlord: "ugroup",
+    leaseType: "full_year", zone: "campustown", landlords: ["ugroup"],
     staysThanksgiving: false, staysSpringBreak: true, avatarColor: "#E0BC00",
     college: "LAS", organizations: ["Korean Cultural Association", "DataSci@UIUC"],
   },
@@ -403,7 +403,7 @@ export const MOCK_USERS: UserProfile[] = [
     id: "u8", name: "Zoe Mitchell", email: "zmitchell@illinois.edu", major: "Journalism",
     bio: "Always writing, always reading. I have a cat (hypoallergenic!).",
     budget: 780, gender: "female", genderPref: "girls_only", cleanliness: 4, noise: 1,
-    leaseType: "spring_sublease", zone: "urbana", landlord: "other",
+    leaseType: "spring_sublease", zone: "urbana", landlords: ["other"],
     staysThanksgiving: true, staysSpringBreak: false, avatarColor: "#CC5500",
     college: "Media", organizations: ["Daily Illini", "SPJ"],
   },

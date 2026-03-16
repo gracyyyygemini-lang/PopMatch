@@ -502,7 +502,7 @@ function SubleaseCard({ post, onMarkLeased }: {
           </View>
           <View style={styles.metaItem}>
             <Ionicons name="business-outline" size={12} color={Colors.textMuted} />
-            <Text style={styles.metaText}>{LANDLORD_LABELS[post.landlord]}</Text>
+            <Text style={styles.metaText}>{(post.landlords || []).map(l => LANDLORD_LABELS[l]).join(", ") || "N/A"}</Text>
           </View>
         </View>
 

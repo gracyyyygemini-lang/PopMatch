@@ -111,7 +111,7 @@ export default function PostSubleaseScreen() {
   const [address, setAddress] = useState("");
   const [leaseType, setLeaseType] = useState<LeaseType>("fall_sublease");
   const [price, setPrice] = useState("");
-  const [landlord, setLandlord] = useState<Landlord>("other");
+  const [landlords, setLandlords] = useState<Landlord[]>([]);
   const [zone, setZone] = useState<Zone>("campustown");
   const [availableDuringBreaks, setAvailableDuringBreaks] = useState(false);
   const [selectedBreaks, setSelectedBreaks] = useState<BreakType[]>([]);
@@ -297,7 +297,12 @@ export default function PostSubleaseScreen() {
     );
   };
 
-  const warning = LANDLORD_WARNINGS[landlord];
+  const warning = landlords.length === 1 ? LANDLORD_WARNINGS[landlords[0]] : undefined;
+
+  const toggleLandlord = (key: Landlord) => {
+    setLandlords(prev => prev.includes(key) ? prev.filter(l => l !== key) : [...prev, key]);
+    Haptics.selectionAsync();
+  };
 
   const toggleBreak = (b: BreakType) => {
     setSelectedBreaks(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
@@ -359,7 +364,7 @@ export default function PostSubleaseScreen() {
       address: address.trim(),
       leaseType,
       pricePerMonth: Number(price),
-      landlord,
+      landlords,
       zone,
       availableDuringBreaks,
       breakTypes: selectedBreaks,
@@ -483,15 +488,18 @@ export default function PostSubleaseScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Landlord *</Text>
-              {LANDLORD_OPTIONS.map(opt => (
-                <TouchableOpacity key={opt.key} style={[styles.optionCard, landlord === opt.key && styles.optionCardActive]}
-                  onPress={() => { setLandlord(opt.key); Haptics.selectionAsync(); }}>
-                  <View style={[styles.landlordDot, { backgroundColor: opt.color }]} />
-                  <Text style={[styles.optionLabel, landlord === opt.key && styles.optionLabelActive]}>{opt.label}</Text>
-                  {landlord === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
-                </TouchableOpacity>
-              ))}
+              <Text style={styles.label}>Landlord(s) *</Text>
+              {LANDLORD_OPTIONS.map(opt => {
+                const isSelected = landlords.includes(opt.key);
+                return (
+                  <TouchableOpacity key={opt.key} style={[styles.optionCard, isSelected && styles.optionCardActive]}
+                    onPress={() => toggleLandlord(opt.key)}>
+                    <View style={[styles.landlordDot, { backgroundColor: opt.color }]} />
+                    <Text style={[styles.optionLabel, isSelected && styles.optionLabelActive]}>{opt.label}</Text>
+                    {isSelected && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
+                  </TouchableOpacity>
+                );
+              })}
               {warning && (
                 <View style={[styles.warningBox, {
                   backgroundColor: warning.level === "danger" ? "#FFF0F0" : warning.level === "warn" ? "#FFF4E6" : "#EFF8FF",

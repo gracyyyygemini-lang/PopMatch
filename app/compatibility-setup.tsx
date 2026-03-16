@@ -173,12 +173,29 @@ export default function CompatibilitySetupScreen() {
   const [promptAnswer, setPromptAnswer] = useState("");
   const [showPromptPicker, setShowPromptPicker] = useState(false);
 
+  const DISABLED_BG = "#E0E8E9";
+  const DISABLED_TEXT = "#8A9FA3";
+
+  const isFormComplete =
+    !!starSign &&
+    !!mbti &&
+    !!year &&
+    vices.length > 0 &&
+    pets.length > 0 &&
+    sleep.length > 0 &&
+    alarms.length > 0 &&
+    cleanVibe.length > 0 &&
+    groceries.length > 0 &&
+    guests.length > 0 &&
+    selectedPrompt.length > 0 &&
+    promptAnswer.trim().length > 0;
+
   const toggleMulti = (arr: string[], setArr: (v: string[]) => void, chip: string) => {
     setArr(arr.includes(chip) ? arr.filter(c => c !== chip) : [...arr, chip]);
   };
 
   const handleFinish = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !isFormComplete) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const vibeProfile: VibeProfile = {
       identity, lookingFor, starSign, mbti, year, greekLife,
@@ -347,8 +364,14 @@ export default function CompatibilitySetupScreen() {
         maxWidth: isDesktop ? 640 : contentMaxWidth,
         alignSelf: "center" as const, width: "100%",
       }]}>
-        <TouchableOpacity style={s.finishBtn} onPress={handleFinish}>
-          <Text style={s.finishBtnText}>Generate My Profile ✨</Text>
+        <TouchableOpacity
+          style={[s.finishBtn, !isFormComplete && { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 }]}
+          onPress={handleFinish}
+          disabled={!isFormComplete}
+        >
+          <Text style={[s.finishBtnText, !isFormComplete && { color: DISABLED_TEXT }]}>
+            Generate My Profile ✨
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
