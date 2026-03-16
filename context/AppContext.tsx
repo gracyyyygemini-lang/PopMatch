@@ -164,6 +164,8 @@ export interface ChatMessage {
 export type CrashVibe = "sos" | "offering";
 export type CrashCurrency = "cash" | "boba" | "lion_cover" | "food" | "favor";
 
+export type CrashPostStatus = "active" | "completed";
+
 export interface CrashPost {
   id: string;
   userId: string;
@@ -172,12 +174,14 @@ export interface CrashPost {
   avatarColor: string;
   vibe: CrashVibe;
   story: string;
-  imageUrl?: string;
+  imageUrl: string;
   dates: string;
+  targetDate: number;
   zone: Zone;
   currency: CrashCurrency;
   currencyLabel: string;
   timestamp: number;
+  status: CrashPostStatus;
 }
 
 export interface MatchRecord {
@@ -269,41 +273,41 @@ const DEMO_CRASH: CrashPost[] = [
     id: "cr1", userId: "u2", userName: "Jake Thompson", userEmail: "jthom22@illinois.edu",
     avatarColor: "#CC5500", vibe: "sos",
     story: "Locked out of the Ike. Need a floor to sleep on, will buy you a Blue Guy at Kam's tomorrow.",
-    dates: "Tonight only", zone: "south",
+    imageUrl: "", dates: "Tonight only", targetDate: Date.now() + 86400000, zone: "south",
     currency: "food", currencyLabel: "🍺 Kam's Blue Guy",
-    timestamp: Date.now() - 600000,
+    timestamp: Date.now() - 600000, status: "active",
   },
   {
     id: "cr2", userId: "u5", userName: "Marcus Williams", userEmail: "mwill5@illinois.edu",
     avatarColor: "#1A7AAF", vibe: "offering",
     story: "Roommate is gone. Got an air mattress near Grainger. Yours for $15 or a burrito from Maize.",
-    dates: "Nov 22 – Nov 25", zone: "north",
+    imageUrl: "", dates: "Tomorrow – 3 days", targetDate: Date.now() + 259200000, zone: "north",
     currency: "cash", currencyLabel: "💵 $15",
-    timestamp: Date.now() - 1800000,
+    timestamp: Date.now() - 1800000, status: "active",
   },
   {
     id: "cr3", userId: "u4", userName: "Aisha Okonkwo", userEmail: "aokonkwo@illinois.edu",
     avatarColor: "#5A8A5A", vibe: "sos",
     story: "Flight got cancelled. Stranded at Willard with a suitcase and no plan. Can venmo or buy boba.",
-    dates: "Tonight only", zone: "campustown",
+    imageUrl: "", dates: "Tonight only", targetDate: Date.now() + 43200000, zone: "campustown",
     currency: "boba", currencyLabel: "🧋 Boba",
-    timestamp: Date.now() - 3600000,
+    timestamp: Date.now() - 3600000, status: "active",
   },
   {
     id: "cr4", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
     avatarColor: "#9B59B6", vibe: "offering",
     story: "Empty couch in my apartment all Moms Weekend. $20/night or cover me at Red Lion Saturday.",
-    dates: "Mom/Dad Weekend", zone: "campustown",
+    imageUrl: "", dates: "This weekend", targetDate: Date.now() + 432000000, zone: "campustown",
     currency: "lion_cover", currencyLabel: "🦁 Lion Cover",
-    timestamp: Date.now() - 7200000,
+    timestamp: Date.now() - 7200000, status: "active",
   },
   {
     id: "cr5", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
     avatarColor: "#E0BC00", vibe: "offering",
     story: "Subletting my studio for graduation weekend. Walk to Foellinger. Clean, private, AC.",
-    dates: "May 9 – May 12", zone: "campustown",
+    imageUrl: "", dates: "May 9 – May 12", targetDate: Date.now() + 604800000, zone: "campustown",
     currency: "cash", currencyLabel: "💵 $40/night",
-    timestamp: Date.now() - 14400000,
+    timestamp: Date.now() - 14400000, status: "active",
   },
 ];
 
@@ -329,6 +333,7 @@ interface AppContextValue {
   removeSublease: (id: string) => void;
   crashPosts: CrashPost[];
   addCrashPost: (post: CrashPost) => void;
+  updateCrashPost: (id: string, updates: Partial<CrashPost>) => void;
   friends: FriendRecord[];
   addFriend: (friend: Omit<FriendRecord, "vouchedByMe" | "timestamp">) => Promise<void>;
   removeFriend: (email: string) => Promise<void>;
@@ -523,6 +528,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_crash", JSON.stringify(updated));
   };
 
+  const updateCrashPost = async (id: string, updates: Partial<CrashPost>) => {
+    const updated = crashPosts.map(p => p.id === id ? { ...p, ...updates } : p);
+    setCrashPosts(updated);
+    await AsyncStorage.setItem("@popmatch_crash", JSON.stringify(updated));
+  };
+
   const addFriend = async (friendData: Omit<FriendRecord, "vouchedByMe" | "timestamp">) => {
     const exists = friends.some(f => f.email === friendData.email);
     if (exists) return;
@@ -664,7 +675,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     mockUsers: MOCK_USERS, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
     subleases, addSublease, removeSublease,
-    crashPosts, addCrashPost,
+    crashPosts, addCrashPost, updateCrashPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
     conversations, startConversation, sendMessage, getMessages,
   }), [

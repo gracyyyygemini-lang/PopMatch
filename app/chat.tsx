@@ -19,6 +19,14 @@ const ICEBREAKERS: { label: string; question: string; bg: string; border: string
   { label: "🏠 Guests", question: "What are your thoughts on having friends or partners over on weekends?", bg: "#FFEDE8", border: "#E8997A" },
 ];
 
+const CRASH_CASH_CHIPS: { label: string; question: string; bg: string; border: string }[] = [
+  { label: "Still available? 👀", question: "Still available? 👀", bg: "#FDECE8", border: "#F4A89A" },
+  { label: "When can I pull up? ⌚", question: "When can I pull up? ⌚", bg: "#E8F6F3", border: "#7CC9AA" },
+  { label: "Bring my own blanket? 🛌", question: "Bring my own blanket? 🛌", bg: "#FFF5E6", border: "#F0C87A" },
+  { label: "Venmo or Cash? 💸", question: "Venmo or Cash? 💸", bg: "#EDF6FA", border: "#8AC4DA" },
+  { label: "Guest parking? 🚗", question: "Guest parking? 🚗", bg: "#FFEDE8", border: "#E8997A" },
+];
+
 function IcebreakerChip({ item, onPress }: { item: typeof ICEBREAKERS[0]; onPress: () => void }) {
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -82,9 +90,11 @@ function MessageBubble({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) {
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ conversationId: string }>();
+  const params = useLocalSearchParams<{ conversationId: string; source?: string }>();
   const { conversations, currentUser, getMessages, sendMessage } = useApp();
   const [text, setText] = useState("");
+  const isCrashCash = params.source === "crash_cash";
+  const activeChips = isCrashCash ? CRASH_CASH_CHIPS : ICEBREAKERS;
   const flatListRef = useRef<FlatList>(null);
 
   const convo = conversations.find(c => c.id === params.conversationId);
@@ -173,7 +183,7 @@ export default function ChatScreen() {
         contentContainerStyle={icStyles.row}
         style={{ flexGrow: 0, borderTopWidth: 1, borderTopColor: Colors.borderSoft, backgroundColor: Colors.cardBg }}
       >
-        {ICEBREAKERS.map((ic, idx) => (
+        {activeChips.map((ic, idx) => (
           <IcebreakerChip
             key={idx}
             item={ic}

@@ -44,7 +44,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - `app/chat.tsx` — Chat room with listing preview header, timestamped bubbles, send input
 - `app/link-listing.tsx` — Bridge screen for Host/Sublessor users without listings
 
-- `app/crash-cash.tsx` — Urgent short-term "Crash & Cash" social feed (SOS/Offering vibes, barter currency, DM to chat)
+- `app/crash-cash.tsx` — Urgent short-term "Crash & Cash" social feed. Pinterest 2-column grid with urgency sort (ascending targetDate). Posts have status (active/completed), targetDate (7-day max), mandatory image upload. Owners see "Mark as Filled" instead of DM. Feed auto-filters expired/completed posts. DM navigates to chat with source=crash_cash for contextual icebreaker chips.
 - `app/compatibility-setup.tsx` — Gen Z coseeker vibe profile builder (identity, zodiac, MBTI, habits, icebreaker prompts → saves VibeProfile then routes to matchmaker)
 - `app/admin.tsx` — Hidden admin dashboard
 
