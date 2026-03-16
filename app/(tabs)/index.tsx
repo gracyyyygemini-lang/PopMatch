@@ -78,6 +78,13 @@ const FEATURES = [
     icon: "partly-sunny-outline" as const,
     color: Colors.grassGreen,
   },
+  {
+    route: "/crash-cash" as const,
+    title: "Crash & Cash",
+    subtitle: "Urgent couch for tonight — pay in cash, boba, or Lion cover",
+    icon: "flash-outline" as const,
+    color: "#FF8C69",
+  },
 ];
 
 export default function HomeScreen() {

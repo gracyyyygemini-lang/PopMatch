@@ -148,6 +148,25 @@ export interface BreakPost {
   timestamp: number;
 }
 
+export type CrashVibe = "sos" | "offering";
+export type CrashCurrency = "cash" | "boba" | "lion_cover" | "food" | "favor";
+
+export interface CrashPost {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  avatarColor: string;
+  vibe: CrashVibe;
+  story: string;
+  imageUrl?: string;
+  dates: string;
+  zone: Zone;
+  currency: CrashCurrency;
+  currencyLabel: string;
+  timestamp: number;
+}
+
 export interface MatchRecord {
   userId: string;
   score: number;
@@ -232,6 +251,49 @@ const DEMO_POSTS: SubleasePost[] = [
   },
 ];
 
+const DEMO_CRASH: CrashPost[] = [
+  {
+    id: "cr1", userId: "u2", userName: "Jake Thompson", userEmail: "jthom22@illinois.edu",
+    avatarColor: "#CC5500", vibe: "sos",
+    story: "Locked out of the Ike. Need a floor to sleep on, will buy you a Blue Guy at Kam's tomorrow.",
+    dates: "Tonight only", zone: "south",
+    currency: "food", currencyLabel: "🍺 Kam's Blue Guy",
+    timestamp: Date.now() - 600000,
+  },
+  {
+    id: "cr2", userId: "u5", userName: "Marcus Williams", userEmail: "mwill5@illinois.edu",
+    avatarColor: "#1A7AAF", vibe: "offering",
+    story: "Roommate is gone. Got an air mattress near Grainger. Yours for $15 or a burrito from Maize.",
+    dates: "Nov 22 – Nov 25", zone: "north",
+    currency: "cash", currencyLabel: "💵 $15",
+    timestamp: Date.now() - 1800000,
+  },
+  {
+    id: "cr3", userId: "u4", userName: "Aisha Okonkwo", userEmail: "aokonkwo@illinois.edu",
+    avatarColor: "#5A8A5A", vibe: "sos",
+    story: "Flight got cancelled. Stranded at Willard with a suitcase and no plan. Can venmo or buy boba.",
+    dates: "Tonight only", zone: "campustown",
+    currency: "boba", currencyLabel: "🧋 Boba",
+    timestamp: Date.now() - 3600000,
+  },
+  {
+    id: "cr4", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
+    avatarColor: "#9B59B6", vibe: "offering",
+    story: "Empty couch in my apartment all Moms Weekend. $20/night or cover me at Red Lion Saturday.",
+    dates: "Mom/Dad Weekend", zone: "campustown",
+    currency: "lion_cover", currencyLabel: "🦁 Lion Cover",
+    timestamp: Date.now() - 7200000,
+  },
+  {
+    id: "cr5", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
+    avatarColor: "#E0BC00", vibe: "offering",
+    story: "Subletting my studio for graduation weekend. Walk to Foellinger. Clean, private, AC.",
+    dates: "May 9 – May 12", zone: "campustown",
+    currency: "cash", currencyLabel: "💵 $40/night",
+    timestamp: Date.now() - 14400000,
+  },
+];
+
 const DEMO_BREAKS: BreakPost[] = [
   {
     id: "bp1", userId: "u4", userName: "Aisha Okonkwo", userEmail: "aokonkwo@illinois.edu",
@@ -275,6 +337,8 @@ interface AppContextValue {
   removeSublease: (id: string) => void;
   breakPosts: BreakPost[];
   addBreakPost: (post: BreakPost) => void;
+  crashPosts: CrashPost[];
+  addCrashPost: (post: CrashPost) => void;
   friends: FriendRecord[];
   addFriend: (friend: Omit<FriendRecord, "vouchedByMe" | "timestamp">) => Promise<void>;
   removeFriend: (email: string) => Promise<void>;
@@ -379,6 +443,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [passedUserIds, setPassedUserIds] = useState<string[]>([]);
   const [subleases, setSubleases] = useState<SubleasePost[]>(DEMO_POSTS);
   const [breakPosts, setBreakPosts] = useState<BreakPost[]>(DEMO_BREAKS);
+  const [crashPosts, setCrashPosts] = useState<CrashPost[]>(DEMO_CRASH);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -394,6 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const scamDismissed = await AsyncStorage.getItem("@popmatch_scam");
         const storedSubleases = await AsyncStorage.getItem("@popmatch_subleases");
         const storedBreaks = await AsyncStorage.getItem("@popmatch_breaks");
+        const storedCrash = await AsyncStorage.getItem("@popmatch_crash");
         const storedFriends = await AsyncStorage.getItem("@popmatch_friends");
         const storedConvos = await AsyncStorage.getItem("@popmatch_conversations");
         const storedChatMsgs = await AsyncStorage.getItem("@popmatch_chatmessages");
@@ -406,6 +472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (scamDismissed === "true") setScamBannerDismissed(true);
         if (storedSubleases) setSubleases(JSON.parse(storedSubleases));
         if (storedBreaks) setBreakPosts(JSON.parse(storedBreaks));
+        if (storedCrash) setCrashPosts(JSON.parse(storedCrash));
         if (storedFriends) setFriends(JSON.parse(storedFriends));
         if (storedConvos) setConversations(JSON.parse(storedConvos));
         if (storedChatMsgs) setChatMessages(JSON.parse(storedChatMsgs));
@@ -467,6 +534,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const updated = [post, ...breakPosts];
     setBreakPosts(updated);
     await AsyncStorage.setItem("@popmatch_breaks", JSON.stringify(updated));
+  };
+
+  const addCrashPost = async (post: CrashPost) => {
+    const updated = [post, ...crashPosts];
+    setCrashPosts(updated);
+    await AsyncStorage.setItem("@popmatch_crash", JSON.stringify(updated));
   };
 
   const addFriend = async (friendData: Omit<FriendRecord, "vouchedByMe" | "timestamp">) => {
@@ -610,11 +683,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     mockUsers: MOCK_USERS, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
     subleases, addSublease, removeSublease, breakPosts, addBreakPost,
+    crashPosts, addCrashPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
     conversations, startConversation, sendMessage, getMessages,
   }), [
     currentUser, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
-    likedUserIds, passedUserIds, subleases, breakPosts, friends,
+    likedUserIds, passedUserIds, subleases, breakPosts, crashPosts, friends,
     conversations, chatMessages
   ]);
 
