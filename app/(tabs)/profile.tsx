@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform,
+  Modal, TextInput, FlatList, KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +11,13 @@ import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import type { LeaseType, Zone, Landlord, GenderPref, UserProfile } from "@/context/AppContext";
+
+type SheetType = "avatar" | "name" | "bio" | "budget" | "major" | "leaseType" | "zone" | "landlord" | "genderPref" | "gender" | null;
+
+const SEAFOAM = "rgba(208,240,224,1)";
+const SEAFOAM_BG = "rgba(208,240,224,0.35)";
+const CORAL = "#FF6B4E";
 
 const LEASE_LABELS: Record<string, string> = {
   full_year: "Full Year (Aug – Jul)",
@@ -41,8 +49,93 @@ const LANDLORD_LABELS: Record<string, string> = {
   other: "Private / Other",
 };
 
-function InfoRow({ icon, label, value, color }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; color?: string }) {
+const MAJORS = [
+  "Computer Science", "Engineering", "Business", "Biology", "Psychology",
+  "Finance", "Architecture", "Journalism", "Statistics", "Mathematics",
+  "Physics", "Chemistry", "Economics", "Political Science", "Art & Design",
+  "Pre-Medicine", "Education", "Communications", "Sociology", "Other"
+];
+
+const AVATAR_COLORS = [
+  "#005F73", "#1A9BB5", "#4A8A5A", "#6AAB7A", "#FF6B4E",
+  "#FF8570", "#FFD966", "#E8C14E", "#9B59B6", "#E06800",
+  "#C62828", "#5A7A82", "#2E86AB", "#A23B72",
+];
+
+const GENDER_OPTIONS: { key: "female" | "male" | "nonbinary"; label: string }[] = [
+  { key: "female", label: "Woman" },
+  { key: "male", label: "Man" },
+  { key: "nonbinary", label: "Non-binary" },
+];
+
+function BottomSheet({
+  visible,
+  onClose,
+  title,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={sh.overlay} activeOpacity={1} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close sheet">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ justifyContent: "flex-end" }}>
+          <TouchableOpacity activeOpacity={1} style={sh.sheet}>
+            <View style={sh.handle} />
+            <Text style={sh.title} accessibilityRole="header">{title}</Text>
+            {children}
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+function OptionRow({
+  label,
+  selected,
+  onPress,
+  color,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  color?: string;
+}) {
+  return (
+    <TouchableOpacity
+      style={[sh.optionRow, selected && { backgroundColor: SEAFOAM_BG }]}
+      onPress={onPress}
+      activeOpacity={0.6}
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+    >
+      <Text style={[sh.optionText, selected && { color: Colors.ocean, fontFamily: "Nunito_700Bold" }]}>
+        {label}
+      </Text>
+      {selected && <Ionicons name="checkmark-circle" size={20} color={color || Colors.ocean} />}
+    </TouchableOpacity>
+  );
+}
+
+function InfoRow({
+  icon,
+  label,
+  value,
+  color,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  color?: string;
+  onPress?: () => void;
+}) {
+  const content = (
     <View style={styles.infoRow}>
       <View style={[styles.infoIcon, { backgroundColor: (color || Colors.ocean) + "18" }]}>
         <Ionicons name={icon} size={15} color={color || Colors.ocean} />
@@ -51,8 +144,18 @@ function InfoRow({ icon, label, value, color }: { icon: keyof typeof Ionicons.gl
         <Text style={styles.infoLabel}>{label}</Text>
         <Text style={styles.infoValue}>{value}</Text>
       </View>
+      {onPress && <Ionicons name="chevron-forward" size={14} color={Colors.textLight} />}
     </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.6} style={{ backgroundColor: "transparent" }}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+  return content;
 }
 
 export default function ProfileScreen() {
@@ -63,6 +166,28 @@ export default function ProfileScreen() {
   const mySubleases = subleases.filter(s => s.userId === currentUser?.id);
   const [versionTaps, setVersionTaps] = useState(0);
   const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [sheetType, setSheetType] = useState<SheetType>(null);
+  const [editText, setEditText] = useState("");
+  const [majorSearch, setMajorSearch] = useState("");
+  const [algoModalVisible, setAlgoModalVisible] = useState(false);
+
+  const openSheet = (type: SheetType) => {
+    setSheetType(type);
+    if (type === "name") setEditText(currentUser?.name || "");
+    else if (type === "bio") setEditText(currentUser?.bio || "");
+    else if (type === "budget") setEditText(currentUser?.budget?.toString() || "");
+    else if (type === "major") setMajorSearch("");
+    Haptics.selectionAsync();
+  };
+
+  const closeSheet = () => setSheetType(null);
+
+  const updateField = <K extends keyof UserProfile>(field: K, value: UserProfile[K]) => {
+    if (!currentUser) return;
+    setCurrentUser({ ...currentUser, [field]: value });
+    Haptics.selectionAsync();
+  };
 
   const handleVersionTap = () => {
     const next = versionTaps + 1;
@@ -136,6 +261,203 @@ export default function ProfileScreen() {
   }
 
   const initials = currentUser.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+  const filteredMajors = majorSearch
+    ? MAJORS.filter(m => m.toLowerCase().includes(majorSearch.toLowerCase()))
+    : MAJORS;
+
+  const renderSheet = () => {
+    if (!sheetType) return null;
+
+    if (sheetType === "avatar") {
+      return (
+        <BottomSheet visible title="Avatar Color" onClose={closeSheet}>
+          <View style={sh.colorGrid}>
+            {AVATAR_COLORS.map(c => (
+              <TouchableOpacity
+                key={c}
+                style={[sh.colorCircle, { backgroundColor: c }, currentUser.avatarColor === c && sh.colorCircleActive]}
+                onPress={() => { updateField("avatarColor", c); closeSheet(); }}
+              />
+            ))}
+          </View>
+        </BottomSheet>
+      );
+    }
+
+    if (sheetType === "name") {
+      return (
+        <BottomSheet visible title="Edit Name" onClose={closeSheet}>
+          <TextInput
+            style={sh.textInput}
+            value={editText}
+            onChangeText={setEditText}
+            placeholder="Your name"
+            placeholderTextColor={Colors.textLight}
+            autoFocus
+          />
+          <TouchableOpacity
+            style={sh.saveBtn}
+            onPress={() => { if (editText.trim()) { updateField("name", editText.trim()); closeSheet(); } }}
+          >
+            <Text style={sh.saveBtnText}>Save</Text>
+          </TouchableOpacity>
+        </BottomSheet>
+      );
+    }
+
+    if (sheetType === "bio") {
+      return (
+        <BottomSheet visible title="Edit Bio" onClose={closeSheet}>
+          <TextInput
+            style={[sh.textInput, { height: 80, textAlignVertical: "top" }]}
+            value={editText}
+            onChangeText={setEditText}
+            placeholder="Tell potential roommates about yourself..."
+            placeholderTextColor={Colors.textLight}
+            multiline
+            autoFocus
+          />
+          <TouchableOpacity
+            style={sh.saveBtn}
+            onPress={() => { updateField("bio", editText.trim()); closeSheet(); }}
+          >
+            <Text style={sh.saveBtnText}>Save</Text>
+          </TouchableOpacity>
+        </BottomSheet>
+      );
+    }
+
+    if (sheetType === "budget") {
+      return (
+        <BottomSheet visible title="Monthly Budget" onClose={closeSheet}>
+          <TextInput
+            style={sh.textInput}
+            value={editText}
+            onChangeText={setEditText}
+            placeholder="e.g. 800"
+            placeholderTextColor={Colors.textLight}
+            keyboardType="numeric"
+            autoFocus
+          />
+          <TouchableOpacity
+            style={sh.saveBtn}
+            onPress={() => {
+              const val = parseInt(editText);
+              if (!isNaN(val) && val > 0) { updateField("budget", val); closeSheet(); }
+            }}
+          >
+            <Text style={sh.saveBtnText}>Save</Text>
+          </TouchableOpacity>
+        </BottomSheet>
+      );
+    }
+
+    if (sheetType === "major") {
+      return (
+        <BottomSheet visible title="Select Major" onClose={closeSheet}>
+          <TextInput
+            style={sh.textInput}
+            value={majorSearch}
+            onChangeText={setMajorSearch}
+            placeholder="Search majors..."
+            placeholderTextColor={Colors.textLight}
+          />
+          <FlatList
+            data={filteredMajors}
+            keyExtractor={i => i}
+            style={{ maxHeight: 260 }}
+            renderItem={({ item }) => (
+              <OptionRow
+                label={item}
+                selected={currentUser.major === item}
+                onPress={() => { updateField("major", item); closeSheet(); }}
+              />
+            )}
+          />
+        </BottomSheet>
+      );
+    }
+
+    if (sheetType === "leaseType") {
+      return (
+        <BottomSheet visible title="Lease Type" onClose={closeSheet}>
+          {(Object.entries(LEASE_LABELS) as [LeaseType, string][]).map(([key, label]) => (
+            <OptionRow
+              key={key}
+              label={label}
+              selected={currentUser.leaseType === key}
+              onPress={() => { updateField("leaseType", key); closeSheet(); }}
+            />
+          ))}
+        </BottomSheet>
+      );
+    }
+
+    if (sheetType === "zone") {
+      return (
+        <BottomSheet visible title="Preferred Zone" onClose={closeSheet}>
+          {(Object.entries(ZONE_LABELS) as [Zone, string][]).map(([key, label]) => (
+            <OptionRow
+              key={key}
+              label={label}
+              selected={currentUser.zone === key}
+              onPress={() => { updateField("zone", key); closeSheet(); }}
+              color={Colors.grassGreen}
+            />
+          ))}
+        </BottomSheet>
+      );
+    }
+
+    if (sheetType === "landlord") {
+      return (
+        <BottomSheet visible title="Landlord" onClose={closeSheet}>
+          {(Object.entries(LANDLORD_LABELS) as [Landlord, string][]).map(([key, label]) => (
+            <OptionRow
+              key={key}
+              label={label}
+              selected={currentUser.landlord === key}
+              onPress={() => { updateField("landlord", key); closeSheet(); }}
+              color={Colors.orange}
+            />
+          ))}
+        </BottomSheet>
+      );
+    }
+
+    if (sheetType === "genderPref") {
+      return (
+        <BottomSheet visible title="Roommate Preference" onClose={closeSheet}>
+          {(Object.entries(GENDER_LABELS) as [GenderPref, string][]).map(([key, label]) => (
+            <OptionRow
+              key={key}
+              label={label}
+              selected={currentUser.genderPref === key}
+              onPress={() => { updateField("genderPref", key); closeSheet(); }}
+              color={Colors.goldDark}
+            />
+          ))}
+        </BottomSheet>
+      );
+    }
+
+    if (sheetType === "gender") {
+      return (
+        <BottomSheet visible title="Gender Identity" onClose={closeSheet}>
+          {GENDER_OPTIONS.map(({ key, label }) => (
+            <OptionRow
+              key={key}
+              label={label}
+              selected={currentUser.gender === key}
+              onPress={() => { updateField("gender", key); closeSheet(); }}
+            />
+          ))}
+        </BottomSheet>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
@@ -154,30 +476,49 @@ export default function ProfileScreen() {
       }]} showsVerticalScrollIndicator={false}>
 
         <View style={styles.profileCard}>
-          <View style={[styles.avatar, { backgroundColor: currentUser.avatarColor }]}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <Text style={styles.profileName}>{currentUser.name}</Text>
+          <TouchableOpacity onPress={() => openSheet("avatar")} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Change avatar color">
+            <View style={[styles.avatar, { backgroundColor: currentUser.avatarColor }]}>
+              <Text style={styles.avatarText}>{initials}</Text>
+              <View style={styles.editBadge}>
+                <Ionicons name="color-palette-outline" size={10} color={Colors.white} />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => openSheet("name")} activeOpacity={0.7} style={styles.editableRow}>
+            <Text style={styles.profileName}>{currentUser.name}</Text>
+            <Ionicons name="pencil-outline" size={12} color={Colors.textLight} />
+          </TouchableOpacity>
+
           <Text style={styles.profileEmail}>{currentUser.email}</Text>
-          {currentUser.major ? (
+
+          <TouchableOpacity onPress={() => openSheet("major")} activeOpacity={0.7}>
             <View style={styles.majorTag}>
               <Ionicons name="school-outline" size={12} color={Colors.ocean} />
-              <Text style={styles.majorTagText}>{currentUser.major}</Text>
+              <Text style={styles.majorTagText}>{currentUser.major || "Add major"}</Text>
+              <Ionicons name="chevron-forward" size={11} color={Colors.ocean} />
             </View>
-          ) : null}
-          {currentUser.bio ? (
-            <Text style={styles.bio}>{currentUser.bio}</Text>
-          ) : null}
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => openSheet("bio")} activeOpacity={0.7} style={{ width: "100%" }}>
+            <Text style={styles.bio}>
+              {currentUser.bio || "Tap to add a bio..."}
+            </Text>
+            <View style={styles.editHint}>
+              <Ionicons name="pencil-outline" size={10} color={Colors.textLight} />
+            </View>
+          </TouchableOpacity>
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statNum}>{friends.length}</Text>
               <Text style={styles.statLabel}>Circle</Text>
             </View>
-            <View style={[styles.statBox, styles.statBoxMid]}>
+            <TouchableOpacity style={[styles.statBox, styles.statBoxMid]} onPress={() => openSheet("budget")} activeOpacity={0.7}>
               <Text style={[styles.statNum, { color: Colors.ocean }]}>${currentUser.budget}</Text>
               <Text style={styles.statLabel}>Budget/mo</Text>
-            </View>
+              <Ionicons name="pencil-outline" size={9} color={Colors.textLight} style={{ position: "absolute", top: 6, right: 6 }} />
+            </TouchableOpacity>
             <View style={styles.statBox}>
               <Text style={styles.statNum}>{mySubleases.length}</Text>
               <Text style={styles.statLabel}>Listings</Text>
@@ -188,13 +529,13 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Housing Details</Text>
           <View style={styles.detailCard}>
-            <InfoRow icon="calendar-outline" label="Lease Type" value={LEASE_LABELS[currentUser.leaseType]} color={Colors.ocean} />
+            <InfoRow icon="calendar-outline" label="Lease Type" value={LEASE_LABELS[currentUser.leaseType]} color={Colors.ocean} onPress={() => openSheet("leaseType")} />
             <View style={styles.divider} />
-            <InfoRow icon="location-outline" label="Preferred Zone" value={ZONE_LABELS[currentUser.zone]} color={Colors.grassGreen} />
+            <InfoRow icon="location-outline" label="Preferred Zone" value={ZONE_LABELS[currentUser.zone]} color={Colors.grassGreen} onPress={() => openSheet("zone")} />
             <View style={styles.divider} />
-            <InfoRow icon="business-outline" label="Landlord" value={LANDLORD_LABELS[currentUser.landlord]} color={Colors.orange} />
+            <InfoRow icon="business-outline" label="Landlord" value={LANDLORD_LABELS[currentUser.landlord]} color={Colors.orange} onPress={() => openSheet("landlord")} />
             <View style={styles.divider} />
-            <InfoRow icon="people-outline" label="Roommate Pref" value={GENDER_LABELS[currentUser.genderPref]} color={Colors.goldDark} />
+            <InfoRow icon="people-outline" label="Roommate Pref" value={GENDER_LABELS[currentUser.genderPref]} color={Colors.goldDark} onPress={() => openSheet("genderPref")} />
           </View>
         </View>
 
@@ -205,7 +546,20 @@ export default function ProfileScreen() {
               <Text style={styles.ratingLabel}>Cleanliness</Text>
               <View style={styles.dots}>
                 {[1,2,3,4,5].map(n => (
-                  <View key={n} style={[styles.dot, { backgroundColor: n <= currentUser.cleanliness ? Colors.grassGreen : Colors.borderSoft }]} />
+                  <TouchableOpacity
+                    key={n}
+                    onPress={() => updateField("cleanliness", n)}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set cleanliness to ${n}`}
+                    accessibilityState={{ selected: n <= currentUser.cleanliness }}
+                  >
+                    <View style={[styles.dot, {
+                      backgroundColor: n <= currentUser.cleanliness ? Colors.grassGreen : Colors.borderSoft,
+                      transform: [{ scale: n <= currentUser.cleanliness ? 1 : 0.85 }],
+                    }]} />
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>
@@ -214,66 +568,115 @@ export default function ProfileScreen() {
               <Text style={styles.ratingLabel}>Noise & Social</Text>
               <View style={styles.dots}>
                 {[1,2,3,4,5].map(n => (
-                  <View key={n} style={[styles.dot, { backgroundColor: n <= currentUser.noise ? Colors.ocean : Colors.borderSoft }]} />
+                  <TouchableOpacity
+                    key={n}
+                    onPress={() => updateField("noise", n)}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set noise level to ${n}`}
+                    accessibilityState={{ selected: n <= currentUser.noise }}
+                  >
+                    <View style={[styles.dot, {
+                      backgroundColor: n <= currentUser.noise ? Colors.ocean : Colors.borderSoft,
+                      transform: [{ scale: n <= currentUser.noise ? 1 : 0.85 }],
+                    }]} />
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>
             <View style={styles.divider} />
-            <View style={styles.ratingRow}>
+            <TouchableOpacity onPress={() => openSheet("gender")} activeOpacity={0.6} style={styles.ratingRow}>
               <Text style={styles.ratingLabel}>I identify as</Text>
-              <Text style={styles.ratingValue}>
-                {currentUser.gender === "female" ? "Woman" : currentUser.gender === "male" ? "Man" : "Non-binary"}
-              </Text>
-            </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={styles.ratingValue}>
+                  {currentUser.gender === "female" ? "Woman" : currentUser.gender === "male" ? "Man" : "Non-binary"}
+                </Text>
+                <Ionicons name="chevron-forward" size={12} color={Colors.textLight} />
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Break Plans</Text>
           <View style={styles.detailCard}>
-            <View style={styles.breakRow}>
+            <TouchableOpacity
+              style={styles.breakRow}
+              activeOpacity={0.6}
+              onPress={() => {
+                updateField("staysThanksgiving", !currentUser.staysThanksgiving);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              accessibilityRole="switch"
+              accessibilityLabel="Thanksgiving Break"
+              accessibilityState={{ checked: currentUser.staysThanksgiving }}
+            >
               <View style={styles.breakLeft}>
                 <Ionicons name="home-outline" size={15} color={currentUser.staysThanksgiving ? Colors.grassGreen : Colors.textLight} />
                 <Text style={styles.breakLabel}>Thanksgiving Break</Text>
               </View>
-              <View style={[styles.breakBadge, { backgroundColor: currentUser.staysThanksgiving ? Colors.grassGreen : Colors.borderSoft }]}>
-                <Text style={[styles.breakBadgeText, { color: currentUser.staysThanksgiving ? Colors.white : Colors.textMuted }]}>
+              <View style={[styles.breakBadge, {
+                backgroundColor: currentUser.staysThanksgiving ? SEAFOAM : CORAL + "20",
+              }]}>
+                <Text style={[styles.breakBadgeText, {
+                  color: currentUser.staysThanksgiving ? Colors.grassGreen : CORAL,
+                }]}>
                   {currentUser.staysThanksgiving ? "Staying" : "Leaving"}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
             <View style={styles.divider} />
-            <View style={styles.breakRow}>
+            <TouchableOpacity
+              style={styles.breakRow}
+              activeOpacity={0.6}
+              onPress={() => {
+                updateField("staysSpringBreak", !currentUser.staysSpringBreak);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              accessibilityRole="switch"
+              accessibilityLabel="Spring Break"
+              accessibilityState={{ checked: currentUser.staysSpringBreak }}
+            >
               <View style={styles.breakLeft}>
                 <Ionicons name="sunny-outline" size={15} color={currentUser.staysSpringBreak ? Colors.grassGreen : Colors.textLight} />
                 <Text style={styles.breakLabel}>Spring Break</Text>
               </View>
-              <View style={[styles.breakBadge, { backgroundColor: currentUser.staysSpringBreak ? Colors.grassGreen : Colors.borderSoft }]}>
-                <Text style={[styles.breakBadgeText, { color: currentUser.staysSpringBreak ? Colors.white : Colors.textMuted }]}>
+              <View style={[styles.breakBadge, {
+                backgroundColor: currentUser.staysSpringBreak ? SEAFOAM : CORAL + "20",
+              }]}>
+                <Text style={[styles.breakBadgeText, {
+                  color: currentUser.staysSpringBreak ? Colors.grassGreen : CORAL,
+                }]}>
                   {currentUser.staysSpringBreak ? "Staying" : "Leaving"}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>How Matching Works</Text>
-          <View style={styles.algoCard}>
-            <Text style={styles.algoDesc}>Weighted Euclidean Distance formula. Lower distance = higher compatibility.</Text>
-            {[
-              { label: "Budget compatibility", weight: "35%", color: Colors.ocean },
-              { label: "Cleanliness match", weight: "25%", color: Colors.grassGreen },
-              { label: "Noise & social level", weight: "20%", color: Colors.orange },
-              { label: "Zone proximity", weight: "20%", color: Colors.goldDark },
-            ].map(({ label, weight, color }) => (
-              <View key={label} style={styles.algoRow}>
-                <View style={[styles.algoDot, { backgroundColor: color }]} />
-                <Text style={styles.algoLabel}>{label}</Text>
-                <Text style={[styles.algoWeight, { color }]}>{weight}</Text>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => { setAlgoModalVisible(true); Haptics.selectionAsync(); }}>
+            <View style={styles.algoCard}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={styles.algoDesc}>Weighted Euclidean Distance formula</Text>
+                <Ionicons name="information-circle-outline" size={18} color={Colors.ocean} />
               </View>
-            ))}
-          </View>
+              {[
+                { label: "Budget compatibility", weight: "35%", color: Colors.ocean },
+                { label: "Cleanliness match", weight: "25%", color: Colors.grassGreen },
+                { label: "Noise & social level", weight: "20%", color: Colors.orange },
+                { label: "Zone proximity", weight: "20%", color: Colors.goldDark },
+              ].map(({ label, weight, color }) => (
+                <View key={label} style={styles.algoRow}>
+                  <View style={[styles.algoDot, { backgroundColor: color }]} />
+                  <Text style={styles.algoLabel}>{label}</Text>
+                  <Text style={[styles.algoWeight, { color }]}>{weight}</Text>
+                </View>
+              ))}
+            </View>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.signOutFullBtn} onPress={handleSignOut}>
@@ -292,9 +695,119 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {renderSheet()}
+
+      <Modal visible={algoModalVisible} transparent animationType="fade" onRequestClose={() => setAlgoModalVisible(false)}>
+        <TouchableOpacity style={sh.overlay} activeOpacity={1} onPress={() => setAlgoModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={sh.algoModal}>
+            <View style={sh.handle} />
+            <Text style={sh.algoModalTitle}>How PopMatch Finds Your Roommate</Text>
+            <Text style={sh.algoModalBody}>
+              We use a Weighted Euclidean Distance formula to calculate how compatible two students are. Think of it like measuring "distance" between your preferences — the closer you are, the better the match!
+            </Text>
+            <View style={sh.algoModalSection}>
+              <Text style={sh.algoModalSubtitle}>Weight Breakdown</Text>
+              {[
+                { label: "Budget", pct: "35%", desc: "Financial compatibility is the biggest factor — you need to agree on rent.", color: Colors.ocean },
+                { label: "Cleanliness", pct: "25%", desc: "Living with someone at a similar tidiness level avoids daily friction.", color: Colors.grassGreen },
+                { label: "Noise & Social", pct: "20%", desc: "Night owl vs. early bird? Party vs. quiet? This matters.", color: Colors.orange },
+                { label: "Zone", pct: "20%", desc: "Preferring the same neighborhood makes apartment hunting easier.", color: Colors.goldDark },
+              ].map(({ label, pct, desc, color }) => (
+                <View key={label} style={sh.algoModalRow}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View style={[sh.algoModalDot, { backgroundColor: color }]} />
+                    <Text style={sh.algoModalLabel}>{label}</Text>
+                    <Text style={[sh.algoModalPct, { color }]}>{pct}</Text>
+                  </View>
+                  <Text style={sh.algoModalDesc}>{desc}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={sh.algoModalFooter}>
+              Lower distance = higher compatibility. A 95%+ match means you and your potential roommate are really in sync!
+            </Text>
+            <TouchableOpacity style={sh.saveBtn} onPress={() => setAlgoModalVisible(false)}>
+              <Text style={sh.saveBtnText}>Got It</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
+
+const sh = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, paddingBottom: 36, maxHeight: "75%",
+  },
+  handle: {
+    width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.borderSoft,
+    alignSelf: "center", marginBottom: 16,
+  },
+  title: {
+    fontFamily: "Nunito_700Bold", fontSize: 18, color: Colors.charcoal, marginBottom: 16,
+  },
+  optionRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, marginBottom: 4,
+  },
+  optionText: {
+    fontFamily: "Nunito_600SemiBold", fontSize: 15, color: Colors.charcoal,
+  },
+  textInput: {
+    fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.charcoal,
+    backgroundColor: Colors.sandDark, borderRadius: 12, borderWidth: 1.5,
+    borderColor: Colors.borderSoft, padding: 14, marginBottom: 12,
+  },
+  saveBtn: {
+    backgroundColor: Colors.ocean, borderRadius: 12, paddingVertical: 14,
+    alignItems: "center",
+  },
+  saveBtnText: {
+    fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.white,
+  },
+  colorGrid: {
+    flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", paddingVertical: 8,
+  },
+  colorCircle: {
+    width: 44, height: 44, borderRadius: 22,
+  },
+  colorCircleActive: {
+    borderWidth: 3, borderColor: Colors.charcoal,
+  },
+  algoModal: {
+    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, paddingBottom: 36, maxHeight: "85%",
+  },
+  algoModalTitle: {
+    fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal, marginBottom: 10,
+  },
+  algoModalBody: {
+    fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted, lineHeight: 21, marginBottom: 16,
+  },
+  algoModalSection: { gap: 12, marginBottom: 16 },
+  algoModalSubtitle: {
+    fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal,
+  },
+  algoModalRow: { gap: 3 },
+  algoModalDot: { width: 10, height: 10, borderRadius: 5 },
+  algoModalLabel: {
+    fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal, flex: 1,
+  },
+  algoModalPct: { fontFamily: "Nunito_700Bold", fontSize: 14 },
+  algoModalDesc: {
+    fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, lineHeight: 17, paddingLeft: 18,
+  },
+  algoModalFooter: {
+    fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, lineHeight: 19,
+    fontStyle: "italic", marginBottom: 16,
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.sand },
@@ -313,8 +826,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBg, borderRadius: 20, borderWidth: 1.5,
     borderColor: Colors.borderSoft, padding: 20, alignItems: "center", gap: 8,
   },
-  avatar: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center" },
+  avatar: {
+    width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center",
+  },
   avatarText: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.white },
+  editBadge: {
+    position: "absolute", bottom: 0, right: 0, width: 22, height: 22, borderRadius: 11,
+    backgroundColor: Colors.charcoal, alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: Colors.white,
+  },
+  editableRow: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+  },
   profileName: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.charcoal },
   profileEmail: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
   majorTag: {
@@ -322,7 +845,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ocean + "18", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
   },
   majorTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.ocean },
-  bio: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center", lineHeight: 19 },
+  bio: {
+    fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted,
+    textAlign: "center", lineHeight: 19,
+  },
+  editHint: {
+    position: "absolute", right: 0, top: 0,
+  },
   statsRow: { flexDirection: "row", width: "100%", gap: 8, marginTop: 4 },
   statBox: { flex: 1, backgroundColor: Colors.sandDark, borderRadius: 12, padding: 12, alignItems: "center", gap: 2 },
   statBoxMid: { backgroundColor: Colors.ocean + "15" },
@@ -341,14 +870,14 @@ const styles = StyleSheet.create({
   ratingLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
   ratingValue: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
   dots: { flexDirection: "row", gap: 5 },
-  dot: { width: 12, height: 12, borderRadius: 6 },
+  dot: { width: 14, height: 14, borderRadius: 7 },
   breakRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14 },
   breakLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   breakLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
   breakBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   breakBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 12 },
   algoCard: { backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 16, gap: 10 },
-  algoDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, lineHeight: 18 },
+  algoDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, lineHeight: 18, flex: 1 },
   algoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   algoDot: { width: 9, height: 9, borderRadius: 5 },
   algoLabel: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, flex: 1 },
