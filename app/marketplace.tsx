@@ -663,38 +663,7 @@ export default function MarketplaceScreen() {
 
       <ZonePicker selected={zoneFilter} onSelect={setZoneFilter} />
 
-      <ScrollView
-        horizontal showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.filterRow}
-      >
-        {(Object.keys(CATEGORY_LABELS) as CategoryFilter[]).map(key => {
-          const isActive = activeFilter === key;
-          const chipColor = CATEGORY_COLORS[key];
-          return (
-            <TouchableOpacity
-              key={key}
-              style={[
-                styles.filterChip,
-                isActive && { backgroundColor: chipColor, borderColor: chipColor }
-              ]}
-              onPress={() => { handleCategoryChange(key); Haptics.selectionAsync(); }}
-            >
-              <Ionicons
-                name={CATEGORY_ICONS[key]}
-                size={12}
-                color={isActive ? Colors.white : Colors.textMuted}
-              />
-              <Text style={[
-                styles.filterChipText,
-                isActive && styles.filterChipTextActive
-              ]}>
-                {CATEGORY_LABELS[key]}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      <View style={{ height: 16 }} />
 
       <SubFilterRow
         category={activeFilter}
