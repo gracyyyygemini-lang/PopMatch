@@ -1,7 +1,7 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable, TouchableOpacity, Platform,
-  Modal, Image, TextInput, KeyboardAvoidingView, ScrollView,
+  Modal, TextInput, KeyboardAvoidingView, ScrollView, useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,15 +16,27 @@ const SUBTITLE_GREY = "#6B8A8F";
 const SCREEN_BG = "#FBFBF9";
 const CORAL_FAB = "#FF8C69";
 const ESSENTIALS_BG = "#F0F5F5";
+const SOS_TINT = "#FDECE8";
+const OFFER_TINT = "#E8F6F3";
 const SOS_RED = "#E74C3C";
 const OFFERING_GREEN = "#D0F0E0";
+const GRID_GAP = 12;
+const GRID_PAD = 16;
 
 const ZONE_SHORT: Record<string, string> = {
   campustown: "Campustown",
-  north: "North Campus",
-  south: "South Campus",
+  north: "North",
+  south: "South",
   urbana: "Urbana",
   downtown: "Downtown",
+};
+
+const PLACEHOLDER_IMGS: Record<string, { colors: string[]; icon: keyof typeof Ionicons.glyphMap }> = {
+  campustown: { colors: ["#FFE5D9", "#FBBF9E"], icon: "storefront-outline" },
+  north: { colors: ["#D6EAF8", "#A9CCE3"], icon: "hardware-chip-outline" },
+  south: { colors: ["#D5F5E3", "#A9DFBF"], icon: "football-outline" },
+  urbana: { colors: ["#FCF3CF", "#F9E79F"], icon: "leaf-outline" },
+  downtown: { colors: ["#E8DAEF", "#D2B4DE"], icon: "business-outline" },
 };
 
 const CURRENCY_OPTIONS: { key: CrashCurrency; emoji: string; label: string }[] = [
@@ -43,6 +55,8 @@ const ZONE_OPTIONS: { key: Zone; label: string }[] = [
   { key: "downtown", label: "Downtown" },
 ];
 
+type VibeFilter = "all" | "sos" | "offering";
+
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
@@ -53,98 +67,144 @@ function timeAgo(ts: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function FullScreenImage({ uri, visible, onClose }: { uri: string; visible: boolean; onClose: () => void }) {
-  const insets = useSafeAreaInsets();
-  if (!visible) return null;
-  return (
-    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={onClose}>
-      <View style={fsStyles.overlay}>
-        <TouchableOpacity
-          style={[fsStyles.closeBtn, { top: (Platform.OS === "web" ? 67 : insets.top) + 12 }]}
-          onPress={onClose}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="close" size={24} color={Colors.white} />
-        </TouchableOpacity>
-        <Image source={{ uri }} style={fsStyles.image} resizeMode="contain" />
-      </View>
-    </Modal>
-  );
-}
-
-const fsStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" },
-  closeBtn: {
-    position: "absolute", left: 16, zIndex: 10,
-    width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center", justifyContent: "center",
-  },
-  image: { width: "100%", height: "80%" },
-});
-
-function CrashCard({ post, onDm }: { post: CrashPost; onDm: () => void }) {
-  const [imageOpen, setImageOpen] = useState(false);
+function GridCard({ post, cardWidth, onDm }: { post: CrashPost; cardWidth: number; onDm: () => void }) {
   const isSos = post.vibe === "sos";
+  const tint = isSos ? SOS_TINT : OFFER_TINT;
+  const placeholder = PLACEHOLDER_IMGS[post.zone] || PLACEHOLDER_IMGS.campustown;
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardTopRow}>
-        <View style={[styles.vibePill, isSos ? styles.vibeRed : styles.vibeGreen]}>
-          <Text style={styles.vibeText}>
-            {isSos ? "🚨 SOS / Stranded" : "🛋️ Offering a Crashpad"}
-          </Text>
+    <View style={[gc.card, { width: cardWidth, backgroundColor: tint }]}>
+      <View style={gc.heroWrap}>
+        <View style={[gc.heroPlaceholder, { backgroundColor: placeholder.colors[0] }]}>
+          <Ionicons name={placeholder.icon} size={36} color={placeholder.colors[1]} />
         </View>
-        <Text style={styles.timestamp}>{timeAgo(post.timestamp)}</Text>
+
+        <View style={gc.avatarOverlay}>
+          <View style={[gc.avatar, { backgroundColor: post.avatarColor }]}>
+            <Text style={gc.avatarText}>{post.userName[0]}</Text>
+          </View>
+        </View>
+
+        <View style={gc.timeOverlay}>
+          <View style={gc.timePill}>
+            <Text style={gc.timeText}>{timeAgo(post.timestamp)}</Text>
+          </View>
+        </View>
+
+        <View style={gc.tagOverlay}>
+          <View style={[gc.tagPill, isSos ? gc.tagSos : gc.tagOffer]}>
+            <Text style={gc.tagText}>{isSos ? "🚨 NEED" : "🛋️ GOT"}</Text>
+          </View>
+        </View>
       </View>
 
-      <Text style={styles.story}>{post.story}</Text>
+      <View style={gc.details}>
+        <Text style={gc.story} numberOfLines={2}>{post.story}</Text>
 
-      {post.imageUrl && (
-        <>
-          <Pressable onPress={() => setImageOpen(true)}>
+        <View style={gc.essBox}>
+          <View style={gc.essItem}>
+            <Text style={gc.essIcon}>🗓️</Text>
+            <Text style={gc.essText} numberOfLines={1}>{post.dates}</Text>
+          </View>
+          <View style={gc.essItem}>
+            <Text style={gc.essIcon}>📍</Text>
+            <Text style={gc.essText} numberOfLines={1}>{ZONE_SHORT[post.zone] || post.zone}</Text>
+          </View>
+        </View>
+
+        <View style={gc.actionRow}>
+          <Text style={gc.currency} numberOfLines={1}>{post.currencyLabel}</Text>
+          <Pressable onPress={onDm}>
             {({ pressed }) => (
-              <Image
-                source={{ uri: post.imageUrl }}
-                style={[styles.thumbnail, pressed && { opacity: 0.8 }]}
-                resizeMode="cover"
-              />
+              <View style={[gc.dmBtn, pressed && { backgroundColor: DARK_TEAL, transform: [{ scale: 0.95 }] }]}>
+                <Text style={[gc.dmBtnText, pressed && { color: Colors.white }]}>DM ⚡️</Text>
+              </View>
             )}
           </Pressable>
-          <FullScreenImage uri={post.imageUrl} visible={imageOpen} onClose={() => setImageOpen(false)} />
-        </>
-      )}
-
-      <View style={styles.essentialsBox}>
-        <View style={styles.essentialItem}>
-          <Text style={styles.essentialIcon}>🗓️</Text>
-          <Text style={styles.essentialText}>{post.dates}</Text>
         </View>
-        <View style={styles.essentialItem}>
-          <Text style={styles.essentialIcon}>📍</Text>
-          <Text style={styles.essentialText}>{ZONE_SHORT[post.zone] || post.zone}</Text>
-        </View>
-      </View>
-
-      <View style={styles.actionRow}>
-        <Text style={styles.currencyLabel}>{post.currencyLabel}</Text>
-        <Pressable onPress={onDm}>
-          {({ pressed }) => (
-            <View style={[styles.dmButton, pressed && { backgroundColor: Colors.ocean, transform: [{ scale: 0.97 }] }]}>
-              <Text style={[styles.dmButtonText, pressed && { color: Colors.white }]}>
-                Slide into DMs ⚡️
-              </Text>
-            </View>
-          )}
-        </Pressable>
       </View>
     </View>
   );
 }
 
+const gc = StyleSheet.create({
+  card: {
+    borderRadius: 16, overflow: "hidden",
+    shadowColor: "rgba(0,0,0,0.05)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 16,
+    elevation: 2,
+  },
+  heroWrap: { height: 180, position: "relative" },
+  heroPlaceholder: {
+    flex: 1, alignItems: "center", justifyContent: "center",
+  },
+  avatarOverlay: { position: "absolute", top: 8, left: 8 },
+  avatar: {
+    width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: Colors.white,
+  },
+  avatarText: { fontFamily: "Nunito_800ExtraBold", fontSize: 12, color: Colors.white },
+  timeOverlay: { position: "absolute", top: 8, right: 8 },
+  timePill: {
+    backgroundColor: "rgba(255,255,255,0.75)", backdropFilter: "blur(8px)",
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10,
+  },
+  timeText: { fontFamily: "Nunito_600SemiBold", fontSize: 10, color: DARK_TEAL },
+  tagOverlay: { position: "absolute", bottom: -10, left: 8 },
+  tagPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  tagSos: { backgroundColor: "#FF6B4E" },
+  tagOffer: { backgroundColor: Colors.grassGreen },
+  tagText: { fontFamily: "Nunito_800ExtraBold", fontSize: 11, color: Colors.white },
+  details: { padding: 8, paddingTop: 16, gap: 6 },
+  story: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: DARK_TEAL, lineHeight: 18 },
+  essBox: {
+    backgroundColor: Colors.white, borderRadius: 8, padding: 6, gap: 3,
+  },
+  essItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  essIcon: { fontSize: 11 },
+  essText: { fontFamily: "Nunito_400Regular", fontSize: 11, color: DARK_TEAL, flex: 1 },
+  actionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
+  currency: { fontFamily: "Nunito_800ExtraBold", fontSize: 13, color: DARK_TEAL, flex: 1 },
+  dmBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+    backgroundColor: DARK_TEAL,
+  },
+  dmBtnText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.white },
+});
+
+function SegmentedToggle({ value, onChange }: { value: VibeFilter; onChange: (v: VibeFilter) => void }) {
+  const opts: { key: VibeFilter; label: string }[] = [
+    { key: "sos", label: "🚨 Needing" },
+    { key: "offering", label: "🛋️ Offering" },
+    { key: "all", label: "All" },
+  ];
+  return (
+    <View style={seg.wrap}>
+      {opts.map(o => (
+        <Pressable key={o.key} onPress={() => { onChange(o.key); Haptics.selectionAsync(); }} style={{ flex: 1 }}>
+          {({ pressed }) => (
+            <View style={[seg.item, value === o.key && seg.itemActive, pressed && { opacity: 0.85 }]}>
+              <Text style={[seg.text, value === o.key && seg.textActive]}>{o.label}</Text>
+            </View>
+          )}
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+const seg = StyleSheet.create({
+  wrap: {
+    flexDirection: "row", backgroundColor: "#EDF2F2", borderRadius: 14, padding: 3,
+    marginHorizontal: GRID_PAD, marginBottom: 8,
+  },
+  item: { paddingVertical: 8, borderRadius: 12, alignItems: "center" },
+  itemActive: { backgroundColor: Colors.white, shadowColor: "rgba(0,0,0,0.06)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6, elevation: 2 },
+  text: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: SUBTITLE_GREY },
+  textActive: { fontFamily: "Nunito_700Bold", color: DARK_TEAL },
+});
+
 function NewPostSheet({
-  visible,
-  onClose,
-  onSubmit,
+  visible, onClose, onSubmit,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -298,10 +358,15 @@ const np = StyleSheet.create({
 
 export default function CrashCashScreen() {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const { crashPosts, addCrashPost, currentUser, startConversation } = useApp();
   const { isDesktop, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
   const [showNewPost, setShowNewPost] = useState(false);
+  const [vibeFilter, setVibeFilter] = useState<VibeFilter>("all");
+
+  const containerWidth = isDesktop ? Math.min(640, screenWidth) : Math.min(screenWidth, contentMaxWidth);
+  const cardWidth = (containerWidth - GRID_PAD * 2 - GRID_GAP) / 2;
 
   const handleDm = (post: CrashPost) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -331,36 +396,47 @@ export default function CrashCashScreen() {
     setShowNewPost(false);
   };
 
-  const sorted = [...crashPosts].sort((a, b) => b.timestamp - a.timestamp);
+  const sorted = [...crashPosts]
+    .filter(p => vibeFilter === "all" || p.vibe === vibeFilter)
+    .sort((a, b) => b.timestamp - a.timestamp);
 
   return (
     <View style={[styles.container, { backgroundColor: SCREEN_BG }]}>
-      <View style={[styles.header, { paddingTop: topPadding + 8 }, isDesktop && { maxWidth: contentMaxWidth, alignSelf: "center" as const, width: "100%" }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 8 }, isDesktop && { maxWidth: 640, alignSelf: "center" as const, width: "100%" }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}>
           <Ionicons name="arrow-back" size={20} color={Colors.ocean} />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>Crash & Cash</Text>
-          <Text style={styles.headerSub}>Rent your couch for the weekend. Get paid in cash, boba, or cover for Red Lion.</Text>
+          <Text style={styles.headerSub}>Rent your couch. Get paid in cash, boba, or Red Lion cover.</Text>
         </View>
       </View>
+
+      <SegmentedToggle value={vibeFilter} onChange={setVibeFilter} />
 
       <FlatList
         data={sorted}
         keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <CrashCard
-            post={item}
-            onDm={() => handleDm(item)}
-          />
-        )}
-        contentContainerStyle={[styles.listContent, {
+        numColumns={2}
+        columnWrapperStyle={{
+          gap: GRID_GAP,
+          paddingHorizontal: GRID_PAD,
           maxWidth: isDesktop ? 640 : contentMaxWidth,
           alignSelf: "center" as const,
           width: "100%",
+        }}
+        renderItem={({ item }) => (
+          <GridCard
+            post={item}
+            cardWidth={cardWidth}
+            onDm={() => handleDm(item)}
+          />
+        )}
+        contentContainerStyle={{
+          gap: GRID_GAP,
           paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 80,
-        }]}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          paddingTop: 4,
+        }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
@@ -377,7 +453,7 @@ export default function CrashCashScreen() {
       >
         {({ pressed }) => (
           <View style={[styles.fabInner, pressed && { transform: [{ scale: 0.92 }] }]}>
-            <Ionicons name="pencil" size={22} color={Colors.white} />
+            <Ionicons name="add" size={26} color={Colors.white} />
           </View>
         )}
       </Pressable>
@@ -394,50 +470,22 @@ export default function CrashCashScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    paddingHorizontal: 16, paddingBottom: 12, flexDirection: "row", alignItems: "flex-start", gap: 12,
+    paddingHorizontal: GRID_PAD, paddingBottom: 10, flexDirection: "row", alignItems: "flex-start", gap: 12,
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.white,
     alignItems: "center", justifyContent: "center",
-    shadowColor: "#8FAFB2", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2,
+    shadowColor: "rgba(0,0,0,0.05)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2,
     marginTop: 2,
   },
   headerTextWrap: { flex: 1 },
   headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 24, color: DARK_TEAL },
   headerSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: SUBTITLE_GREY, lineHeight: 17, marginTop: 2 },
-  listContent: { paddingHorizontal: 16, paddingTop: 8 },
-  card: {
-    backgroundColor: Colors.white, borderRadius: 16, padding: 16, gap: 12,
-    shadowColor: "#8FAFB2", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 2,
-  },
-  cardTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  vibePill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  vibeRed: { backgroundColor: SOS_RED + "18" },
-  vibeGreen: { backgroundColor: OFFERING_GREEN },
-  vibeText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: DARK_TEAL },
-  timestamp: { fontFamily: "Nunito_400Regular", fontSize: 12, color: SUBTITLE_GREY },
-  story: { fontFamily: "Nunito_400Regular", fontSize: 15, color: DARK_TEAL, lineHeight: 22 },
-  thumbnail: { width: 120, height: 120, borderRadius: 12, backgroundColor: "#F0F0F0" },
-  essentialsBox: {
-    backgroundColor: ESSENTIALS_BG, borderRadius: 12, padding: 10, flexDirection: "row", gap: 16,
-  },
-  essentialItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  essentialIcon: { fontSize: 14 },
-  essentialText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: DARK_TEAL },
-  actionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  currencyLabel: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: DARK_TEAL },
-  dmButton: {
-    paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14,
-    backgroundColor: Colors.ocean + "12", borderWidth: 1.5, borderColor: Colors.ocean + "30",
-  },
-  dmButtonText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
-  fab: {
-    position: "absolute", right: 20,
-  },
+  fab: { position: "absolute", right: 20 },
   fabInner: {
     width: 56, height: 56, borderRadius: 28, backgroundColor: CORAL_FAB,
     alignItems: "center", justifyContent: "center",
-    shadowColor: CORAL_FAB, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
+    shadowColor: "rgba(0,0,0,0.05)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 16, elevation: 6,
   },
   emptyState: { alignItems: "center", paddingTop: 80, gap: 8 },
   emptyEmoji: { fontSize: 48 },
