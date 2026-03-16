@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Modal, Animated, Image, Dimensions
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Platform, Modal, Animated, Image, Dimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -76,6 +76,94 @@ const LEASE_LABELS: Record<string, string> = {
 };
 
 type CategoryFilter = "all" | "roommate_openings" | "summer_only" | "august_gap" | "semester_takeover" | "short_term";
+
+const DARK_TEAL = "#2C555C";
+const CHIP_BORDER = "#E0E8E9";
+const CHIP_SEAFOAM = "#D0F0E0";
+
+const SUB_FILTERS: Record<string, string[]> = {
+  roommate_openings: ["Girls Only", "Guys Only", "Co-ed", "Grainger Grind", "Grad/PhD"],
+  semester_takeover: ["Spring (Dec/Jan – May)", "Fall (Aug – Dec)", "Full Year (Aug – Jul)"],
+  summer_only: ["Full Summer (May–Aug)", "Early Summer (May–Jun)", "Late Summer (Jul–Aug)", "Parking Included"],
+  short_term: ["August Gap", "Graduation", "Mom/Dad Weekend", "Homecoming", "Winter Break", "Spring Break", "Thanksgiving"],
+};
+
+function SubFilterRow({
+  category,
+  selected,
+  onToggle,
+}: {
+  category: CategoryFilter;
+  selected: string[];
+  onToggle: (chip: string) => void;
+}) {
+  const chips = SUB_FILTERS[category];
+  if (!chips) return null;
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={sfStyles.scroll}
+      contentContainerStyle={sfStyles.row}
+    >
+      {chips.map((chip) => {
+        const isSelected = selected.includes(chip);
+        return (
+          <Pressable
+            key={chip}
+            onPress={() => {
+              onToggle(chip);
+              Haptics.selectionAsync();
+            }}
+            accessibilityRole="checkbox"
+            accessibilityLabel={chip}
+            accessibilityState={{ checked: isSelected }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  sfStyles.chip,
+                  isSelected && sfStyles.chipSelected,
+                  pressed && !isSelected && { backgroundColor: "#F2F7F7" },
+                ]}
+              >
+                {isSelected && (
+                  <Ionicons name="checkmark" size={14} color={DARK_TEAL} style={{ marginRight: 2 }} />
+                )}
+                <Text style={sfStyles.chipText}>{chip}</Text>
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+const sfStyles = StyleSheet.create({
+  scroll: { maxHeight: 46 },
+  row: { paddingHorizontal: 16, gap: 8, paddingVertical: 6, alignItems: "center" as const },
+  chip: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: CHIP_BORDER,
+  },
+  chipSelected: {
+    backgroundColor: CHIP_SEAFOAM,
+    borderColor: CHIP_SEAFOAM,
+  },
+  chipText: {
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 12,
+    color: DARK_TEAL,
+  },
+});
 
 function CongratsSheet({ visible, onDone }: { visible: boolean; onDone: () => void }) {
   const insets = useSafeAreaInsets();
@@ -486,13 +574,26 @@ export default function MarketplaceScreen() {
 
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
   const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
+  const [selectedSubFilters, setSelectedSubFilters] = useState<string[]>([]);
   const [showCongrats, setShowCongrats] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [leasedPost, setLeasedPost] = useState<SubleasePost | null>(null);
 
+  const handleCategoryChange = (cat: CategoryFilter) => {
+    setActiveFilter(cat);
+    setSelectedSubFilters([]);
+  };
+
+  const handleSubFilterToggle = (chip: string) => {
+    setSelectedSubFilters(prev =>
+      prev.includes(chip) ? prev.filter(c => c !== chip) : [...prev, chip]
+    );
+  };
+
   useEffect(() => {
     if (params.category && Object.keys(CATEGORY_LABELS).includes(params.category)) {
       setActiveFilter(params.category as CategoryFilter);
+      setSelectedSubFilters([]);
     }
     if (params.zone && ["campustown", "north", "south", "urbana", "downtown"].includes(params.zone)) {
       setZoneFilter(params.zone as Zone);
@@ -577,7 +678,7 @@ export default function MarketplaceScreen() {
                 styles.filterChip,
                 isActive && { backgroundColor: chipColor, borderColor: chipColor }
               ]}
-              onPress={() => { setActiveFilter(key); Haptics.selectionAsync(); }}
+              onPress={() => { handleCategoryChange(key); Haptics.selectionAsync(); }}
             >
               <Ionicons
                 name={CATEGORY_ICONS[key]}
@@ -594,6 +695,12 @@ export default function MarketplaceScreen() {
           );
         })}
       </ScrollView>
+
+      <SubFilterRow
+        category={activeFilter}
+        selected={selectedSubFilters}
+        onToggle={handleSubFilterToggle}
+      />
 
       <ScrollView
         style={styles.scroll}
