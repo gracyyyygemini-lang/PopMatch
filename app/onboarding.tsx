@@ -329,9 +329,16 @@ export default function OnboardingScreen() {
       case "sublessor":
         router.replace("/post-sublease");
         break;
-      case "sublessee":
-        router.replace("/marketplace?category=short_term");
+      case "sublessee": {
+        const sublesseeRoutes: Record<string, string> = {
+          spring_sublease: "/marketplace?category=semester_takeover&subFilter=Spring (Dec/Jan – May)",
+          fall_sublease: "/marketplace?category=semester_takeover&subFilter=Fall (Aug – Dec)",
+          full_year: "/marketplace?category=semester_takeover&subFilter=Full Year (Aug – Jul)",
+          summer_sublease: "/marketplace?category=summer_only",
+        };
+        router.replace(sublesseeRoutes[leaseType] || "/marketplace?category=short_term");
         break;
+      }
       default:
         router.replace("/(tabs)");
         break;

@@ -567,7 +567,7 @@ function SubleaseCard({ post, onMarkLeased }: {
 
 export default function MarketplaceScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ category?: string; zone?: string }>();
+  const params = useLocalSearchParams<{ category?: string; zone?: string; subFilter?: string }>();
   const { subleases, removeSublease, currentUser } = useApp();
   const { isDesktop, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
@@ -593,12 +593,17 @@ export default function MarketplaceScreen() {
   useEffect(() => {
     if (params.category && Object.keys(CATEGORY_LABELS).includes(params.category)) {
       setActiveFilter(params.category as CategoryFilter);
-      setSelectedSubFilters([]);
+      const cat = params.category as CategoryFilter;
+      if (params.subFilter && SUB_FILTERS[cat]?.includes(params.subFilter)) {
+        setSelectedSubFilters([params.subFilter]);
+      } else {
+        setSelectedSubFilters([]);
+      }
     }
     if (params.zone && ["campustown", "north", "south", "urbana", "downtown"].includes(params.zone)) {
       setZoneFilter(params.zone as Zone);
     }
-  }, [params.category, params.zone]);
+  }, [params.category, params.zone, params.subFilter]);
 
   const filtered = subleases.filter(s => {
     if (activeFilter === "roommate_openings") {
