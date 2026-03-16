@@ -71,9 +71,9 @@ function formatDate(ts: number): string {
 }
 
 function GridCard({
-  post, cardWidth, isOwner, onDm, onMarkFilled,
+  post, cardWidth, isOwner, isPinned, onDm, onMarkFilled,
 }: {
-  post: CrashPost; cardWidth: number; isOwner: boolean;
+  post: CrashPost; cardWidth: number; isOwner: boolean; isPinned: boolean;
   onDm: () => void; onMarkFilled: () => void;
 }) {
   const isSos = post.vibe === "sos";
@@ -82,7 +82,7 @@ function GridCard({
   const hasImage = !!post.imageUrl;
 
   return (
-    <View style={[gc.card, { width: cardWidth, backgroundColor: tint }]}>
+    <View style={[gc.card, { width: cardWidth, backgroundColor: tint }, isPinned && gc.pinnedCard]}>
       <View style={gc.heroWrap}>
         {hasImage ? (
           <Image source={{ uri: post.imageUrl }} style={gc.heroImage} />
@@ -101,6 +101,13 @@ function GridCard({
             <Text style={gc.tagText}>{isSos ? "🚨 NEED" : "🛋️ GOT"}</Text>
           </View>
         </View>
+        {isPinned && (
+          <View style={gc.pinnedOverlay}>
+            <View style={gc.pinnedPill}>
+              <Text style={gc.pinnedText}>📌 Pinned</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={gc.details}>
@@ -176,6 +183,12 @@ const gc = StyleSheet.create({
     borderWidth: 1.5, borderColor: SUBTITLE_GREY, backgroundColor: "transparent",
   },
   filledBtnText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: SUBTITLE_GREY },
+  pinnedCard: { borderWidth: 2, borderColor: "#005F73" },
+  pinnedOverlay: { position: "absolute", top: 8, right: 8 },
+  pinnedPill: {
+    backgroundColor: "rgba(0,95,115,0.85)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10,
+  },
+  pinnedText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: "#FFFFFF" },
 });
 
 function SegmentedToggle({ value, onChange }: { value: VibeFilter; onChange: (v: VibeFilter) => void }) {
@@ -210,10 +223,10 @@ const seg = StyleSheet.create({
   textActive: { fontFamily: "Nunito_700Bold", color: DARK_TEAL },
 });
 
-function getNext7Days(): { label: string; ts: number }[] {
+function getNext10Days(): { label: string; ts: number }[] {
   const days: { label: string; ts: number }[] = [];
   const now = new Date();
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 10; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() + i);
     d.setHours(23, 59, 59, 999);
@@ -241,7 +254,7 @@ function NewPostSheet({
   const [customCurrencyLabel, setCustomCurrencyLabel] = useState("");
   const [imageUri, setImageUri] = useState("");
   const insets = useSafeAreaInsets();
-  const next7 = useMemo(getNext7Days, []);
+  const next10 = useMemo(getNext10Days, []);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -255,13 +268,15 @@ function NewPostSheet({
     }
   };
 
-  const isFormComplete = !!story.trim() && selectedDateIdx !== null && !!imageUri;
+  const maxDate = Date.now() + 10 * 24 * 60 * 60 * 1000;
+  const isDateValid = selectedDateIdx !== null && next10[selectedDateIdx].ts <= maxDate;
+  const isFormComplete = !!story.trim() && isDateValid && !!imageUri;
 
   const handleSubmit = () => {
     if (!isFormComplete) return;
     const currOpt = CURRENCY_OPTIONS.find(c => c.key === currency);
     const label = customCurrencyLabel.trim() || `${currOpt?.emoji} ${currOpt?.label}`;
-    const dateInfo = next7[selectedDateIdx!];
+    const dateInfo = next10[selectedDateIdx!];
     onSubmit({
       vibe,
       story: story.trim(),
@@ -287,7 +302,7 @@ function NewPostSheet({
             <Text style={np.title}>New Crash Post</Text>
 
             <View style={np.urgentBox}>
-              <Text style={np.urgentText}>⚡️ Crash & Cash is for urgent stays only. You can only post for the next 7 days.</Text>
+              <Text style={np.urgentText}>⚡️ Crash & Cash is for urgent stays only. You can only post for the next 10 days.</Text>
             </View>
 
             <Text style={np.label}>Vibe</Text>
@@ -331,7 +346,7 @@ function NewPostSheet({
 
             <Text style={np.label}>When <Text style={np.required}>*</Text></Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 48 }} contentContainerStyle={{ gap: 8 }}>
-              {next7.map((d, idx) => (
+              {next10.map((d, idx) => (
                 <Pressable key={idx} onPress={() => setSelectedDateIdx(idx)} style={[np.dateChip, selectedDateIdx === idx && np.dateChipActive]}>
                   <Text style={[np.dateChipText, selectedDateIdx === idx && { color: Colors.white }]}>{d.label}</Text>
                 </Pressable>
@@ -511,13 +526,23 @@ export default function CrashCashScreen() {
     setShowNewPost(false);
   };
 
+  const isHost = currentUser?.intent === "host";
+
   const sorted = useMemo(() => {
     const now = Date.now();
-    return crashPosts
-      .filter(p => p.status === "active" && p.targetDate >= now)
+    const maxWindow = now + 10 * 24 * 60 * 60 * 1000;
+    const active = crashPosts
+      .filter(p => p.status === "active" && p.targetDate >= now && p.targetDate <= maxWindow)
       .filter(p => vibeFilter === "all" || p.vibe === vibeFilter)
       .sort((a, b) => a.targetDate - b.targetDate);
-  }, [crashPosts, vibeFilter]);
+
+    if (isHost && currentUser) {
+      const myPosts = active.filter(p => p.userId === currentUser.id);
+      const otherPosts = active.filter(p => p.userId !== currentUser.id);
+      return [...myPosts, ...otherPosts];
+    }
+    return active;
+  }, [crashPosts, vibeFilter, isHost, currentUser]);
 
   return (
     <View style={[styles.container, { backgroundColor: SCREEN_BG }]}>
@@ -549,6 +574,7 @@ export default function CrashCashScreen() {
             post={item}
             cardWidth={cardWidth}
             isOwner={currentUser?.id === item.userId}
+            isPinned={!!isHost && currentUser?.id === item.userId}
             onDm={() => handleDm(item)}
             onMarkFilled={() => handleMarkFilled(item.id)}
           />
@@ -563,7 +589,7 @@ export default function CrashCashScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🛋️</Text>
             <Text style={styles.emptyTitle}>No one is crashing right now!</Text>
-            <Text style={styles.emptySub}>Be the first to offer a spot.</Text>
+            <Text style={styles.emptySub}>Be the first to offer a spot. 🛋️</Text>
           </View>
         }
       />
