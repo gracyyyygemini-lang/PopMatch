@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  Platform, KeyboardAvoidingView
+  Platform, KeyboardAvoidingView, ScrollView, Animated
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +10,59 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, ChatMessage } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
+
+const ICEBREAKERS: { label: string; question: string; bg: string; border: string }[] = [
+  { label: "🍎 Fridge", question: "How should we divide up the fridge and pantry space?", bg: "#FFF0ED", border: "#F4A89A" },
+  { label: "📚 Study Vibe", question: "Do you prefer the place to be quiet during midterm/finals weeks?", bg: "#E8F6F0", border: "#7CC9AA" },
+  { label: "🤝 Social", question: "Are you looking for a roommate to hang out with, or more of a quiet co-existence?", bg: "#FFF5E6", border: "#F0C87A" },
+  { label: "🌡️ Temp", question: "What do you usually like to keep the thermostat at during winter?", bg: "#EDF6FA", border: "#8AC4DA" },
+  { label: "🏠 Guests", question: "What are your thoughts on having friends or partners over on weekends?", bg: "#FFEDE8", border: "#E8997A" },
+];
+
+function IcebreakerChip({ item, onPress }: { item: typeof ICEBREAKERS[0]; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 50, bounciness: 0 }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 12, bounciness: 14 }),
+    ]).start();
+    onPress();
+  };
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={handlePress}
+        style={[icStyles.chip, { backgroundColor: item.bg, borderColor: item.border }]}
+      >
+        <Text style={icStyles.chipText}>{item.label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+const icStyles = StyleSheet.create({
+  row: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+    alignItems: "center",
+    backgroundColor: Colors.cardBg,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  chipText: {
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 13,
+    color: Colors.charcoal,
+  },
+});
 
 function formatTimestamp(ts: number) {
   const d = new Date(ts);
@@ -113,6 +166,24 @@ export default function ChatScreen() {
           </View>
         }
       />
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={icStyles.row}
+        style={{ flexGrow: 0, borderTopWidth: 1, borderTopColor: Colors.borderSoft, backgroundColor: Colors.cardBg }}
+      >
+        {ICEBREAKERS.map((ic, idx) => (
+          <IcebreakerChip
+            key={idx}
+            item={ic}
+            onPress={() => {
+              setText(ic.question);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          />
+        ))}
+      </ScrollView>
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 8 }]}>
         <TextInput
