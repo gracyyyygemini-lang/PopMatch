@@ -1,32 +1,57 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, Animated, PanResponder, Dimensions,
-  TouchableOpacity, ScrollView, Platform
+  TouchableOpacity, Platform, useWindowDimensions, Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp, UserProfile, Zone } from "@/context/AppContext";
+import { useApp, UserProfile, Zone, VibeProfile } from "@/context/AppContext";
 import ZonePicker from "@/components/ZonePicker";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
+const CORAL = "#FF8C69";
+const DARK_TEAL = "#2C555C";
+const SCREEN_BG = "#FBFBF9";
 
-const ZONE_LABELS: Record<string, string> = {
-  campustown: "Campustown (Central Campus)",
-  north: "North Campus (Engineering / Midtown)",
-  south: "South Campus (Ikenberry / Seniorland)",
-  urbana: "Urbana (Gradland)",
-  downtown: "Downtown Champaign",
+const YEAR_LABELS: Record<string, string> = {
+  freshman: "Freshman",
+  sophomore: "Sophomore",
+  junior: "Junior",
+  senior: "Senior",
+  grad_phd: "Grad/PhD",
 };
 
-const LEASE_LABELS: Record<string, string> = {
-  full_year: "Full Year",
-  fall_sublease: "Fall Sub",
-  spring_sublease: "Spring Sub",
-  summer_sublease: "Summer Sub",
+const GREEK_LABELS: Record<string, string> = {
+  sorority: "Sorority",
+  fraternity: "Fraternity",
+  prof_frat: "Prof. Frat",
+  independent: "Independent",
+};
+
+const SLEEP_LABELS: Record<string, string> = {
+  early_bird: "Early Bird",
+  night_owl: "Night Owl",
+  varies: "Varies",
+};
+
+const CLEAN_LABELS: Record<string, string> = {
+  neat_freak: "Neat Freak",
+  tidy: "Tidy",
+  organized_chaos: "Organized Chaos",
+  messy: "Messy",
+};
+
+const VICE_LABELS: Record<string, string> = {
+  "420_friendly": "420 Friendly",
+  drinks_socially: "Social Drinker",
+  social_smoker: "Social Smoker",
+  no_vices: "Substance Free",
+  vapes: "Vapes",
 };
 
 function matchesGenderFilter(current: UserProfile, candidate: UserProfile): boolean {
@@ -35,116 +60,144 @@ function matchesGenderFilter(current: UserProfile, candidate: UserProfile): bool
   return true;
 }
 
-function ProfileCard({ user, score }: { user: UserProfile; score: number }) {
-  const { startConversation, subleases } = useApp();
+function getHabitChips(vp: VibeProfile): string[] {
+  const chips: string[] = [];
+  if (vp.sleep) chips.push(vp.sleep === "night_owl" ? "Night Owl 🦇" : vp.sleep === "early_bird" ? "Early Bird 🌅" : "Flexible 🔄");
+  if (vp.cleanlinessVibe) chips.push(CLEAN_LABELS[vp.cleanlinessVibe] ? `${CLEAN_LABELS[vp.cleanlinessVibe]} ✨` : vp.cleanlinessVibe);
+  if (vp.vices?.length) {
+    vp.vices.forEach(v => {
+      if (v === "420_friendly") chips.push("🌿 420 Friendly");
+      else if (v === "drinks_socially") chips.push("🍷 Social Drinker");
+      else if (v === "no_vices") chips.push("🚫 Substance Free");
+    });
+  }
+  if (vp.pets?.length) {
+    vp.pets.forEach(p => {
+      if (p === "cats") chips.push("🐱 Cat Lover");
+      else if (p === "dogs") chips.push("🐶 Dog Lover");
+      else if (p === "plants") chips.push("🌿 Plant Parent");
+    });
+  }
+  if (vp.guests === "love_hosting") chips.push("🎉 Love Hosting");
+  else if (vp.guests === "rarely") chips.push("🤫 Quiet Space");
+  return chips.slice(0, 5);
+}
+
+function HeroCard({
+  user, score, cardHeight, cardWidth,
+}: {
+  user: UserProfile; score: number; cardHeight: number; cardWidth: number;
+}) {
+  const vp = user.vibeProfile;
   const initials = user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-  const userListing = subleases.find(s => s.userId === user.id);
+  const hasImage = !!user.profileImage;
+  const habitChips = vp ? getHabitChips(vp) : [];
+  const yearLabel = vp?.year ? YEAR_LABELS[vp.year] || vp.year : "";
+  const greekLabel = vp?.greekLife && vp.greekLife !== "independent" ? GREEK_LABELS[vp.greekLife] || "" : "";
+  const vitals = [yearLabel, greekLabel].filter(Boolean).join(" · ");
 
   return (
-    <ScrollView style={styles.cardScroll} showsVerticalScrollIndicator={false} bounces={false}>
-      <View style={styles.cardContent}>
-        <View style={styles.cardTopSection}>
-          <View style={[styles.avatar, { backgroundColor: user.avatarColor }]}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <View style={styles.nameBlock}>
-            <Text style={styles.cardName}>{user.name}</Text>
-            <Text style={styles.cardMajor}>{user.major}</Text>
-            <Text style={styles.cardEmail}>{user.email}</Text>
-          </View>
-          <View style={[styles.scorePill, {
-            backgroundColor: score >= 80 ? Colors.grassGreen : score >= 60 ? Colors.ocean : Colors.textMuted
-          }]}>
-            <Text style={styles.scorePillText}>{score}%</Text>
-          </View>
+    <View style={[hc.container, { height: cardHeight, width: cardWidth }]}>
+      {hasImage ? (
+        <Image source={{ uri: user.profileImage }} style={hc.bgImage} />
+      ) : (
+        <View style={[hc.bgFallback, { backgroundColor: user.avatarColor }]}>
+          <Text style={hc.bgInitials}>{initials}</Text>
+        </View>
+      )}
+
+      <LinearGradient
+        colors={["transparent", "rgba(0,0,0,0.15)", "rgba(0,0,0,0.75)"]}
+        locations={[0.3, 0.55, 1]}
+        style={hc.gradient}
+      />
+
+      <View style={hc.content}>
+        <View style={hc.scoreRow}>
+          <Text style={hc.scoreNum}>{score}</Text>
+          <Text style={hc.scoreLabel}>MATCH ✨</Text>
         </View>
 
-        {user.bio ? (
-          <Text style={styles.cardBio}>{user.bio}</Text>
-        ) : null}
+        <Text style={hc.name}>{user.name}</Text>
+        {vitals ? <Text style={hc.vitals}>{vitals}</Text> : null}
+        <Text style={hc.major}>{user.major}</Text>
 
-        <View style={styles.tagsRow}>
-          <View style={[styles.tag, { backgroundColor: Colors.ocean + "18" }]}>
-            <Ionicons name="location-outline" size={11} color={Colors.ocean} />
-            <Text style={[styles.tagText, { color: Colors.ocean }]}>{ZONE_LABELS[user.zone]}</Text>
+        {habitChips.length > 0 && (
+          <View style={hc.chipsRow}>
+            {habitChips.map((chip, i) => (
+              <View key={i} style={hc.chip}>
+                <Text style={hc.chipText}>{chip}</Text>
+              </View>
+            ))}
           </View>
-          <View style={[styles.tag, { backgroundColor: Colors.gold + "35" }]}>
-            <Ionicons name="cash-outline" size={11} color={Colors.charcoal} />
-            <Text style={[styles.tagText, { color: Colors.charcoal }]}>${user.budget}/mo</Text>
-          </View>
-          <View style={[styles.tag, { backgroundColor: Colors.orange + "18" }]}>
-            <Ionicons name="calendar-outline" size={11} color={Colors.orange} />
-            <Text style={[styles.tagText, { color: Colors.orange }]}>{LEASE_LABELS[user.leaseType]}</Text>
-          </View>
-        </View>
+        )}
 
-        <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <Text style={styles.statItemLabel}>Cleanliness</Text>
-            <View style={styles.dots}>
-              {[1,2,3,4,5].map(n => (
-                <View key={n} style={[styles.dot, { backgroundColor: n <= user.cleanliness ? Colors.grassGreen : Colors.borderSoft }]} />
-              ))}
-            </View>
+        {vp?.prompt && vp?.promptAnswer && (
+          <View style={hc.icebreakerBox}>
+            <Text style={hc.icebreakerPrompt}>{vp.prompt}</Text>
+            <Text style={hc.icebreakerAnswer}>{vp.promptAnswer}</Text>
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statItemLabel}>Noise Level</Text>
-            <View style={styles.dots}>
-              {[1,2,3,4,5].map(n => (
-                <View key={n} style={[styles.dot, { backgroundColor: n <= user.noise ? Colors.ocean : Colors.borderSoft }]} />
-              ))}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.breakRow}>
-          <View style={[styles.breakChip, { opacity: user.staysThanksgiving ? 1 : 0.4 }]}>
-            <Ionicons name="home-outline" size={11} color={Colors.charcoal} />
-            <Text style={styles.breakChipText}>Thanksgiving</Text>
-          </View>
-          <View style={[styles.breakChip, { opacity: user.staysSpringBreak ? 1 : 0.4 }]}>
-            <Ionicons name="sunny-outline" size={11} color={Colors.charcoal} />
-            <Text style={styles.breakChipText}>Spring Break</Text>
-          </View>
-          <View style={[styles.genderPrefChip]}>
-            <Text style={styles.genderPrefText}>
-              {user.genderPref === "girls_only" ? "Girls Only" : user.genderPref === "boys_only" ? "Boys Only" : "Open"}
-            </Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.msgBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            const listing = userListing;
-            const convoId = startConversation(
-              user.id, user.name, user.avatarColor, user.email,
-              listing?.id || `roommate-${user.id}`,
-              listing?.buildingName || "Roommate Match",
-              listing?.pricePerMonth || user.budget,
-              listing?.unitType
-            );
-            router.push(`/chat?conversationId=${convoId}`);
-          }}
-        >
-          <Ionicons name="chatbubble-outline" size={14} color={Colors.ocean} />
-          <Text style={styles.msgBtnText}>Message {user.name.split(" ")[0]}</Text>
-        </TouchableOpacity>
+        )}
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
+const hc = StyleSheet.create({
+  container: { borderRadius: 32, overflow: "hidden", position: "relative" },
+  bgImage: { width: "100%", height: "100%", resizeMode: "cover", position: "absolute" },
+  bgFallback: {
+    width: "100%", height: "100%", position: "absolute",
+    alignItems: "center", justifyContent: "center",
+  },
+  bgInitials: { fontFamily: "Nunito_800ExtraBold", fontSize: 80, color: "rgba(255,255,255,0.3)" },
+  gradient: { position: "absolute", left: 0, right: 0, bottom: 0, height: "70%" },
+  content: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 20, justifyContent: "flex-end" },
+  scoreRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginBottom: 4 },
+  scoreNum: {
+    fontFamily: "Nunito_800ExtraBold", fontSize: 60, color: CORAL, lineHeight: 64,
+    textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
+  },
+  scoreLabel: {
+    fontFamily: "Nunito_800ExtraBold", fontSize: 15, color: "#FFFFFF",
+    letterSpacing: 2, marginBottom: 10,
+    textShadowColor: "rgba(0,0,0,0.4)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
+  },
+  name: {
+    fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: "#FFFFFF",
+    textShadowColor: "rgba(0,0,0,0.4)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
+  },
+  vitals: {
+    fontFamily: "Nunito_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.8)", marginTop: 1,
+  },
+  major: {
+    fontFamily: "Nunito_400Regular", fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 1,
+  },
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
+  chip: {
+    backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 16,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: "#FFFFFF" },
+  icebreakerBox: {
+    backgroundColor: "rgba(0,0,0,0.4)", borderRadius: 12, padding: 12, marginTop: 10,
+  },
+  icebreakerPrompt: {
+    fontFamily: "Nunito_700Bold", fontSize: 13, color: "rgba(255,255,255,0.85)", marginBottom: 4,
+  },
+  icebreakerAnswer: { fontFamily: "Nunito_400Regular", fontSize: 13, color: "#FFFFFF", lineHeight: 18 },
+});
+
 function SwipeableCard({
-  user, score, onLike, onPass, isTop, cardWidth
+  user, score, onLike, onPass, isTop, cardWidth, cardHeight,
 }: {
-  user: UserProfile; score: number; onLike: () => void; onPass: () => void; isTop: boolean; cardWidth: number;
+  user: UserProfile; score: number; onLike: () => void; onPass: () => void;
+  isTop: boolean; cardWidth: number; cardHeight: number;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
-  const rotate = pan.x.interpolate({ inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2], outputRange: ["-10deg", "0deg", "10deg"] });
-  const likeOpacity = pan.x.interpolate({ inputRange: [0, SWIPE_THRESHOLD], outputRange: [0, 1] });
-  const passOpacity = pan.x.interpolate({ inputRange: [-SWIPE_THRESHOLD, 0], outputRange: [1, 0] });
+  const rotate = pan.x.interpolate({ inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2], outputRange: ["-8deg", "0deg", "8deg"] });
+  const likeOpacity = pan.x.interpolate({ inputRange: [0, SWIPE_THRESHOLD], outputRange: [0, 1], extrapolate: "clamp" });
+  const passOpacity = pan.x.interpolate({ inputRange: [-SWIPE_THRESHOLD, 0], outputRange: [1, 0], extrapolate: "clamp" });
 
   const panResponder = useRef(
     PanResponder.create({
@@ -166,34 +219,43 @@ function SwipeableCard({
   return (
     <Animated.View
       style={[styles.card, {
-        width: cardWidth,
+        width: cardWidth, height: cardHeight,
         transform: [{ translateX: pan.x }, { translateY: isTop ? pan.y : 0 }, { rotate: isTop ? rotate : "0deg" }],
         zIndex: isTop ? 10 : 5,
-        opacity: isTop ? 1 : 0.9,
+        opacity: isTop ? 1 : 0.92,
       }]}
       {...(isTop ? panResponder.panHandlers : {})}
     >
       {isTop && (
         <>
           <Animated.View style={[styles.swipeLabel, styles.swipeLike, { opacity: likeOpacity }]}>
-            <Ionicons name="heart" size={22} color={Colors.grassGreen} />
-            <Text style={[styles.swipeLabelText, { color: Colors.grassGreen }]}>CONNECT</Text>
+            <Ionicons name="heart" size={24} color="#FFFFFF" />
+            <Text style={[styles.swipeLabelText, { color: "#FFFFFF" }]}>CONNECT</Text>
           </Animated.View>
           <Animated.View style={[styles.swipeLabel, styles.swipePass, { opacity: passOpacity }]}>
-            <Ionicons name="close" size={22} color={Colors.errorRed} />
-            <Text style={[styles.swipeLabelText, { color: Colors.errorRed }]}>PASS</Text>
+            <Ionicons name="close" size={24} color="#FFFFFF" />
+            <Text style={[styles.swipeLabelText, { color: "#FFFFFF" }]}>PASS</Text>
           </Animated.View>
         </>
       )}
-      <ProfileCard user={user} score={score} />
+      <HeroCard user={user} score={score} cardHeight={cardHeight} cardWidth={cardWidth} />
     </Animated.View>
   );
 }
 
 export default function MatchmakerScreen() {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { currentUser, mockUsers, addMatch, addLiked, addPassed, likedUserIds, passedUserIds, computeScore, subleases } = useApp();
   const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
+
+  const isDesktopMm = Platform.OS === "web" && screenWidth >= 1024;
+  const topPadding = Platform.OS === "web" ? (isDesktopMm ? 24 : 67) : insets.top;
+  const bottomPadding = insets.bottom + (Platform.OS === "web" ? 34 : 0);
+
+  const contentMaxW = isDesktopMm ? 520 : Math.min(screenWidth, 500);
+  const cardWidth = contentMaxW * 0.95;
+  const cardHeight = Math.min(screenHeight * 0.72, 620);
 
   useEffect(() => {
     if (currentUser?.intent === "host" || currentUser?.intent === "sublessor") {
@@ -227,25 +289,19 @@ export default function MatchmakerScreen() {
     await addPassed(user.id);
   }, []);
 
-  const isDesktopMm = Platform.OS === "web" && Dimensions.get("window").width >= 1024;
-  const contentMaxWidthMm = isDesktopMm ? 720 : Dimensions.get("window").width;
-  const cardWidth = Math.min(contentMaxWidthMm - 40, 500);
-  const topPadding = Platform.OS === "web" ? (isDesktopMm ? 24 : 67) : insets.top;
-
   return (
-    <View style={[styles.container, { backgroundColor: Colors.sand }, isDesktopMm && { maxWidth: contentMaxWidthMm, alignSelf: "center" as const, width: "100%" }]}>
-      <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
+    <View style={[styles.container, isDesktopMm && { maxWidth: contentMaxW + 40, alignSelf: "center" as const, width: "100%" }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 8 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}>
           <Ionicons name="arrow-back" size={20} color={Colors.ocean} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Year-Long Matchmaker</Text>
+          <Text style={styles.headerTitle}>Matchmaker</Text>
           <Text style={styles.headerSub}>{remaining.length} potential roommates</Text>
         </View>
-        <View style={styles.headerRight}>
-          <View style={[styles.matchBadge, { backgroundColor: Colors.grassGreen + "20" }]}>
-            <Text style={[styles.matchBadgeText, { color: Colors.grassGreen }]}>{likedUserIds.length}</Text>
-          </View>
+        <View style={[styles.matchBadge, { backgroundColor: Colors.grassGreen + "20" }]}>
+          <Ionicons name="heart" size={12} color={Colors.grassGreen} />
+          <Text style={[styles.matchBadgeText, { color: Colors.grassGreen }]}>{likedUserIds.length}</Text>
         </View>
       </View>
 
@@ -267,7 +323,7 @@ export default function MatchmakerScreen() {
             const score = currentUser ? computeScore(currentUser, user) : 75;
             return (
               <SwipeableCard key={user.id} user={user} score={score} isTop={isTop}
-                cardWidth={cardWidth}
+                cardWidth={cardWidth} cardHeight={cardHeight}
                 onLike={() => handleLike(user)} onPass={() => handlePass(user)} />
             );
           }).reverse()
@@ -275,17 +331,15 @@ export default function MatchmakerScreen() {
       </View>
 
       {remaining.length > 0 && (
-        <View style={[styles.actionRow, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 16 }]}>
-          <TouchableOpacity style={[styles.actionBtn, styles.passBtn]}
-            onPress={() => handlePass(remaining[0])}>
-            <Ionicons name="close" size={28} color={Colors.errorRed} />
+        <View style={[styles.actionRow, { paddingBottom: bottomPadding + 12 }]}>
+          <TouchableOpacity style={[styles.actionBtn, styles.passBtn]} onPress={() => handlePass(remaining[0])}>
+            <Ionicons name="close" size={30} color={DARK_TEAL} />
           </TouchableOpacity>
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{remaining.length} left</Text>
           </View>
-          <TouchableOpacity style={[styles.actionBtn, styles.likeBtn]}
-            onPress={() => handleLike(remaining[0])}>
-            <Ionicons name="heart" size={26} color={Colors.grassGreen} />
+          <TouchableOpacity style={[styles.actionBtn, styles.likeBtn]} onPress={() => handleLike(remaining[0])}>
+            <Ionicons name="heart" size={28} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       )}
@@ -294,91 +348,55 @@ export default function MatchmakerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.sand },
+  container: { flex: 1, backgroundColor: SCREEN_BG },
   header: {
-    flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 8, gap: 12,
+    flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 6, gap: 12,
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.cardBg,
+    width: 40, height: 40, borderRadius: 14, backgroundColor: Colors.white,
     alignItems: "center", justifyContent: "center",
-    borderWidth: 1.5, borderColor: Colors.borderSoft,
+    shadowColor: "rgba(0,0,0,0.06)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2,
   },
   headerCenter: { flex: 1 },
-  headerTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.ocean },
-  headerSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
-  headerRight: {},
-  matchBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: DARK_TEAL },
+  headerSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: "#6B8A8F" },
+  matchBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   matchBadgeText: { fontFamily: "Nunito_800ExtraBold", fontSize: 14 },
-  deckArea: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
+  deckArea: { flex: 1, alignItems: "center", justifyContent: "center" },
   card: {
-    position: "absolute", maxHeight: 440,
-    backgroundColor: Colors.cardBg, borderRadius: 22,
-    borderWidth: 1.5, borderColor: Colors.borderSoft,
-    shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1, shadowRadius: 16, elevation: 5, overflow: "hidden",
+    position: "absolute",
+    borderRadius: 32, overflow: "hidden",
+    shadowColor: "rgba(0,0,0,0.08)", shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1, shadowRadius: 24, elevation: 8,
   },
-  cardScroll: { maxHeight: 440 },
   swipeLabel: {
-    position: "absolute", top: 18, flexDirection: "row", alignItems: "center",
-    gap: 5, zIndex: 20, paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 10, borderWidth: 2,
+    position: "absolute", top: 24, flexDirection: "row", alignItems: "center",
+    gap: 6, zIndex: 20, paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 14,
   },
-  swipeLike: { right: 18, borderColor: Colors.grassGreen, backgroundColor: Colors.grassGreen + "20" },
-  swipePass: { left: 18, borderColor: Colors.errorRed, backgroundColor: Colors.errorRed + "20" },
-  swipeLabelText: { fontFamily: "Nunito_800ExtraBold", fontSize: 14 },
-  cardContent: { padding: 18, gap: 12 },
-  cardTopSection: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  avatar: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.white },
-  nameBlock: { flex: 1 },
-  cardName: { fontFamily: "Nunito_800ExtraBold", fontSize: 19, color: Colors.charcoal },
-  cardMajor: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
-  cardEmail: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight },
-  scorePill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, alignSelf: "flex-start" },
-  scorePillText: { fontFamily: "Nunito_800ExtraBold", fontSize: 12, color: Colors.white },
-  cardBio: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, lineHeight: 19 },
-  tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  tag: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  tagText: { fontFamily: "Nunito_600SemiBold", fontSize: 11 },
-  statsGrid: { flexDirection: "row", gap: 20 },
-  statItem: { flex: 1, gap: 5 },
-  statItemLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.textMuted },
-  dots: { flexDirection: "row", gap: 5 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  breakRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  breakChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: Colors.sandDark },
-  breakChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.charcoal },
-  genderPrefChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: Colors.ocean + "18" },
-  genderPrefText: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.ocean },
-  msgBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7,
-    backgroundColor: Colors.ocean + "10", borderRadius: 10, paddingVertical: 10,
-    borderWidth: 1.5, borderColor: Colors.ocean + "30", marginTop: 2,
-  },
-  msgBtnText: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.ocean },
+  swipeLike: { right: 20, backgroundColor: Colors.grassGreen },
+  swipePass: { left: 20, backgroundColor: Colors.errorRed },
+  swipeLabelText: { fontFamily: "Nunito_800ExtraBold", fontSize: 15 },
   actionRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 24, paddingHorizontal: 40, paddingTop: 16,
+    gap: 28, paddingTop: 12,
   },
   actionBtn: {
-    width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center",
-    backgroundColor: Colors.cardBg, borderWidth: 2,
-    shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2,
+    width: 75, height: 75, borderRadius: 38, alignItems: "center", justifyContent: "center",
+    shadowColor: "rgba(0,0,0,0.08)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 4,
   },
-  passBtn: { borderColor: Colors.errorRed + "60" },
-  likeBtn: { borderColor: Colors.grassGreen + "60" },
-  countBadge: { backgroundColor: Colors.sandDark, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 7 },
-  countText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  passBtn: { backgroundColor: "#F0F3F3" },
+  likeBtn: { backgroundColor: CORAL },
+  countBadge: { backgroundColor: "#EDF2F2", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 8 },
+  countText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: "#6B8A8F" },
   emptyCard: {
     alignItems: "center", justifyContent: "center",
-    backgroundColor: Colors.cardBg, borderRadius: 22, borderWidth: 1.5,
-    borderColor: Colors.borderSoft, padding: 40, gap: 12,
-    maxWidth: 500, width: "100%",
+    backgroundColor: Colors.white, borderRadius: 28, padding: 40, gap: 12,
+    maxWidth: 400, width: "90%",
+    shadowColor: "rgba(0,0,0,0.06)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 16, elevation: 4,
   },
-  emptyTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal },
-  emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center" },
-  goMatchesBtn: {
-    backgroundColor: Colors.ocean, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8,
-  },
-  goMatchesBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
+  emptyTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: DARK_TEAL },
+  emptySub: { fontFamily: "Nunito_400Regular", fontSize: 14, color: "#6B8A8F", textAlign: "center" },
+  goMatchesBtn: { backgroundColor: Colors.ocean, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14, marginTop: 8 },
+  goMatchesBtnText: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.white },
 });

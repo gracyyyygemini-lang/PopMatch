@@ -355,6 +355,7 @@ export const MOCK_USERS: UserProfile[] = [
     leaseType: "fall_sublease", zone: "north", landlords: ["jsm"],
     staysThanksgiving: false, staysSpringBreak: true, avatarColor: "#1A7AAF",
     college: "Grainger", organizations: ["ACM@UIUC", "WCS"],
+    vibeProfile: { identity: "girl", lookingFor: "girls", starSign: "virgo", mbti: "INTJ", year: "junior", vices: ["no_vices"], pets: ["cats"], sleep: "early_bird", alarms: "one_alarm", cleanlinessVibe: "neat_freak", groceries: "meal_prep", guests: "occasional", prompt: "My toxic living habit is...", promptAnswer: "Reorganizing the entire kitchen at midnight." },
   },
   {
     id: "u2", name: "Priya Sharma", email: "psharma4@illinois.edu", major: "Finance",
@@ -363,6 +364,7 @@ export const MOCK_USERS: UserProfile[] = [
     leaseType: "spring_sublease", zone: "campustown", landlords: ["bailey"],
     staysThanksgiving: true, staysSpringBreak: true, avatarColor: "#CC5500",
     college: "Gies", organizations: ["Illini Finance Club", "DECA"],
+    vibeProfile: { identity: "girl", lookingFor: "girls", starSign: "leo", mbti: "ENFJ", year: "senior", greekLife: "sorority", vices: ["social_smoker"], pets: ["no_pets"], sleep: "night_owl", alarms: "multiple_alarms", cleanlinessVibe: "tidy", groceries: "takeout", guests: "love_hosting", prompt: "The way to my heart is...", promptAnswer: "Sunday brunch and a solid skincare routine." },
   },
   {
     id: "u3", name: "Jake Torres", email: "jtorres6@illinois.edu", major: "Mechanical Engineering",
@@ -371,6 +373,7 @@ export const MOCK_USERS: UserProfile[] = [
     leaseType: "full_year", zone: "north", landlords: ["ugroup"],
     staysThanksgiving: true, staysSpringBreak: false, avatarColor: "#5A8A5A",
     college: "Grainger", organizations: ["SWE", "Tau Beta Pi"],
+    vibeProfile: { identity: "guy", lookingFor: "coed", starSign: "sagittarius", mbti: "ISTP", year: "junior", vices: ["420_friendly", "drinks_socially"], pets: ["no_pets"], sleep: "night_owl", alarms: "no_alarm", cleanlinessVibe: "organized_chaos", groceries: "snack_hoarder", guests: "love_hosting", prompt: "My toxic living habit is...", promptAnswer: "Leaving my gaming headset on the kitchen counter." },
   },
   {
     id: "u4", name: "Aisha Okonkwo", email: "aokonkwo@illinois.edu", major: "Psychology",
@@ -379,6 +382,7 @@ export const MOCK_USERS: UserProfile[] = [
     leaseType: "full_year", zone: "urbana", landlords: ["other"],
     staysThanksgiving: false, staysSpringBreak: false, avatarColor: "#E07B00",
     college: "LAS", organizations: ["BSA", "Illini 4000"],
+    vibeProfile: { identity: "girl", lookingFor: "girls", starSign: "pisces", mbti: "INFP", year: "sophomore", vices: ["no_vices"], pets: ["plants"], sleep: "early_bird", alarms: "one_alarm", cleanlinessVibe: "neat_freak", groceries: "meal_prep", guests: "occasional", prompt: "I need a roommate who...", promptAnswer: "Won't judge my 47 houseplants." },
   },
   {
     id: "u5", name: "Marcus Webb", email: "mwebb3@illinois.edu", major: "Architecture",
@@ -387,6 +391,7 @@ export const MOCK_USERS: UserProfile[] = [
     leaseType: "fall_sublease", zone: "downtown", landlords: ["american"],
     staysThanksgiving: false, staysSpringBreak: false, avatarColor: "#9B59B6",
     college: "FAA", organizations: ["AIAS"],
+    vibeProfile: { identity: "guy", lookingFor: "guys", starSign: "capricorn", mbti: "INTJ", year: "senior", vices: ["no_vices"], pets: ["no_pets"], sleep: "night_owl", alarms: "one_alarm", cleanlinessVibe: "neat_freak", groceries: "meal_prep", guests: "rarely", prompt: "The way to my heart is...", promptAnswer: "Good jazz and a clean kitchen counter." },
   },
   {
     id: "u6", name: "Sofia Reyes", email: "sreyes2@illinois.edu", major: "Biology",
@@ -395,6 +400,7 @@ export const MOCK_USERS: UserProfile[] = [
     leaseType: "spring_sublease", zone: "south", landlords: ["jsm"],
     staysThanksgiving: true, staysSpringBreak: true, avatarColor: "#5A8A5A",
     college: "LAS", organizations: ["Illini Pre-Med", "Phi Delta Epsilon"],
+    vibeProfile: { identity: "girl", lookingFor: "girls", starSign: "cancer", mbti: "ISFJ", year: "junior", greekLife: "prof_frat", vices: ["drinks_socially"], pets: ["cats"], sleep: "early_bird", alarms: "multiple_alarms", cleanlinessVibe: "tidy", groceries: "meal_prep", guests: "occasional", prompt: "My toxic living habit is...", promptAnswer: "Studying in the living room until 3am during finals." },
   },
   {
     id: "u7", name: "Liam Park", email: "lpark9@illinois.edu", major: "Statistics",
@@ -403,6 +409,7 @@ export const MOCK_USERS: UserProfile[] = [
     leaseType: "full_year", zone: "campustown", landlords: ["ugroup"],
     staysThanksgiving: false, staysSpringBreak: true, avatarColor: "#E0BC00",
     college: "LAS", organizations: ["Korean Cultural Association", "DataSci@UIUC"],
+    vibeProfile: { identity: "guy", lookingFor: "coed", starSign: "gemini", mbti: "ENTP", year: "senior", vices: ["drinks_socially"], pets: ["no_pets"], sleep: "night_owl", alarms: "multiple_alarms", cleanlinessVibe: "organized_chaos", groceries: "snack_hoarder", guests: "love_hosting", prompt: "I need a roommate who...", promptAnswer: "Appreciates a home-cooked Korean meal at midnight." },
   },
   {
     id: "u8", name: "Zoe Mitchell", email: "zmitchell@illinois.edu", major: "Journalism",
@@ -411,6 +418,7 @@ export const MOCK_USERS: UserProfile[] = [
     leaseType: "spring_sublease", zone: "urbana", landlords: ["other"],
     staysThanksgiving: true, staysSpringBreak: false, avatarColor: "#CC5500",
     college: "Media", organizations: ["Daily Illini", "SPJ"],
+    vibeProfile: { identity: "girl", lookingFor: "girls", starSign: "aquarius", mbti: "INFJ", year: "sophomore", vices: ["no_vices"], pets: ["cats"], sleep: "early_bird", alarms: "one_alarm", cleanlinessVibe: "tidy", groceries: "meal_prep", guests: "rarely", prompt: "The way to my heart is...", promptAnswer: "Quiet reading time with my cat on the couch." },
   },
 ];
 

@@ -38,7 +38,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - `map.tsx` — Hidden from tab bar (href: null), legacy PopMap screen
 
 ### Stack Screens
-- `app/matchmaker.tsx` — Year-Long swipe discovery with ZonePicker + Message button + intent bridge
+- `app/matchmaker.tsx` — Hinge/Bumble-style full-bleed hero swipe card. Card fills ~72% screen height with avatar-color background (or profile image), LinearGradient overlay, large coral match score (60px), name/vitals/major in white, glassmorphic habit chips from vibeProfile, icebreaker prompt box. 75px circular swipe buttons (grey pass / coral heart). ZonePicker filter + intent bridge redirect.
 - `app/marketplace.tsx` — Sublease listings with 60% photo cards, amenity overlay, Message button, FacePile, Mark as Leased
 - `app/post-sublease.tsx` — Multi-step listing form (5 steps: Basic → Unit Details/Photos → Amenities → Cleanliness → Calendar Dates). Calendar uses custom month-view picker with year selector (supports up to 3000), move-out must be after move-in.
 - `app/chat.tsx` — Chat room with listing preview header, timestamped bubbles, send input
