@@ -53,10 +53,22 @@ const LANDLORD_LABELS: Record<string, string> = {
 };
 
 const MAJORS = [
-  "Computer Science", "Engineering", "Business", "Biology", "Psychology",
-  "Finance", "Architecture", "Journalism", "Statistics", "Mathematics",
-  "Physics", "Chemistry", "Economics", "Political Science", "Art & Design",
-  "Pre-Medicine", "Education", "Communications", "Sociology", "Other"
+  "Accountancy", "Aerospace Engineering", "Agricultural & Biological Engineering",
+  "Animal Sciences", "Architecture", "Astronomy", "Biochemistry", "Biology",
+  "Bioengineering", "Business (Undeclared)", "Chemical Engineering",
+  "Chemistry", "Civil Engineering", "Communications", "Computer Engineering",
+  "Computer Science", "Computer Science + X", "Crop Sciences",
+  "Economics", "Education", "Electrical Engineering",
+  "Finance", "Food Science", "Graphic Design",
+  "History", "Industrial Engineering", "Information Sciences",
+  "Integrative Biology", "Journalism", "Kinesiology",
+  "Landscape Architecture", "Linguistics", "Materials Science & Engineering",
+  "Mathematics", "Mechanical Engineering", "Molecular & Cellular Biology",
+  "Music", "Nuclear Engineering", "Nursing",
+  "Philosophy", "Physics", "Political Science",
+  "Pre-Medicine", "Psychology", "Social Work",
+  "Sociology", "Statistics", "Supply Chain Management",
+  "Theatre", "Urban Planning", "Other",
 ];
 
 const AVATAR_COLORS = [
