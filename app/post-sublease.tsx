@@ -116,8 +116,11 @@ const TOTAL_STEPS = 4;
 export default function PostSubleaseScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, addSublease, setCurrentUser } = useApp();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; gateway?: string }>();
   const isHostMode = params.mode === "host";
+  const isSublessorMode = params.mode === "sublessor";
+  const isGateway = params.gateway === "1";
+  const isSupplySide = isHostMode || isSublessorMode;
   const [step, setStep] = useState(0);
 
   const [buildingName, setBuildingName] = useState("");
@@ -365,9 +368,16 @@ export default function PostSubleaseScreen() {
   };
 
   const allImagesUploaded = images.every(img => img !== null);
+  const hasAtLeastOnePhoto = images.some(img => img !== null);
 
-  const canSubmit = buildingName.trim() && price.trim() && !isNaN(Number(price)) && Number(price) > 0
-    && allImagesUploaded && moveInDate !== null && moveOutDate !== null;
+  const canSubmit = !!(
+    buildingName.trim() &&
+    price.trim() && !isNaN(Number(price)) && Number(price) > 0 &&
+    zone &&
+    landlords.length > 0 &&
+    hasAtLeastOnePhoto &&
+    moveInDate !== null && moveOutDate !== null
+  );
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -416,7 +426,13 @@ export default function PostSubleaseScreen() {
       });
     }
 
-    if (isHostMode) {
+    if (isGateway) {
+      if (isHostMode) {
+        router.replace("/marketplace?category=roommate_openings");
+      } else {
+        router.replace("/(tabs)");
+      }
+    } else if (isHostMode) {
       router.replace("/marketplace?category=roommate_openings");
     } else {
       router.canGoBack() ? router.back() : router.replace("/(tabs)");
@@ -433,14 +449,18 @@ export default function PostSubleaseScreen() {
     setStep(s => Math.min(s + 1, TOTAL_STEPS - 1));
   };
   const goBack = () => {
-    if (step === 0) { router.canGoBack() ? router.back() : router.replace("/(tabs)"); return; }
+    if (step === 0) {
+      if (isGateway) return;
+      router.canGoBack() ? router.back() : router.replace("/(tabs)");
+      return;
+    }
     setStep(s => s - 1);
   };
 
   const stepValid = (s: number) => {
-    if (s === 0) return !!(buildingName.trim() && price.trim() && !isNaN(Number(price)) && Number(price) > 0);
+    if (s === 0) return !!(buildingName.trim() && price.trim() && !isNaN(Number(price)) && Number(price) > 0 && landlords.length > 0);
     if (s === 1) {
-      if (!allImagesUploaded) return false;
+      if (!hasAtLeastOnePhoto) return false;
       if (isHostMode && !unitType.trim()) return false;
       return true;
     }
@@ -450,15 +470,19 @@ export default function PostSubleaseScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor: Colors.sand }, isDesktopPs && { maxWidth: contentMaxWidthPs, alignSelf: "center" as const, width: "100%" }]}
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: Colors.warmCream }, isDesktopPs && { maxWidth: contentMaxWidthPs, alignSelf: "center" as const, width: "100%" }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={goBack}>
-          <Ionicons name={step === 0 ? "close" : "arrow-back"} size={20} color={Colors.ocean} />
-        </TouchableOpacity>
+        {isGateway && step === 0 ? (
+          <View style={styles.backBtn} />
+        ) : (
+          <TouchableOpacity style={styles.backBtn} onPress={goBack}>
+            <Ionicons name={step === 0 ? "close" : "arrow-back"} size={20} color={Colors.darkTeal} />
+          </TouchableOpacity>
+        )}
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>{isHostMode ? "Post My Apartment" : "Post My Sublease"}</Text>
-          <Text style={styles.headerSub}>Step {step + 1} of {TOTAL_STEPS}</Text>
+          <Text style={styles.headerSub}>Step {step + 1} of {TOTAL_STEPS}{isGateway ? " — complete to continue" : ""}</Text>
         </View>
         <View style={styles.stepDots}>
           {Array.from({ length: TOTAL_STEPS }, (_, i) => (
@@ -470,6 +494,15 @@ export default function PostSubleaseScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, {
         paddingBottom: insets.bottom + 80
       }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
+        {isGateway && step === 0 && (
+          <View style={styles.gatewayBanner}>
+            <Ionicons name="lock-closed-outline" size={16} color={Colors.darkTeal} />
+            <Text style={styles.gatewayBannerText}>
+              Complete your listing to unlock PopMatch. All fields marked * are required.
+            </Text>
+          </View>
+        )}
 
         {step === 0 && (
           <>
@@ -682,7 +715,7 @@ export default function PostSubleaseScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Upload Photos * (3 required)</Text>
+              <Text style={styles.label}>Upload Photos * (at least 1 required)</Text>
               <View style={styles.photoGrid}>
                 {imageLabels.map((label, idx) => (
                   <TouchableOpacity key={label} style={styles.photoSlot} onPress={() => pickImage(idx)}>
@@ -702,8 +735,8 @@ export default function PostSubleaseScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              {!allImagesUploaded && (
-                <Text style={styles.photoHint}>Tap each slot to upload. All 3 photos are required.</Text>
+              {!hasAtLeastOnePhoto && (
+                <Text style={styles.photoHint}>Tap a slot to upload. At least 1 photo is required.</Text>
               )}
             </View>
 
@@ -844,12 +877,12 @@ export default function PostSubleaseScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.submitBtn, !canSubmit && { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 }]}
+            style={[styles.submitBtn, canSubmit ? { backgroundColor: Colors.coral } : { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 }]}
             onPress={handleSubmit}
             disabled={!canSubmit}
           >
-            <Ionicons name="checkmark" size={20} color={canSubmit ? Colors.white : DISABLED_TEXT} />
-            <Text style={[styles.submitBtnText, !canSubmit && { color: DISABLED_TEXT }]}>{isHostMode ? "Post Apartment" : "Post Sublease"}</Text>
+            <Ionicons name="sparkles" size={20} color={canSubmit ? Colors.white : DISABLED_TEXT} />
+            <Text style={[styles.submitBtnText, !canSubmit && { color: DISABLED_TEXT }]}>Publish Listing ✨</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -868,14 +901,14 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
   headerCenter: { flex: 1, marginLeft: 12 },
-  headerTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.ocean },
+  headerTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.darkTeal },
   headerSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
   stepDots: { flexDirection: "row", gap: 5 },
   stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.borderSoft },
   stepDotActive: { backgroundColor: Colors.ocean },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 16 },
-  sectionTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.ocean },
+  sectionTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.darkTeal },
   sectionSub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, marginTop: -8 },
   field: { gap: 8 },
   label: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
@@ -1028,7 +1061,7 @@ const styles = StyleSheet.create({
   yearCellTextActive: { color: Colors.white },
   footer: {
     paddingHorizontal: 16, paddingTop: 12,
-    backgroundColor: Colors.sand, borderTopWidth: 1, borderTopColor: Colors.borderSoft,
+    backgroundColor: Colors.warmCream, borderTopWidth: 1, borderTopColor: Colors.borderSoft,
   },
   nextBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
@@ -1037,7 +1070,15 @@ const styles = StyleSheet.create({
   nextBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
   submitBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.orange, borderRadius: 14, paddingVertical: 14,
+    backgroundColor: Colors.coral, borderRadius: 14, paddingVertical: 14,
   },
   submitBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
+  gatewayBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: Colors.darkTeal + "12", borderRadius: 12, padding: 14,
+    borderWidth: 1.5, borderColor: Colors.darkTeal + "25", marginBottom: 4,
+  },
+  gatewayBannerText: {
+    fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.darkTeal, flex: 1, lineHeight: 18,
+  },
 });

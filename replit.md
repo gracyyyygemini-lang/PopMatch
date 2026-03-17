@@ -19,7 +19,9 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 ### Design System ("Ponyo-Sea")
 - `constants/colors.ts` — single source of truth
 - Foam: #F8F9F3, Teal/Ocean: #005F73, Ponyo Orange: #FF6B4E, Bucket Yellow: #FFD966
+- Warm Cream: #FBFBF9, Dark Teal: #2C555C, Coral: #FF8C69
 - Charcoal: #1A2E35, Card: #FFFFFF, Border: #DDE0D8
+- Disabled: bg #E0E8E9, text #8A9FA3
 - Responsive web: mobile (<768px) uses 500px max-width centered + bottom tabs; desktop (≥1024px) removes 500px cap, uses sidebar nav + 720px content max-width (960px for marketplace 2-column grid)
 - `hooks/useResponsive.ts` — shared breakpoint hook (mobile/tablet/desktop), exports contentMaxWidth, sidebarWidth, columns
 - `components/WebSidebar.tsx` — left sidebar navigation for desktop web (Browse, Inbox, Profile + Marketplace, Matchmaker)
@@ -28,7 +30,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 
 ### Entry
 - `app/index.tsx` — Redirects to /onboarding or /(tabs) based on AsyncStorage
-- `app/onboarding.tsx` — Email OTP step (Step 0) → Intent step (Step 1) → 4-step onboarding (6 total steps)
+- `app/onboarding.tsx` — Email OTP step (Step 0) → Intent step (Step 1) → About You (Step 2). Supply-side roles (Host/Sublessor) finish after 3 steps and route to mandatory post-sublease gateway. Demand-side roles (Joiner/CoSeeker/Sublessee) continue through 6 steps (Preferences, Location, Breaks).
 - `app/admin.tsx` — Hidden admin dashboard (5-tap on profile version label)
 
 ### Tabs (app/(tabs)/) — 3 tabs
@@ -40,7 +42,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 ### Stack Screens
 - `app/matchmaker.tsx` — Hinge/Bumble-style full-bleed hero card (no swipe gestures — button-only). Card fills ~72% screen height with CustomAvatar fallback (or profile image), LinearGradient overlay, large coral match score (60px), name/vitals/major in white, glassmorphic habit chips from vibeProfile, icebreaker prompt box. 80px circular action buttons: red 🐼 (pass) / green 💚 (match). Mutual match detection: mock users u1,u3,u5,u7 have "pre-liked" the current user; on mutual match shows "It's a Match! 🎉" modal with "Say Hi 👋" button that auto-creates conversation and navigates to chat. No zone filter on matchmaker screen.
 - `app/marketplace.tsx` — Sublease listings with 60% photo cards, amenity overlay, Message button, FacePile, Mark as Leased
-- `app/post-sublease.tsx` — Multi-step listing form (5 steps: Basic → Unit Details/Photos → Amenities → Cleanliness → Calendar Dates). Calendar uses custom month-view picker with year selector (supports up to 3000), move-out must be after move-in.
+- `app/post-sublease.tsx` — Multi-step listing form (4 steps: Basic → Unit Details/Photos → Amenities → Cleanliness/Dates). Gateway mode (?gateway=1) locks the back button on step 0 and requires full completion before entering the main app. Strict validation: Zone + Dates + Price + Landlord + ≥1 Photo required. Auto-categorization: lease type auto-tagged based on move-in/move-out date range. "Publish Listing ✨" coral (#FF8C69) submit button. Warm cream (#FBFBF9) background, dark teal (#2C555C) header text. Zone/leaseType synced to global user profile on submit.
 - `app/chat.tsx` — Chat room with listing preview header, timestamped bubbles, send input
 - `app/link-listing.tsx` — Bridge screen for Host/Sublessor users without listings
 

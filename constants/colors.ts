@@ -31,6 +31,9 @@ const Colors = {
   goldDark: "#E8C14E",
   orange: "#FF6B4E",
   orangeLight: "#FF8570",
+  warmCream: "#FBFBF9",
+  darkTeal: "#2C555C",
+  coral: "#FF8C69",
 
   landlords: {
     jsm: "#1A9BB5",

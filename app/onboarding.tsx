@@ -218,8 +218,8 @@ export default function OnboardingScreen() {
   const [intent, setIntent] = useState<Intent>("joiner");
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
-  const isHost = intent === "host";
-  const STEPS = isHost ? 3 : 6;
+  const isSupplySide = intent === "host" || intent === "sublessor";
+  const STEPS = isSupplySide ? 3 : 6;
 
   const startCountdown = (seconds = 60) => {
     setCountdown(seconds);
@@ -333,7 +333,7 @@ export default function OnboardingScreen() {
   const handleNext = () => {
     if (!isFormComplete) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (isHost && step === 2) {
+    if (isSupplySide && step === 2) {
       handleFinish();
       return;
     }
@@ -355,15 +355,15 @@ export default function OnboardingScreen() {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
       name: name.trim(), email: email.toLowerCase().trim(),
       major: major || "Undeclared", bio: bio.trim(),
-      budget: isHost ? 0 : budget,
-      gender, genderPref: isHost ? "mixed" : genderPref,
-      cleanliness: isHost ? 3 : cleanliness,
-      noise: isHost ? 3 : noise,
-      leaseType: isHost ? "full_year" : leaseType,
-      zone: isHost ? "campustown" : zone,
-      landlords: isHost ? [] : landlords,
-      staysThanksgiving: isHost ? false : staysThanksgiving,
-      staysSpringBreak: isHost ? false : staysSpringBreak,
+      budget: isSupplySide ? 0 : budget,
+      gender, genderPref: isSupplySide ? "mixed" : genderPref,
+      cleanliness: isSupplySide ? 3 : cleanliness,
+      noise: isSupplySide ? 3 : noise,
+      leaseType: isSupplySide ? "full_year" : leaseType,
+      zone: isSupplySide ? "campustown" : zone,
+      landlords: isSupplySide ? [] : landlords,
+      staysThanksgiving: isSupplySide ? false : staysThanksgiving,
+      staysSpringBreak: isSupplySide ? false : staysSpringBreak,
       avatarColor, intent,
       ...(profileImage ? { profileImage } : {}),
     };
@@ -371,7 +371,7 @@ export default function OnboardingScreen() {
     await setIsOnboarded(true);
     switch (intent) {
       case "host":
-        router.replace("/post-sublease?mode=host");
+        router.replace("/post-sublease?mode=host&gateway=1");
         break;
       case "joiner":
         router.replace("/marketplace?category=roommate_openings");
@@ -380,7 +380,7 @@ export default function OnboardingScreen() {
         router.replace("/compatibility-setup");
         break;
       case "sublessor":
-        router.replace("/post-sublease");
+        router.replace("/post-sublease?mode=sublessor&gateway=1");
         break;
       case "sublessee": {
         const sublesseeRoutes: Record<string, string> = {
@@ -793,18 +793,18 @@ export default function OnboardingScreen() {
               styles.nextBtn,
               !isFormComplete && { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 },
             ]}
-            onPress={step === STEPS - 1 || (isHost && step === 2) ? handleFinish : handleNext}
+            onPress={step === STEPS - 1 || (isSupplySide && step === 2) ? handleFinish : handleNext}
             disabled={!isFormComplete}
           >
             <Text style={[styles.nextBtnText, !isFormComplete && { color: DISABLED_TEXT }]}>
-              {isHost && step === 2
-                ? "Post My Apartment"
+              {isSupplySide && step === 2
+                ? intent === "host" ? "Post My Apartment" : "Post My Sublease"
                 : step === STEPS - 1
                   ? "Find My Match"
                   : "Continue"}
             </Text>
             <Ionicons
-              name={isHost && step === 2 ? "home" : step === STEPS - 1 ? "heart" : "arrow-forward"}
+              name={isSupplySide && step === 2 ? "home" : step === STEPS - 1 ? "heart" : "arrow-forward"}
               size={17}
               color={isFormComplete ? Colors.white : DISABLED_TEXT}
             />
