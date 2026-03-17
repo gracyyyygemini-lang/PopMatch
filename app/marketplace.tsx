@@ -475,6 +475,17 @@ function SubleaseCard({ post, onMarkLeased }: {
           ) : null}
         </View>
 
+        <View style={styles.dateStripRow}>
+          <View style={styles.dateStripPill}>
+            <Ionicons name="calendar-outline" size={14} color="#2C555C" />
+            <Text style={styles.dateStripText}>
+              {post.moveInDate && post.moveOutDate
+                ? `${new Date(post.moveInDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — ${new Date(post.moveOutDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                : "Exact Dates Required"}
+            </Text>
+          </View>
+        </View>
+
         {post.listingType === "roommate" && (
           <View style={styles.roommateInfo}>
             {post.roomsAvailable ? (
@@ -888,6 +899,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 2, marginLeft: 6, alignSelf: "center" as const,
   },
   fullyPrivateText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.grassGreen },
+  dateStripRow: { flexDirection: "row" as const, alignItems: "center" as const, marginTop: 8, marginBottom: 8 },
+  dateStripPill: {
+    flexDirection: "row" as const, alignItems: "center" as const, gap: 6,
+    backgroundColor: "#E8F0F1", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
+  },
+  dateStripText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: "#2C555C" },
   roommateInfo: {
     backgroundColor: "#8B5CF6" + "0D", borderRadius: 10, padding: 10, gap: 6,
     borderWidth: 1, borderColor: "#8B5CF6" + "20",
