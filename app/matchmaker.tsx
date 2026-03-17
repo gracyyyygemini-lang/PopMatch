@@ -1,22 +1,24 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
-  View, Text, StyleSheet, Animated, PanResponder, Dimensions,
-  TouchableOpacity, Platform, useWindowDimensions, Image,
+  View, Text, StyleSheet, Dimensions,
+  TouchableOpacity, Platform, useWindowDimensions, Image, Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import Animated, { FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
 import Colors from "@/constants/colors";
-import { useApp, UserProfile, Zone, VibeProfile } from "@/context/AppContext";
-import ZonePicker from "@/components/ZonePicker";
+import { useApp, UserProfile, VibeProfile } from "@/context/AppContext";
+import CustomAvatar from "@/components/CustomAvatar";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 const CORAL = "#FF8C69";
 const DARK_TEAL = "#2C555C";
 const SCREEN_BG = "#FBFBF9";
+const MATCH_GREEN = "#34C759";
+const PASS_RED = "#FF6B6B";
 
 const YEAR_LABELS: Record<string, string> = {
   freshman: "Freshman",
@@ -33,25 +35,11 @@ const GREEK_LABELS: Record<string, string> = {
   independent: "Independent",
 };
 
-const SLEEP_LABELS: Record<string, string> = {
-  early_bird: "Early Bird",
-  night_owl: "Night Owl",
-  varies: "Varies",
-};
-
 const CLEAN_LABELS: Record<string, string> = {
   neat_freak: "Neat Freak",
   tidy: "Tidy",
   organized_chaos: "Organized Chaos",
   messy: "Messy",
-};
-
-const VICE_LABELS: Record<string, string> = {
-  "420_friendly": "420 Friendly",
-  drinks_socially: "Social Drinker",
-  social_smoker: "Social Smoker",
-  no_vices: "Substance Free",
-  vapes: "Vapes",
 };
 
 function matchesGenderFilter(current: UserProfile, candidate: UserProfile): boolean {
@@ -89,7 +77,6 @@ function HeroCard({
   user: UserProfile; score: number; cardHeight: number; cardWidth: number;
 }) {
   const vp = user.vibeProfile;
-  const initials = user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   const hasImage = !!user.profileImage;
   const habitChips = vp ? getHabitChips(vp) : [];
   const yearLabel = vp?.year ? YEAR_LABELS[vp.year] || vp.year : "";
@@ -102,7 +89,7 @@ function HeroCard({
         <Image source={{ uri: user.profileImage }} style={hc.bgImage} />
       ) : (
         <View style={[hc.bgFallback, { backgroundColor: user.avatarColor }]}>
-          <Text style={hc.bgInitials}>{initials}</Text>
+          <CustomAvatar name={user.name} avatarColor={user.avatarColor} size={120} fontSize={48} />
         </View>
       )}
 
@@ -150,7 +137,6 @@ const hc = StyleSheet.create({
     width: "100%", height: "100%", position: "absolute",
     alignItems: "center", justifyContent: "center",
   },
-  bgInitials: { fontFamily: "Nunito_800ExtraBold", fontSize: 80, color: "rgba(255,255,255,0.3)" },
   gradient: { position: "absolute", left: 0, right: 0, bottom: 0, height: "70%" },
   content: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 20, justifyContent: "flex-end" },
   scoreRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginBottom: 4 },
@@ -188,66 +174,105 @@ const hc = StyleSheet.create({
   icebreakerAnswer: { fontFamily: "Nunito_400Regular", fontSize: 13, color: "#FFFFFF", lineHeight: 18 },
 });
 
-function SwipeableCard({
-  user, score, onLike, onPass, isTop, cardWidth, cardHeight,
+function StaticCard({
+  user, score, cardWidth, cardHeight, isTop,
 }: {
-  user: UserProfile; score: number; onLike: () => void; onPass: () => void;
-  isTop: boolean; cardWidth: number; cardHeight: number;
+  user: UserProfile; score: number; cardWidth: number; cardHeight: number; isTop: boolean;
 }) {
-  const pan = useRef(new Animated.ValueXY()).current;
-  const rotate = pan.x.interpolate({ inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2], outputRange: ["-8deg", "0deg", "8deg"] });
-  const likeOpacity = pan.x.interpolate({ inputRange: [0, SWIPE_THRESHOLD], outputRange: [0, 1], extrapolate: "clamp" });
-  const passOpacity = pan.x.interpolate({ inputRange: [-SWIPE_THRESHOLD, 0], outputRange: [1, 0], extrapolate: "clamp" });
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => isTop,
-      onMoveShouldSetPanResponder: (_, g) => isTop && Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 5,
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dx > SWIPE_THRESHOLD) {
-          Animated.spring(pan, { toValue: { x: SCREEN_WIDTH * 1.5, y: gs.dy }, useNativeDriver: false }).start(onLike);
-        } else if (gs.dx < -SWIPE_THRESHOLD) {
-          Animated.spring(pan, { toValue: { x: -SCREEN_WIDTH * 1.5, y: gs.dy }, useNativeDriver: false }).start(onPass);
-        } else {
-          Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
-        }
-      },
-    })
-  ).current;
-
   return (
-    <Animated.View
+    <View
       style={[styles.card, {
         width: cardWidth, height: cardHeight,
-        transform: [{ translateX: pan.x }, { translateY: isTop ? pan.y : 0 }, { rotate: isTop ? rotate : "0deg" }],
         zIndex: isTop ? 10 : 5,
         opacity: isTop ? 1 : 0.92,
       }]}
-      {...(isTop ? panResponder.panHandlers : {})}
     >
-      {isTop && (
-        <>
-          <Animated.View style={[styles.swipeLabel, styles.swipeLike, { opacity: likeOpacity }]}>
-            <Ionicons name="heart" size={24} color="#FFFFFF" />
-            <Text style={[styles.swipeLabelText, { color: "#FFFFFF" }]}>CONNECT</Text>
-          </Animated.View>
-          <Animated.View style={[styles.swipeLabel, styles.swipePass, { opacity: passOpacity }]}>
-            <Ionicons name="close" size={24} color="#FFFFFF" />
-            <Text style={[styles.swipeLabelText, { color: "#FFFFFF" }]}>PASS</Text>
-          </Animated.View>
-        </>
-      )}
       <HeroCard user={user} score={score} cardHeight={cardHeight} cardWidth={cardWidth} />
-    </Animated.View>
+    </View>
   );
 }
+
+function MatchModal({
+  visible,
+  matchedUser,
+  onSayHi,
+  onClose,
+}: {
+  visible: boolean;
+  matchedUser: UserProfile | null;
+  onSayHi: () => void;
+  onClose: () => void;
+}) {
+  if (!matchedUser) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <View style={mm.overlay}>
+        <Animated.View entering={ZoomIn.duration(400)} style={mm.card}>
+          <Text style={mm.emoji}>🎉</Text>
+          <Text style={mm.title}>It's a Match!</Text>
+          <Text style={mm.subtitle}>You and {matchedUser.name} liked each other</Text>
+
+          <View style={mm.avatarRow}>
+            <CustomAvatar
+              name={matchedUser.name}
+              avatarColor={matchedUser.avatarColor}
+              profileImage={matchedUser.profileImage}
+              size={80}
+            />
+          </View>
+
+          <TouchableOpacity style={mm.sayHiBtn} onPress={onSayHi} activeOpacity={0.8}>
+            <Text style={mm.sayHiBtnText}>Say Hi 👋</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={mm.laterBtn} onPress={onClose} activeOpacity={0.7}>
+            <Text style={mm.laterBtnText}>Keep Swiping</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+const mm = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center", justifyContent: "center", padding: 32,
+  },
+  card: {
+    backgroundColor: "#FFFFFF", borderRadius: 28, padding: 32,
+    alignItems: "center", width: "100%", maxWidth: 360,
+    shadowColor: "rgba(0,0,0,0.15)", shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1, shadowRadius: 32, elevation: 12,
+  },
+  emoji: { fontSize: 56, marginBottom: 8 },
+  title: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: DARK_TEAL, marginBottom: 4 },
+  subtitle: { fontFamily: "Nunito_400Regular", fontSize: 15, color: "#6B8A8F", textAlign: "center", marginBottom: 20 },
+  avatarRow: { marginBottom: 24 },
+  sayHiBtn: {
+    backgroundColor: MATCH_GREEN, borderRadius: 16,
+    paddingHorizontal: 40, paddingVertical: 16, width: "100%", alignItems: "center",
+    marginBottom: 12,
+  },
+  sayHiBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 17, color: "#FFFFFF" },
+  laterBtn: {
+    paddingVertical: 12,
+  },
+  laterBtnText: { fontFamily: "Nunito_600SemiBold", fontSize: 15, color: "#6B8A8F" },
+});
 
 export default function MatchmakerScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { currentUser, mockUsers, addMatch, addLiked, addPassed, likedUserIds, passedUserIds, computeScore, subleases } = useApp();
-  const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
+  const {
+    currentUser, mockUsers, addMatch, addLiked, addPassed,
+    likedUserIds, passedUserIds, computeScore, subleases,
+    mockLikedByIds, startMatchConversation,
+  } = useApp();
+
+  const [matchModalUser, setMatchModalUser] = useState<UserProfile | null>(null);
+  const [matchConvoId, setMatchConvoId] = useState<string>("");
 
   const isDesktopMm = Platform.OS === "web" && screenWidth >= 1024;
   const topPadding = Platform.OS === "web" ? (isDesktopMm ? 24 : 67) : insets.top;
@@ -270,7 +295,6 @@ export default function MatchmakerScreen() {
     if (!currentUser) return true;
     if (u.id === currentUser.id) return false;
     if (!matchesGenderFilter(currentUser, u)) return false;
-    if (zoneFilter !== "all" && u.zone !== zoneFilter) return false;
     return true;
   });
 
@@ -282,12 +306,26 @@ export default function MatchmakerScreen() {
     const score = currentUser ? computeScore(currentUser, user) : 75;
     await addLiked(user.id);
     await addMatch({ userId: user.id, score, liked: true, timestamp: Date.now() });
-  }, [currentUser, computeScore]);
+
+    const isMutual = mockLikedByIds.includes(user.id);
+    if (isMutual) {
+      const convoId = startMatchConversation(user);
+      setMatchConvoId(convoId);
+      setMatchModalUser(user);
+    }
+  }, [currentUser, computeScore, mockLikedByIds, startMatchConversation, addLiked, addMatch]);
 
   const handlePass = useCallback(async (user: UserProfile) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await addPassed(user.id);
-  }, []);
+  }, [addPassed]);
+
+  const handleSayHi = () => {
+    setMatchModalUser(null);
+    if (matchConvoId) {
+      router.push(`/chat?conversationId=${matchConvoId}`);
+    }
+  };
 
   return (
     <View style={[styles.container, isDesktopMm && { maxWidth: contentMaxW + 40, alignSelf: "center" as const, width: "100%" }]}>
@@ -305,8 +343,6 @@ export default function MatchmakerScreen() {
         </View>
       </View>
 
-      <ZonePicker selected={zoneFilter} onSelect={setZoneFilter} />
-
       <View style={styles.deckArea}>
         {remaining.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -322,9 +358,8 @@ export default function MatchmakerScreen() {
             const isTop = i === 0;
             const score = currentUser ? computeScore(currentUser, user) : 75;
             return (
-              <SwipeableCard key={user.id} user={user} score={score} isTop={isTop}
-                cardWidth={cardWidth} cardHeight={cardHeight}
-                onLike={() => handleLike(user)} onPass={() => handlePass(user)} />
+              <StaticCard key={user.id} user={user} score={score} isTop={isTop}
+                cardWidth={cardWidth} cardHeight={cardHeight} />
             );
           }).reverse()
         )}
@@ -332,17 +367,32 @@ export default function MatchmakerScreen() {
 
       {remaining.length > 0 && (
         <View style={[styles.actionRow, { paddingBottom: bottomPadding + 12 }]}>
-          <TouchableOpacity style={[styles.actionBtn, styles.passBtn]} onPress={() => handlePass(remaining[0])}>
-            <Ionicons name="close" size={30} color={DARK_TEAL} />
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.passBtn]}
+            onPress={() => handlePass(remaining[0])}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.actionEmoji}>🐼</Text>
           </TouchableOpacity>
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{remaining.length} left</Text>
           </View>
-          <TouchableOpacity style={[styles.actionBtn, styles.likeBtn]} onPress={() => handleLike(remaining[0])}>
-            <Ionicons name="heart" size={28} color="#FFFFFF" />
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.likeBtn]}
+            onPress={() => handleLike(remaining[0])}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.actionEmoji}>💚</Text>
           </TouchableOpacity>
         </View>
       )}
+
+      <MatchModal
+        visible={!!matchModalUser}
+        matchedUser={matchModalUser}
+        onSayHi={handleSayHi}
+        onClose={() => setMatchModalUser(null)}
+      />
     </View>
   );
 }
@@ -369,24 +419,17 @@ const styles = StyleSheet.create({
     shadowColor: "rgba(0,0,0,0.08)", shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 1, shadowRadius: 24, elevation: 8,
   },
-  swipeLabel: {
-    position: "absolute", top: 24, flexDirection: "row", alignItems: "center",
-    gap: 6, zIndex: 20, paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 14,
-  },
-  swipeLike: { right: 20, backgroundColor: Colors.grassGreen },
-  swipePass: { left: 20, backgroundColor: Colors.errorRed },
-  swipeLabelText: { fontFamily: "Nunito_800ExtraBold", fontSize: 15 },
   actionRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 28, paddingTop: 12,
   },
   actionBtn: {
-    width: 75, height: 75, borderRadius: 38, alignItems: "center", justifyContent: "center",
-    shadowColor: "rgba(0,0,0,0.08)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 4,
+    width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center",
+    shadowColor: "rgba(0,0,0,0.12)", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 1, shadowRadius: 16, elevation: 6,
   },
-  passBtn: { backgroundColor: "#F0F3F3" },
-  likeBtn: { backgroundColor: CORAL },
+  passBtn: { backgroundColor: PASS_RED },
+  likeBtn: { backgroundColor: MATCH_GREEN },
+  actionEmoji: { fontSize: 36 },
   countBadge: { backgroundColor: "#EDF2F2", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 8 },
   countText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: "#6B8A8F" },
   emptyCard: {

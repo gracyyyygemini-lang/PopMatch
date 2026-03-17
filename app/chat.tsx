@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, ChatMessage } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import CustomAvatar from "@/components/CustomAvatar";
 
 const ICEBREAKERS: { label: string; question: string; bg: string; border: string }[] = [
   { label: "🍎 Fridge", question: "How should we divide up the fridge and pantry space?", bg: "#FFF0ED", border: "#F4A89A" },
@@ -124,8 +125,6 @@ export default function ChatScreen() {
     );
   }
 
-  const initial = (convo.otherUserName || "?")[0].toUpperCase();
-
   return (
     <KeyboardAvoidingView
       style={[styles.container, isDesktop && { maxWidth: contentMaxWidth, alignSelf: "center" as const, width: "100%" }]}
@@ -136,9 +135,12 @@ export default function ChatScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={20} color={Colors.ocean} />
         </TouchableOpacity>
-        <View style={[styles.headerAvatar, { backgroundColor: convo.otherUserAvatar || Colors.ocean }]}>
-          <Text style={styles.headerAvatarText}>{initial}</Text>
-        </View>
+        <CustomAvatar
+          name={convo.otherUserName || "?"}
+          avatarColor={convo.otherUserAvatar || Colors.ocean}
+          profileImage={convo.otherUserProfileImage}
+          size={36}
+        />
         <View style={styles.headerInfo}>
           <Text style={styles.headerName} numberOfLines={1}>{convo.otherUserName}</Text>
           <Text style={styles.headerEmail} numberOfLines={1}>{convo.otherUserEmail}</Text>

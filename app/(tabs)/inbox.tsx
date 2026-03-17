@@ -6,6 +6,7 @@ import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApp, Conversation } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import CustomAvatar from "@/components/CustomAvatar";
 
 function formatTime(ts?: number) {
   if (!ts) return "";
@@ -21,17 +22,18 @@ function formatTime(ts?: number) {
 }
 
 function ConversationRow({ convo }: { convo: Conversation }) {
-  const initial = (convo.otherUserName || "?")[0].toUpperCase();
-
   return (
     <TouchableOpacity
       style={styles.convoRow}
       activeOpacity={0.7}
       onPress={() => router.push(`/chat?conversationId=${convo.id}`)}
     >
-      <View style={[styles.avatar, { backgroundColor: convo.otherUserAvatar || Colors.ocean }]}>
-        <Text style={styles.avatarText}>{initial}</Text>
-      </View>
+      <CustomAvatar
+        name={convo.otherUserName || "?"}
+        avatarColor={convo.otherUserAvatar || Colors.ocean}
+        profileImage={convo.otherUserProfileImage}
+        size={48}
+      />
       <View style={styles.convoContent}>
         <View style={styles.convoHeader}>
           <Text style={styles.convoName} numberOfLines={1}>{convo.otherUserName || "User"}</Text>

@@ -150,6 +150,7 @@ export interface Conversation {
   otherUserName?: string;
   otherUserAvatar?: string;
   otherUserEmail?: string;
+  otherUserProfileImage?: string;
 }
 
 export interface ChatMessage {
@@ -340,10 +341,14 @@ interface AppContextValue {
   toggleVouch: (email: string) => Promise<void>;
   getTrustInfo: (userEmail: string) => TrustInfo;
   conversations: Conversation[];
-  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string) => string;
+  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string) => string;
+  startMatchConversation: (targetUser: UserProfile) => string;
   sendMessage: (conversationId: string, content: string) => void;
   getMessages: (conversationId: string) => ChatMessage[];
+  mockLikedByIds: string[];
 }
+
+const MOCK_LIKED_BY_IDS = ["u1", "u3", "u5", "u7"];
 
 const AppContext = createContext<AppContextValue | null>(null);
 
@@ -565,7 +570,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_friends", JSON.stringify(updated));
   };
 
-  const startConversation = (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string): string => {
+  const startConversation = (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string): string => {
     if (!currentUser) return "";
     const existing = conversations.find(c =>
       c.listingId === listingId &&
@@ -585,6 +590,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       otherUserName: targetName,
       otherUserAvatar: targetAvatar,
       otherUserEmail: targetEmail,
+      otherUserProfileImage: targetProfileImage,
+    };
+    const updated = [newConvo, ...conversations];
+    setConversations(updated);
+    AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updated));
+    return newConvo.id;
+  };
+
+  const startMatchConversation = (targetUser: UserProfile): string => {
+    if (!currentUser) return "";
+    const matchListingId = `match_${currentUser.id}_${targetUser.id}`;
+    const existing = conversations.find(c =>
+      c.listingId === matchListingId &&
+      ((c.participant1Id === currentUser.id && c.participant2Id === targetUser.id) ||
+       (c.participant1Id === targetUser.id && c.participant2Id === currentUser.id))
+    );
+    if (existing) return existing.id;
+
+    const newConvo: Conversation = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+      participant1Id: currentUser.id,
+      participant2Id: targetUser.id,
+      listingId: matchListingId,
+      listingBuilding: "Matchmaker",
+      listingPrice: 0,
+      listingUnitType: "Roommate Match",
+      otherUserName: targetUser.name,
+      otherUserAvatar: targetUser.avatarColor,
+      otherUserEmail: targetUser.email,
+      otherUserProfileImage: targetUser.profileImage,
     };
     const updated = [newConvo, ...conversations];
     setConversations(updated);
@@ -685,7 +720,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     subleases, addSublease, removeSublease,
     crashPosts, addCrashPost, updateCrashPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
-    conversations, startConversation, sendMessage, getMessages,
+    conversations, startConversation, startMatchConversation, sendMessage, getMessages,
+    mockLikedByIds: MOCK_LIKED_BY_IDS,
   }), [
     currentUser, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, crashPosts, friends,

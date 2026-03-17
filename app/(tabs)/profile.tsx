@@ -12,6 +12,7 @@ import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import BottomSheetModal from "@/components/BottomSheetModal";
+import CustomAvatar from "@/components/CustomAvatar";
 import type { LeaseType, Zone, Landlord, GenderPref, UserProfile } from "@/context/AppContext";
 
 type SheetType = "avatar" | "name" | "bio" | "budget" | "major" | "leaseType" | "zone" | "landlord" | "genderPref" | "gender" | null;
@@ -531,8 +532,14 @@ export default function ProfileScreen() {
         <View style={styles.profileCard}>
           <Pressable onPress={() => openSheet("avatar")} accessibilityRole="button" accessibilityLabel="Change avatar color">
             {({ pressed }) => (
-              <View style={[styles.avatar, { backgroundColor: currentUser.avatarColor }, pressed && { opacity: 0.8 }]}>
-                <Text style={styles.avatarText}>{initials}</Text>
+              <View style={[{ opacity: pressed ? 0.8 : 1 }]}>
+                <CustomAvatar
+                  name={currentUser.name}
+                  avatarColor={currentUser.avatarColor}
+                  profileImage={currentUser.profileImage}
+                  size={72}
+                  fontSize={28}
+                />
                 <View style={styles.editBadge}>
                   <Ionicons name="color-palette-outline" size={10} color={Colors.white} />
                 </View>

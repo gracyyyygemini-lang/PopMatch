@@ -12,6 +12,7 @@ import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { useApp, CrashPost, CrashVibe, CrashCurrency, Zone } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import CustomAvatar from "@/components/CustomAvatar";
 
 const DARK_TEAL = "#2C555C";
 const SUBTITLE_GREY = "#6B8A8F";
@@ -92,9 +93,7 @@ function GridCard({
           </View>
         )}
         <View style={gc.avatarOverlay}>
-          <View style={[gc.avatar, { backgroundColor: post.avatarColor }]}>
-            <Text style={gc.avatarText}>{post.userName[0]}</Text>
-          </View>
+          <CustomAvatar name={post.userName} avatarColor={post.avatarColor} size={28} fontSize={12} />
         </View>
         <View style={gc.tagOverlay}>
           <View style={[gc.tagPill, isSos ? gc.tagSos : gc.tagOffer]}>
