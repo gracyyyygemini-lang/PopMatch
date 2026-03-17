@@ -135,6 +135,9 @@ export interface SubleasePost {
   cleaningFrequency?: CleaningFrequency;
   shoePolicy?: ShoePolicy;
   images?: string[];
+  eventTag?: string;
+  subCategory?: string;
+  hasParking?: boolean;
 }
 
 export type ConversationSource = "sublease" | "coseeker" | "crash_cash";

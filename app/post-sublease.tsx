@@ -21,6 +21,17 @@ const LEASE_OPTIONS: { key: LeaseType; label: string; desc: string }[] = [
   { key: "summer_sublease", label: "Summer Sublease", desc: "May – Aug" },
 ];
 
+const SHORT_TERM_EVENTS = [
+  "Mom's Weekend", "Graduation", "August Gap", "Homecoming",
+  "Dad's Weekend", "Thanksgiving", "Winter Break", "Other / Generic Short-Term",
+];
+
+const SUMMER_TIMELINE_OPTIONS: { key: string; label: string; desc: string }[] = [
+  { key: "full_summer", label: "Full Summer", desc: "May – Aug" },
+  { key: "early_summer", label: "Early Summer", desc: "May – Jun" },
+  { key: "late_summer", label: "Late Summer", desc: "Jul – Aug" },
+];
+
 const LANDLORD_OPTIONS: { key: Landlord; label: string; color: string }[] = [
   { key: "jsm", label: "JSM", color: Colors.landlords.jsm },
   { key: "ugroup", label: "UGroup", color: Colors.landlords.ugroup },
@@ -103,12 +114,18 @@ const DISABLED_TEXT = "#8A9FA3";
 
 function autoCategorize(moveIn: Date, moveOut: Date): LeaseType {
   const durationDays = Math.round((moveOut.getTime() - moveIn.getTime()) / (1000 * 60 * 60 * 24));
+  if (durationDays <= 10) return "fall_sublease";
   const moveInMonth = moveIn.getMonth();
   if (durationDays >= 330) return "full_year";
   if (moveInMonth >= 4 && moveInMonth <= 6 && durationDays <= 120) return "summer_sublease";
   if (moveInMonth >= 0 && moveInMonth <= 1 && durationDays >= 90 && durationDays <= 180) return "spring_sublease";
   if (moveInMonth >= 7 && moveInMonth <= 8 && durationDays >= 90 && durationDays <= 180) return "fall_sublease";
   return "fall_sublease";
+}
+
+function getDurationDays(moveIn: Date | null, moveOut: Date | null): number {
+  if (!moveIn || !moveOut) return 0;
+  return Math.round((moveOut.getTime() - moveIn.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 const TOTAL_STEPS = 4;
@@ -144,6 +161,9 @@ export default function PostSubleaseScreen() {
   const [currentResidentBio, setCurrentResidentBio] = useState("");
 
   const [amenities, setAmenities] = useState<Amenities>({ ...DEFAULT_AMENITIES });
+  const [eventTag, setEventTag] = useState("");
+  const [subCategory, setSubCategory] = useState("");
+  const [hasParking, setHasParking] = useState(false);
 
   const [cleaningFrequency, setCleaningFrequency] = useState<CleaningFrequency>("weekly");
   const [shoePolicy, setShoePolicy] = useState<ShoePolicy>("no_policy");
@@ -370,18 +390,30 @@ export default function PostSubleaseScreen() {
   const allImagesUploaded = images.every(img => img !== null);
   const hasAtLeastOnePhoto = images.some(img => img !== null);
 
+  const days = getDurationDays(moveInDate, moveOutDate);
+  const isShortTerm = days > 0 && days <= 10;
+  const isSummer = leaseType === "summer_sublease" && !isShortTerm;
+
   const canSubmit = !!(
     buildingName.trim() &&
     price.trim() && !isNaN(Number(price)) && Number(price) > 0 &&
     zone &&
     landlords.length > 0 &&
     hasAtLeastOnePhoto &&
-    moveInDate !== null && moveOutDate !== null
+    moveInDate !== null && moveOutDate !== null &&
+    (!isShortTerm || eventTag) &&
+    (!isSummer || subCategory)
   );
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    const finalCategory = isShortTerm ? "short_term"
+      : leaseType === "summer_sublease" ? "summer"
+      : leaseType === "spring_sublease" ? "spring"
+      : leaseType === "fall_sublease" ? "fall"
+      : "full_year";
 
     const post: SubleasePost = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
@@ -399,6 +431,7 @@ export default function PostSubleaseScreen() {
       description: description.trim(),
       avatarColor: currentUser?.avatarColor || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
       timestamp: Date.now(),
+      category: finalCategory,
       kitchenType,
       bathroomType,
       unitType: unitType.trim() || undefined,
@@ -414,6 +447,9 @@ export default function PostSubleaseScreen() {
       cleaningFrequency,
       shoePolicy,
       images: images.filter(Boolean) as string[],
+      eventTag: isShortTerm ? eventTag : undefined,
+      subCategory: isSummer ? subCategory : undefined,
+      hasParking: isSummer ? hasParking : undefined,
     };
 
     await addSublease(post);
@@ -426,16 +462,14 @@ export default function PostSubleaseScreen() {
       });
     }
 
-    if (isGateway) {
-      if (isHostMode) {
-        router.replace("/marketplace?category=roommate_openings");
-      } else {
-        router.replace("/(tabs)");
-      }
-    } else if (isHostMode) {
+    if (isHostMode) {
       router.replace("/marketplace?category=roommate_openings");
+    } else if (finalCategory === "short_term") {
+      router.replace("/marketplace?category=short_term");
+    } else if (finalCategory === "summer") {
+      router.replace(`/marketplace?category=summer_only${subCategory ? `&filter=${subCategory}` : ""}`);
     } else {
-      router.canGoBack() ? router.back() : router.replace("/(tabs)");
+      router.replace(`/marketplace?category=semester_takeover`);
     }
   };
 
@@ -533,19 +567,61 @@ export default function PostSubleaseScreen() {
               </View>
             </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Lease Type *</Text>
-              {LEASE_OPTIONS.map(opt => (
-                <TouchableOpacity key={opt.key} style={[styles.optionCard, leaseType === opt.key && styles.optionCardActive]}
-                  onPress={() => { setLeaseType(opt.key); Haptics.selectionAsync(); }}>
-                  <View style={styles.optionLeft}>
-                    <Text style={[styles.optionLabel, leaseType === opt.key && styles.optionLabelActive]}>{opt.label}</Text>
-                    <Text style={styles.optionDesc}>{opt.desc}</Text>
+            {getDurationDays(moveInDate, moveOutDate) > 0 && getDurationDays(moveInDate, moveOutDate) <= 10 ? (
+              <View style={styles.field}>
+                <Text style={styles.label}>Event / Category *</Text>
+                <Text style={[styles.fieldHint, { marginBottom: 8 }]}>Short stay ({getDurationDays(moveInDate, moveOutDate)} days) — select the event</Text>
+                <View style={styles.chipRow}>
+                  {SHORT_TERM_EVENTS.map(evt => (
+                    <TouchableOpacity key={evt} style={[styles.chip, eventTag === evt && styles.chipActive]}
+                      onPress={() => { setEventTag(evt); Haptics.selectionAsync(); }}>
+                      <Text style={[styles.chipText, eventTag === evt && styles.chipTextActive]}>{evt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <View style={styles.field}>
+                <Text style={styles.label}>Lease Type *</Text>
+                {LEASE_OPTIONS.map(opt => (
+                  <TouchableOpacity key={opt.key} style={[styles.optionCard, leaseType === opt.key && styles.optionCardActive]}
+                    onPress={() => { setLeaseType(opt.key); setEventTag(""); Haptics.selectionAsync(); }}>
+                    <View style={styles.optionLeft}>
+                      <Text style={[styles.optionLabel, leaseType === opt.key && styles.optionLabelActive]}>{opt.label}</Text>
+                      <Text style={styles.optionDesc}>{opt.desc}</Text>
+                    </View>
+                    {leaseType === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
+                  </TouchableOpacity>
+                ))}
+
+                {leaseType === "summer_sublease" && (
+                  <View style={styles.summerSubmenu}>
+                    <Text style={[styles.label, { marginBottom: 8 }]}>Summer Timeline *</Text>
+                    {SUMMER_TIMELINE_OPTIONS.map(opt => (
+                      <TouchableOpacity key={opt.key}
+                        style={[styles.optionCard, subCategory === opt.key && styles.optionCardActive]}
+                        onPress={() => { setSubCategory(opt.key); Haptics.selectionAsync(); }}>
+                        <View style={styles.optionLeft}>
+                          <Text style={[styles.optionLabel, subCategory === opt.key && styles.optionLabelActive]}>{opt.label}</Text>
+                          <Text style={styles.optionDesc}>{opt.desc}</Text>
+                        </View>
+                        {subCategory === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
+                      </TouchableOpacity>
+                    ))}
+
+                    <TouchableOpacity style={styles.parkingToggle}
+                      onPress={() => { setHasParking(!hasParking); Haptics.selectionAsync(); }}>
+                      <Text style={styles.parkingLabel}>🚗 Parking Included</Text>
+                      <View style={[styles.toggle, hasParking && { backgroundColor: "#2C555C" }]}>
+                        <Text style={[styles.toggleText, hasParking && styles.toggleTextOn]}>
+                          {hasParking ? "Yes" : "No"}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
                   </View>
-                  {leaseType === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
-                </TouchableOpacity>
-              ))}
-            </View>
+                )}
+              </View>
+            )}
 
             <View style={styles.field}>
               <Text style={styles.label}>Landlord(s) *</Text>
@@ -841,7 +917,9 @@ export default function PostSubleaseScreen() {
               <View style={[styles.warningBox, { backgroundColor: Colors.ocean + "12", borderLeftColor: Colors.ocean }]}>
                 <Ionicons name="pricetag-outline" size={16} color={Colors.ocean} />
                 <Text style={styles.warningText}>
-                  Auto-tagged as: {LEASE_OPTIONS.find(o => o.key === leaseType)?.label || leaseType} ({Math.round((moveOutDate.getTime() - moveInDate.getTime()) / (1000 * 60 * 60 * 24))} days)
+                  {getDurationDays(moveInDate, moveOutDate) <= 10
+                    ? `Short-Term (${getDurationDays(moveInDate, moveOutDate)} days) — select event below`
+                    : `Auto-tagged as: ${LEASE_OPTIONS.find(o => o.key === leaseType)?.label || leaseType} (${getDurationDays(moveInDate, moveOutDate)} days)`}
                 </Text>
               </View>
             )}
@@ -966,6 +1044,26 @@ const styles = StyleSheet.create({
   toggleOn: { backgroundColor: Colors.grassGreen, borderColor: Colors.grassGreen },
   toggleText: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted },
   toggleTextOn: { color: Colors.white },
+  summerSubmenu: {
+    backgroundColor: "rgba(44, 85, 92, 0.05)",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    gap: 8,
+  },
+  parkingToggle: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginTop: 8,
+  },
+  parkingLabel: {
+    fontFamily: "Nunito_700Bold",
+    fontSize: 15,
+    color: "#2C555C",
+  },
   breakOptions: { gap: 8 },
   breakOptionsLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
   photoGrid: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
