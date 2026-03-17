@@ -17,31 +17,28 @@ const WARM_CREAM = "#FBFBF9";
 const SENT_CORAL = "#FF8C69";
 const RECEIVED_SEAFOAM = "#E8F6F3";
 
-const ICEBREAKERS: { label: string; question: string; bg: string; border: string }[] = [
-  { label: "🍎 Fridge", question: "How should we divide up the fridge and pantry space?", bg: "#FFF0ED", border: "#F4A89A" },
-  { label: "📚 Study Vibe", question: "Do you prefer the place to be quiet during midterm/finals weeks?", bg: "#E8F6F0", border: "#7CC9AA" },
-  { label: "🤝 Social", question: "Are you looking for a roommate to hang out with, or more of a quiet co-existence?", bg: "#FFF5E6", border: "#F0C87A" },
-  { label: "🌡️ Temp", question: "What do you usually like to keep the thermostat at during winter?", bg: "#EDF6FA", border: "#8AC4DA" },
-  { label: "🏠 Guests", question: "What are your thoughts on having friends or partners over on weekends?", bg: "#FFEDE8", border: "#E8997A" },
+const CRASH_CASH_CHIPS: { label: string; bg: string; border: string }[] = [
+  { label: "Still available? 👀", bg: "#FDECE8", border: "#F4A89A" },
+  { label: "When can I pull up? ⌚", bg: "#E8F6F3", border: "#7CC9AA" },
+  { label: "Venmo or Cash? 💸", bg: "#EDF6FA", border: "#8AC4DA" },
+  { label: "Guest parking? 🚗", bg: "#FFEDE8", border: "#E8997A" },
 ];
 
-const CRASH_CASH_CHIPS: { label: string; question: string; bg: string; border: string }[] = [
-  { label: "Still available? 👀", question: "Still available? 👀", bg: "#FDECE8", border: "#F4A89A" },
-  { label: "When can I pull up? ⌚", question: "When can I pull up? ⌚", bg: "#E8F6F3", border: "#7CC9AA" },
-  { label: "Bring my own blanket? 🛌", question: "Bring my own blanket? 🛌", bg: "#FFF5E6", border: "#F0C87A" },
-  { label: "Venmo or Cash? 💸", question: "Venmo or Cash? 💸", bg: "#EDF6FA", border: "#8AC4DA" },
-  { label: "Guest parking? 🚗", question: "Guest parking? 🚗", bg: "#FFEDE8", border: "#E8997A" },
+const COSEEKER_CHIPS: { label: string; bg: string; border: string }[] = [
+  { label: "Hey! Love your profile ✨", bg: "#E8F6F3", border: "#7CC9AA" },
+  { label: "What is your major?", bg: "#FFF5E6", border: "#F0C87A" },
+  { label: "Are you a night owl? 🦇", bg: "#EDF6FA", border: "#8AC4DA" },
+  { label: "Wanna grab coffee and chat? ☕", bg: "#FFEDE8", border: "#E8997A" },
 ];
 
-const SUBLEASE_CHIPS: { label: string; question: string; bg: string; border: string }[] = [
-  { label: "🔑 Move-in?", question: "What's the earliest I could move in?", bg: "#E8F0F1", border: "#9AB8BE" },
-  { label: "🧾 Lease transfer?", question: "Is this a full lease transfer or sublease?", bg: "#FFF5E6", border: "#F0C87A" },
-  { label: "🏗️ Furnished?", question: "Is the place furnished or unfurnished?", bg: "#E8F6F3", border: "#7CC9AA" },
-  { label: "💡 Utilities?", question: "Are utilities included in the rent?", bg: "#EDF6FA", border: "#8AC4DA" },
-  { label: "🅿️ Parking?", question: "Is there parking available with this unit?", bg: "#FFEDE8", border: "#E8997A" },
+const SUBLEASE_CHIPS: { label: string; bg: string; border: string }[] = [
+  { label: "Is this still available? 🔑", bg: "#E8F0F1", border: "#9AB8BE" },
+  { label: "Are utilities included? 💡", bg: "#EDF6FA", border: "#8AC4DA" },
+  { label: "Can I schedule a tour? 📅", bg: "#FFF5E6", border: "#F0C87A" },
+  { label: "Is it furnished? 🛋️", bg: "#E8F6F3", border: "#7CC9AA" },
 ];
 
-function IcebreakerChip({ item, onPress }: { item: typeof ICEBREAKERS[0]; onPress: () => void }) {
+function IcebreakerChip({ item, onPress }: { item: typeof CRASH_CASH_CHIPS[0]; onPress: () => void }) {
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
@@ -109,7 +106,7 @@ export default function ChatScreen() {
   const [text, setText] = useState("");
   const source = params.source || "sublease";
   const activeChips = source === "crash_cash" ? CRASH_CASH_CHIPS
-    : source === "coseeker" ? ICEBREAKERS
+    : source === "coseeker" ? COSEEKER_CHIPS
     : SUBLEASE_CHIPS;
   const flatListRef = useRef<FlatList>(null);
 
@@ -211,8 +208,10 @@ export default function ChatScreen() {
             key={idx}
             item={ic}
             onPress={() => {
-              setText(ic.question);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              if (params.conversationId) {
+                sendMessage(params.conversationId, ic.label);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }
             }}
           />
         ))}
