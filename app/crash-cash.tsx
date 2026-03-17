@@ -474,6 +474,7 @@ export default function CrashCashScreen() {
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
   const [showNewPost, setShowNewPost] = useState(false);
   const [vibeFilter, setVibeFilter] = useState<VibeFilter>("all");
+  const [selectedPost, setSelectedPost] = useState<CrashPost | null>(null);
 
   const containerWidth = isDesktop ? Math.min(640, screenWidth) : Math.min(screenWidth, contentMaxWidth);
   const cardWidth = (containerWidth - GRID_PAD * 2 - GRID_GAP) / 2;
@@ -569,14 +570,16 @@ export default function CrashCashScreen() {
           width: "100%",
         }}
         renderItem={({ item }) => (
-          <GridCard
-            post={item}
-            cardWidth={cardWidth}
-            isOwner={currentUser?.id === item.userId}
-            isPinned={!!isHost && currentUser?.id === item.userId}
-            onDm={() => handleDm(item)}
-            onMarkFilled={() => handleMarkFilled(item.id)}
-          />
+          <TouchableOpacity activeOpacity={0.85} onPress={() => { setSelectedPost(item); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}>
+            <GridCard
+              post={item}
+              cardWidth={cardWidth}
+              isOwner={currentUser?.id === item.userId}
+              isPinned={!!isHost && currentUser?.id === item.userId}
+              onDm={() => handleDm(item)}
+              onMarkFilled={() => handleMarkFilled(item.id)}
+            />
+          </TouchableOpacity>
         )}
         contentContainerStyle={{
           gap: GRID_GAP,
@@ -604,6 +607,77 @@ export default function CrashCashScreen() {
         )}
       </Pressable>
 
+      {selectedPost && (
+        <Modal visible={true} animationType="slide" transparent={false} onRequestClose={() => setSelectedPost(null)}>
+          <View style={[dm.container, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) }]}>
+            <ScrollView style={dm.scroll} contentContainerStyle={dm.scrollContent} bounces={false} showsVerticalScrollIndicator={false}>
+              <View style={dm.heroWrap}>
+                {selectedPost.imageUrl ? (
+                  <Image source={{ uri: selectedPost.imageUrl }} style={dm.heroImage} resizeMode="cover" />
+                ) : (
+                  <View style={[dm.heroPlaceholder, { backgroundColor: (PLACEHOLDER_IMGS[selectedPost.zone] || PLACEHOLDER_IMGS.campustown).colors[0] }]}>
+                    <Ionicons name={(PLACEHOLDER_IMGS[selectedPost.zone] || PLACEHOLDER_IMGS.campustown).icon} size={64} color={(PLACEHOLDER_IMGS[selectedPost.zone] || PLACEHOLDER_IMGS.campustown).colors[1]} />
+                  </View>
+                )}
+                <TouchableOpacity style={dm.closeBtn} onPress={() => setSelectedPost(null)} activeOpacity={0.7}>
+                  <Ionicons name="close" size={22} color={DARK_TEAL} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={dm.body}>
+                <View style={dm.userRow}>
+                  <CustomAvatar name={selectedPost.userName} avatarColor={selectedPost.avatarColor} size={40} fontSize={16} />
+                  <View style={dm.userInfo}>
+                    <Text style={dm.userName}>{selectedPost.userName}</Text>
+                    <Text style={dm.userTime}>{formatDate(selectedPost.targetDate)}</Text>
+                  </View>
+                  <View style={[dm.tagPill, selectedPost.vibe === "sos" ? dm.tagSos : dm.tagOffer]}>
+                    <Text style={dm.tagText}>{selectedPost.vibe === "sos" ? "🚨 NEED" : "🛋️ GOT"}</Text>
+                  </View>
+                </View>
+
+                <Text style={dm.storyText}>{selectedPost.story}</Text>
+
+                <View style={dm.essBox}>
+                  <View style={dm.essItem}>
+                    <Text style={dm.essIcon}>🗓️</Text>
+                    <Text style={dm.essLabel}>When</Text>
+                    <Text style={dm.essValue}>{selectedPost.dates}</Text>
+                  </View>
+                  <View style={dm.essDivider} />
+                  <View style={dm.essItem}>
+                    <Text style={dm.essIcon}>📍</Text>
+                    <Text style={dm.essLabel}>Where</Text>
+                    <Text style={dm.essValue}>{ZONE_SHORT[selectedPost.zone] || selectedPost.zone}</Text>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={dm.footer}>
+              <Text style={dm.footerCurrency}>{selectedPost.currencyLabel}</Text>
+              {currentUser?.id === selectedPost.userId ? (
+                <TouchableOpacity
+                  style={dm.filledBtn}
+                  activeOpacity={0.7}
+                  onPress={() => { handleMarkFilled(selectedPost.id); setSelectedPost(null); }}
+                >
+                  <Text style={dm.filledBtnText}>Mark Filled 🔒</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={dm.dmBtn}
+                  activeOpacity={0.8}
+                  onPress={() => { handleDm(selectedPost); setSelectedPost(null); }}
+                >
+                  <Text style={dm.dmBtnText}>Slide into DMs ⚡️</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </Modal>
+      )}
+
       <NewPostSheet
         visible={showNewPost}
         onClose={() => setShowNewPost(false)}
@@ -612,6 +686,60 @@ export default function CrashCashScreen() {
     </View>
   );
 }
+
+const dm = StyleSheet.create({
+  container: { flex: 1, backgroundColor: SCREEN_BG },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 24 },
+  heroWrap: { position: "relative" },
+  heroImage: { width: "100%", height: 350, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, overflow: "hidden" as const },
+  heroPlaceholder: {
+    width: "100%", height: 350, alignItems: "center", justifyContent: "center",
+    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+  },
+  closeBtn: {
+    position: "absolute", top: Platform.OS === "web" ? 72 : 52, right: 16, zIndex: 10,
+    width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.85)",
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "rgba(0,0,0,0.1)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 4,
+  },
+  body: { paddingHorizontal: 20, paddingTop: 20, gap: 20 },
+  userRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  userInfo: { flex: 1 },
+  userName: { fontFamily: "Nunito_700Bold", fontSize: 18, color: DARK_TEAL },
+  userTime: { fontFamily: "Nunito_400Regular", fontSize: 13, color: SUBTITLE_GREY },
+  tagPill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14 },
+  tagSos: { backgroundColor: "#FF6B4E" },
+  tagOffer: { backgroundColor: Colors.grassGreen },
+  tagText: { fontFamily: "Nunito_800ExtraBold", fontSize: 12, color: Colors.white },
+  storyText: { fontFamily: "Nunito_600SemiBold", fontSize: 18, lineHeight: 26, color: DARK_TEAL },
+  essBox: {
+    backgroundColor: Colors.white, borderRadius: 16, padding: 16, gap: 12,
+    shadowColor: "rgba(0,0,0,0.04)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 1,
+  },
+  essItem: { flexDirection: "row", alignItems: "center", gap: 8 },
+  essIcon: { fontSize: 18 },
+  essLabel: { fontFamily: "Nunito_400Regular", fontSize: 13, color: SUBTITLE_GREY, width: 50 },
+  essValue: { fontFamily: "Nunito_700Bold", fontSize: 15, color: DARK_TEAL, flex: 1 },
+  essDivider: { height: 1, backgroundColor: "#EDF2F2" },
+  footer: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingVertical: 14,
+    backgroundColor: SCREEN_BG, borderTopWidth: 1, borderTopColor: "#EDF2F2",
+    shadowColor: "rgba(0,0,0,0.06)", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 4,
+  },
+  footerCurrency: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: DARK_TEAL },
+  dmBtn: {
+    paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14, backgroundColor: DARK_TEAL,
+    shadowColor: "rgba(0,0,0,0.1)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 4,
+  },
+  dmBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
+  filledBtn: {
+    paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14,
+    borderWidth: 1.5, borderColor: SUBTITLE_GREY, backgroundColor: "transparent",
+  },
+  filledBtnText: { fontFamily: "Nunito_700Bold", fontSize: 16, color: SUBTITLE_GREY },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
