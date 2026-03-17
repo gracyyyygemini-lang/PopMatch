@@ -29,10 +29,8 @@ export default function CustomAvatar({
     return (
       <Image
         source={{ uri: profileImage }}
-        style={[
-          styles.image,
-          { width: size, height: size, borderRadius },
-        ]}
+        resizeMode="cover"
+        style={{ width: size, height: size, borderRadius }}
       />
     );
   }

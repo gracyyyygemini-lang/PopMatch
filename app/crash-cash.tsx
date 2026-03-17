@@ -483,7 +483,7 @@ export default function CrashCashScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const convoId = startConversation(
       post.userId, post.userName, post.avatarColor, post.userEmail,
-      post.id, `Crash: ${post.dates}`, 0
+      post.id, `Crash: ${post.dates}`, 0, undefined, undefined, "crash_cash"
     );
     router.push(`/chat?conversationId=${convoId}&source=crash_cash`);
   };

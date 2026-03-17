@@ -137,6 +137,8 @@ export interface SubleasePost {
   images?: string[];
 }
 
+export type ConversationSource = "sublease" | "coseeker" | "crash_cash";
+
 export interface Conversation {
   id: string;
   participant1Id: string;
@@ -151,6 +153,7 @@ export interface Conversation {
   otherUserAvatar?: string;
   otherUserEmail?: string;
   otherUserProfileImage?: string;
+  source?: ConversationSource;
 }
 
 export interface ChatMessage {
@@ -341,7 +344,7 @@ interface AppContextValue {
   toggleVouch: (email: string) => Promise<void>;
   getTrustInfo: (userEmail: string) => TrustInfo;
   conversations: Conversation[];
-  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string) => string;
+  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource) => string;
   startMatchConversation: (targetUser: UserProfile) => string;
   sendMessage: (conversationId: string, content: string) => void;
   getMessages: (conversationId: string) => ChatMessage[];
@@ -570,7 +573,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_friends", JSON.stringify(updated));
   };
 
-  const startConversation = (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string): string => {
+  const startConversation = (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource): string => {
     if (!currentUser) return "";
     const existing = conversations.find(c =>
       c.listingId === listingId &&
@@ -591,6 +594,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       otherUserAvatar: targetAvatar,
       otherUserEmail: targetEmail,
       otherUserProfileImage: targetProfileImage,
+      source,
     };
     const updated = [newConvo, ...conversations];
     setConversations(updated);
@@ -620,6 +624,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       otherUserAvatar: targetUser.avatarColor,
       otherUserEmail: targetUser.email,
       otherUserProfileImage: targetUser.profileImage,
+      source: "coseeker",
     };
     const updated = [newConvo, ...conversations];
     setConversations(updated);

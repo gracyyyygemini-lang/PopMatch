@@ -323,7 +323,7 @@ export default function MatchmakerScreen() {
   const handleSayHi = () => {
     setMatchModalUser(null);
     if (matchConvoId) {
-      router.push(`/chat?conversationId=${matchConvoId}`);
+      router.push(`/chat?conversationId=${matchConvoId}&source=coseeker`);
     }
   };
 

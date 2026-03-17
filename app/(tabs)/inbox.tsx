@@ -4,9 +4,25 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
-import { useApp, Conversation } from "@/context/AppContext";
+import { useApp, Conversation, ConversationSource } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
+
+const DARK_TEAL = "#2C555C";
+const WARM_CREAM = "#FBFBF9";
+
+const BADGE_CONFIG: Record<string, { bg: string; label: string; color: string }> = {
+  crash_cash: { bg: "#FDECE8", label: "🚨 Urgent", color: "#C0392B" },
+  coseeker: { bg: "#E8F6F3", label: "✨ Co-seeker", color: DARK_TEAL },
+  sublease: { bg: "#E8F0F1", label: "🔑 Sublease", color: DARK_TEAL },
+};
+
+function inferSource(convo: Conversation): ConversationSource {
+  if (convo.source) return convo.source;
+  if (convo.listingId?.startsWith("match_")) return "coseeker";
+  if (convo.listingBuilding?.startsWith("Crash")) return "crash_cash";
+  return "sublease";
+}
 
 function formatTime(ts?: number) {
   if (!ts) return "";
@@ -22,35 +38,40 @@ function formatTime(ts?: number) {
 }
 
 function ConversationRow({ convo }: { convo: Conversation }) {
+  const src = inferSource(convo);
+  const badge = BADGE_CONFIG[src];
+  const buildingName = src === "sublease" && convo.listingBuilding ? convo.listingBuilding : null;
+
   return (
     <TouchableOpacity
       style={styles.convoRow}
       activeOpacity={0.7}
-      onPress={() => router.push(`/chat?conversationId=${convo.id}`)}
+      onPress={() => router.push(`/chat?conversationId=${convo.id}&source=${src}`)}
     >
       <CustomAvatar
         name={convo.otherUserName || "?"}
         avatarColor={convo.otherUserAvatar || Colors.ocean}
         profileImage={convo.otherUserProfileImage}
-        size={48}
+        size={50}
       />
       <View style={styles.convoContent}>
         <View style={styles.convoHeader}>
           <Text style={styles.convoName} numberOfLines={1}>{convo.otherUserName || "User"}</Text>
           <Text style={styles.convoTime}>{formatTime(convo.lastMessageAt)}</Text>
         </View>
-        <View style={styles.convoMeta}>
-          <Ionicons name="home-outline" size={11} color={Colors.textLight} />
-          <Text style={styles.convoBuilding} numberOfLines={1}>
-            {convo.listingUnitType
-              ? `${convo.listingUnitType} — $${convo.listingPrice}/mo`
-              : `${convo.listingBuilding} · $${convo.listingPrice}/mo`}
-          </Text>
+
+        <View style={styles.badgeRow}>
+          <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+            <Text style={[styles.badgeText, { color: badge.color }]}>
+              {badge.label}{buildingName ? ` · ${buildingName}` : ""}
+            </Text>
+          </View>
         </View>
+
         {convo.lastMessage ? (
           <Text style={styles.convoPreview} numberOfLines={1}>{convo.lastMessage}</Text>
         ) : (
-          <Text style={[styles.convoPreview, { fontStyle: "italic" }]}>No messages yet</Text>
+          <Text style={[styles.convoPreview, { fontStyle: "italic", color: Colors.textLight }]}>No messages yet</Text>
         )}
       </View>
     </TouchableOpacity>
@@ -94,13 +115,13 @@ export default function InboxScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.sand,
+    backgroundColor: WARM_CREAM,
     paddingHorizontal: 20,
   },
   headerTitle: {
     fontFamily: "Nunito_800ExtraBold",
     fontSize: 28,
-    color: Colors.charcoal,
+    color: DARK_TEAL,
     marginBottom: 16,
   },
   emptyState: {
@@ -113,7 +134,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontFamily: "Nunito_700Bold",
     fontSize: 18,
-    color: Colors.charcoal,
+    color: DARK_TEAL,
     marginTop: 8,
   },
   emptySub: {
@@ -128,28 +149,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: Colors.cardBg,
+    backgroundColor: WARM_CREAM,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderSoft,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontFamily: "Nunito_800ExtraBold",
-    fontSize: 18,
-    color: Colors.white,
+    shadowColor: "rgba(0,0,0,0.06)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    elevation: 2,
   },
   convoContent: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
   convoHeader: {
     flexDirection: "row",
@@ -158,8 +170,8 @@ const styles = StyleSheet.create({
   },
   convoName: {
     fontFamily: "Nunito_700Bold",
-    fontSize: 15,
-    color: Colors.charcoal,
+    fontSize: 16,
+    color: DARK_TEAL,
     flex: 1,
   },
   convoTime: {
@@ -168,20 +180,23 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     marginLeft: 8,
   },
-  convoMeta: {
+  badgeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
   },
-  convoBuilding: {
-    fontFamily: "Nunito_600SemiBold",
+  badge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  badgeText: {
+    fontFamily: "Nunito_700Bold",
     fontSize: 12,
-    color: Colors.textMuted,
-    flex: 1,
   },
   convoPreview: {
     fontFamily: "Nunito_400Regular",
     fontSize: 13,
-    color: Colors.textLight,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
 });

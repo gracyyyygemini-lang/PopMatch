@@ -550,9 +550,9 @@ function SubleaseCard({ post, onMarkLeased }: {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               const convoId = startConversation(
                 post.userId, post.userName, post.avatarColor, post.userEmail,
-                post.id, post.buildingName, post.pricePerMonth, post.unitType
+                post.id, post.buildingName, post.pricePerMonth, post.unitType, undefined, "sublease"
               );
-              router.push(`/chat?conversationId=${convoId}`);
+              router.push(`/chat?conversationId=${convoId}&source=sublease`);
             }}
           >
             <Ionicons name="chatbubble-outline" size={15} color={Colors.ocean} />

@@ -12,6 +12,11 @@ import { useApp, ChatMessage } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
 
+const DARK_TEAL = "#2C555C";
+const WARM_CREAM = "#FBFBF9";
+const SENT_CORAL = "#FF8C69";
+const RECEIVED_SEAFOAM = "#E8F6F3";
+
 const ICEBREAKERS: { label: string; question: string; bg: string; border: string }[] = [
   { label: "🍎 Fridge", question: "How should we divide up the fridge and pantry space?", bg: "#FFF0ED", border: "#F4A89A" },
   { label: "📚 Study Vibe", question: "Do you prefer the place to be quiet during midterm/finals weeks?", bg: "#E8F6F0", border: "#7CC9AA" },
@@ -26,6 +31,14 @@ const CRASH_CASH_CHIPS: { label: string; question: string; bg: string; border: s
   { label: "Bring my own blanket? 🛌", question: "Bring my own blanket? 🛌", bg: "#FFF5E6", border: "#F0C87A" },
   { label: "Venmo or Cash? 💸", question: "Venmo or Cash? 💸", bg: "#EDF6FA", border: "#8AC4DA" },
   { label: "Guest parking? 🚗", question: "Guest parking? 🚗", bg: "#FFEDE8", border: "#E8997A" },
+];
+
+const SUBLEASE_CHIPS: { label: string; question: string; bg: string; border: string }[] = [
+  { label: "🔑 Move-in?", question: "What's the earliest I could move in?", bg: "#E8F0F1", border: "#9AB8BE" },
+  { label: "🧾 Lease transfer?", question: "Is this a full lease transfer or sublease?", bg: "#FFF5E6", border: "#F0C87A" },
+  { label: "🏗️ Furnished?", question: "Is the place furnished or unfurnished?", bg: "#E8F6F3", border: "#7CC9AA" },
+  { label: "💡 Utilities?", question: "Are utilities included in the rent?", bg: "#EDF6FA", border: "#8AC4DA" },
+  { label: "🅿️ Parking?", question: "Is there parking available with this unit?", bg: "#FFEDE8", border: "#E8997A" },
 ];
 
 function IcebreakerChip({ item, onPress }: { item: typeof ICEBREAKERS[0]; onPress: () => void }) {
@@ -58,7 +71,7 @@ const icStyles = StyleSheet.create({
     paddingVertical: 8,
     gap: 8,
     alignItems: "center",
-    backgroundColor: Colors.cardBg,
+    backgroundColor: WARM_CREAM,
   },
   chip: {
     paddingHorizontal: 14,
@@ -69,7 +82,7 @@ const icStyles = StyleSheet.create({
   chipText: {
     fontFamily: "Nunito_600SemiBold",
     fontSize: 13,
-    color: Colors.charcoal,
+    color: DARK_TEAL,
   },
 });
 
@@ -94,8 +107,10 @@ export default function ChatScreen() {
   const params = useLocalSearchParams<{ conversationId: string; source?: string }>();
   const { conversations, currentUser, getMessages, sendMessage } = useApp();
   const [text, setText] = useState("");
-  const isCrashCash = params.source === "crash_cash";
-  const activeChips = isCrashCash ? CRASH_CASH_CHIPS : ICEBREAKERS;
+  const source = params.source || "sublease";
+  const activeChips = source === "crash_cash" ? CRASH_CASH_CHIPS
+    : source === "coseeker" ? ICEBREAKERS
+    : SUBLEASE_CHIPS;
   const flatListRef = useRef<FlatList>(null);
 
   const convo = conversations.find(c => c.id === params.conversationId);
@@ -116,7 +131,7 @@ export default function ChatScreen() {
     return (
       <View style={[styles.container, { paddingTop: topPadding + 12 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={20} color={Colors.ocean} />
+          <Ionicons name="arrow-back" size={20} color={DARK_TEAL} />
         </TouchableOpacity>
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>Conversation not found</Text>
@@ -124,6 +139,10 @@ export default function ChatScreen() {
       </View>
     );
   }
+
+  const contextLabel = source === "crash_cash" ? "🚨 Crash & Cash"
+    : source === "coseeker" ? "✨ Co-seeker Match"
+    : convo.listingBuilding ? `🔑 ${convo.listingBuilding}` : "🔑 Sublease";
 
   return (
     <KeyboardAvoidingView
@@ -133,31 +152,33 @@ export default function ChatScreen() {
     >
       <View style={[styles.header, { paddingTop: topPadding + 8 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={20} color={Colors.ocean} />
+          <Ionicons name="arrow-back" size={20} color={DARK_TEAL} />
         </TouchableOpacity>
         <CustomAvatar
           name={convo.otherUserName || "?"}
           avatarColor={convo.otherUserAvatar || Colors.ocean}
           profileImage={convo.otherUserProfileImage}
-          size={36}
+          size={38}
         />
         <View style={styles.headerInfo}>
           <Text style={styles.headerName} numberOfLines={1}>{convo.otherUserName}</Text>
-          <Text style={styles.headerEmail} numberOfLines={1}>{convo.otherUserEmail}</Text>
+          <Text style={styles.headerContext} numberOfLines={1}>{contextLabel}</Text>
         </View>
       </View>
 
-      <View style={styles.listingPreview}>
-        <Ionicons name="home-outline" size={16} color={Colors.ocean} />
-        <Text style={styles.listingPreviewText} numberOfLines={1}>
-          {convo.listingUnitType
-            ? `${convo.listingUnitType} — $${convo.listingPrice}/mo`
-            : convo.listingBuilding}
-        </Text>
-        {!convo.listingUnitType && (
-          <Text style={styles.listingPreviewPrice}>${convo.listingPrice}/mo</Text>
-        )}
-      </View>
+      {source === "sublease" && convo.listingPrice > 0 && (
+        <View style={styles.listingPreview}>
+          <Ionicons name="home-outline" size={16} color={DARK_TEAL} />
+          <Text style={styles.listingPreviewText} numberOfLines={1}>
+            {convo.listingUnitType
+              ? `${convo.listingUnitType} — $${convo.listingPrice}/mo`
+              : convo.listingBuilding}
+          </Text>
+          {!convo.listingUnitType && (
+            <Text style={styles.listingPreviewPrice}>${convo.listingPrice}/mo</Text>
+          )}
+        </View>
+      )}
 
       <FlatList
         ref={flatListRef}
@@ -183,7 +204,7 @@ export default function ChatScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={icStyles.row}
-        style={{ flexGrow: 0, borderTopWidth: 1, borderTopColor: Colors.borderSoft, backgroundColor: Colors.cardBg }}
+        style={{ flexGrow: 0, borderTopWidth: 1, borderTopColor: "#EDF2F2", backgroundColor: WARM_CREAM }}
       >
         {activeChips.map((ic, idx) => (
           <IcebreakerChip
@@ -225,7 +246,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.sand,
+    backgroundColor: WARM_CREAM,
   },
   header: {
     flexDirection: "row",
@@ -233,29 +254,17 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: Colors.cardBg,
+    backgroundColor: WARM_CREAM,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderSoft,
+    borderBottomColor: "#EDF2F2",
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: Colors.sand,
+    backgroundColor: "#E8F0F1",
     alignItems: "center",
     justifyContent: "center",
-  },
-  headerAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerAvatarText: {
-    fontFamily: "Nunito_800ExtraBold",
-    fontSize: 15,
-    color: Colors.white,
   },
   headerInfo: {
     flex: 1,
@@ -263,10 +272,10 @@ const styles = StyleSheet.create({
   headerName: {
     fontFamily: "Nunito_700Bold",
     fontSize: 16,
-    color: Colors.charcoal,
+    color: DARK_TEAL,
   },
-  headerEmail: {
-    fontFamily: "Nunito_400Regular",
+  headerContext: {
+    fontFamily: "Nunito_600SemiBold",
     fontSize: 12,
     color: Colors.textMuted,
   },
@@ -277,23 +286,21 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 4,
-    backgroundColor: Colors.ocean + "0D",
+    backgroundColor: "#E8F0F1",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: Colors.ocean + "20",
   },
   listingPreviewText: {
     fontFamily: "Nunito_600SemiBold",
     fontSize: 13,
-    color: Colors.ocean,
+    color: DARK_TEAL,
     flex: 1,
   },
   listingPreviewPrice: {
     fontFamily: "Nunito_800ExtraBold",
     fontSize: 14,
-    color: Colors.ocean,
+    color: DARK_TEAL,
   },
   messageList: {
     paddingHorizontal: 16,
@@ -330,19 +337,17 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   bubbleOwn: {
-    backgroundColor: Colors.ocean,
+    backgroundColor: SENT_CORAL,
     borderBottomRightRadius: 4,
   },
   bubbleOther: {
-    backgroundColor: Colors.cardBg,
+    backgroundColor: RECEIVED_SEAFOAM,
     borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: Colors.borderSoft,
   },
   bubbleText: {
     fontFamily: "Nunito_400Regular",
     fontSize: 15,
-    color: Colors.charcoal,
+    color: DARK_TEAL,
     lineHeight: 21,
   },
   bubbleTextOwn: {
@@ -351,11 +356,11 @@ const styles = StyleSheet.create({
   bubbleTime: {
     fontFamily: "Nunito_400Regular",
     fontSize: 10,
-    color: Colors.textLight,
+    color: Colors.textMuted,
     alignSelf: "flex-end",
   },
   bubbleTimeOwn: {
-    color: "rgba(255,255,255,0.65)",
+    color: "rgba(255,255,255,0.7)",
   },
   inputBar: {
     flexDirection: "row",
@@ -363,28 +368,28 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 16,
     paddingTop: 10,
-    backgroundColor: Colors.cardBg,
+    backgroundColor: WARM_CREAM,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderSoft,
+    borderTopColor: "#EDF2F2",
   },
   textInput: {
     flex: 1,
-    backgroundColor: Colors.sand,
+    backgroundColor: Colors.white,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontFamily: "Nunito_400Regular",
     fontSize: 15,
-    color: Colors.charcoal,
+    color: DARK_TEAL,
     maxHeight: 100,
     borderWidth: 1,
-    borderColor: Colors.borderSoft,
+    borderColor: DARK_TEAL + "30",
   },
   sendBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.ocean,
+    backgroundColor: DARK_TEAL,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 2,
