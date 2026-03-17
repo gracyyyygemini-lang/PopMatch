@@ -83,9 +83,21 @@ const CHIP_SEAFOAM = "#D0F0E0";
 
 const SUB_FILTERS: Record<string, string[]> = {
   roommate_openings: ["Girls Only", "Guys Only", "Co-ed", "Grainger Grind", "Grad/PhD"],
-  semester_takeover: ["Spring (Dec/Jan – May)", "Fall (Aug – Dec)", "Full Year (Aug – Jul)"],
-  summer_only: ["Full Summer (May–Aug)", "Early Summer (May–Jun)", "Late Summer (Jul–Aug)", "Parking Included"],
-  short_term: ["August Gap", "Graduation", "Mom/Dad Weekend", "Homecoming", "Winter Break", "Spring Break", "Thanksgiving"],
+  semester_takeover: ["Spring", "Fall", "Full Year"],
+  summer_only: ["Full Summer", "Early Summer", "Late Summer", "🚗 Parking Only"],
+  short_term: ["Mom's Weekend", "Graduation", "August Gap", "Homecoming", "Dad's Weekend", "Thanksgiving", "Winter Break"],
+};
+
+const SUMMER_CHIP_TO_SUB: Record<string, string> = {
+  "Full Summer": "full_summer",
+  "Early Summer": "early_summer",
+  "Late Summer": "late_summer",
+};
+
+const SEMESTER_CHIP_TO_CAT: Record<string, string> = {
+  "Spring": "spring",
+  "Fall": "fall",
+  "Full Year": "full_year",
 };
 
 function SubFilterRow({
@@ -129,9 +141,9 @@ function SubFilterRow({
                 ]}
               >
                 {isSelected && (
-                  <Ionicons name="checkmark" size={14} color={DARK_TEAL} style={{ marginRight: 2 }} />
+                  <Ionicons name="checkmark" size={14} color="#FFFFFF" style={{ marginRight: 2 }} />
                 )}
-                <Text style={sfStyles.chipText}>{chip}</Text>
+                <Text style={[sfStyles.chipText, isSelected && sfStyles.chipTextSelected]}>{chip}</Text>
               </View>
             )}
           </Pressable>
@@ -155,13 +167,16 @@ const sfStyles = StyleSheet.create({
     borderColor: CHIP_BORDER,
   },
   chipSelected: {
-    backgroundColor: CHIP_SEAFOAM,
-    borderColor: CHIP_SEAFOAM,
+    backgroundColor: DARK_TEAL,
+    borderColor: DARK_TEAL,
   },
   chipText: {
     fontFamily: "Nunito_600SemiBold",
     fontSize: 12,
     color: DARK_TEAL,
+  },
+  chipTextSelected: {
+    color: "#FFFFFF",
   },
 });
 
@@ -399,7 +414,8 @@ function SubleaseCard({ post, onMarkLeased }: {
   const { getTrustInfo, currentUser, startConversation } = useApp();
   const trust = getTrustInfo(post.userEmail);
   const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
-  const cat = post.listingType === "roommate" ? "roommate_openings" : (post.category || "semester_takeover");
+  const rawCat = post.listingType === "roommate" ? "roommate_openings" : (post.category || "semester_takeover");
+  const cat = rawCat === "summer" ? "summer_only" : ["spring", "fall", "full_year"].includes(rawCat) ? "semester_takeover" : rawCat;
   const catColor = CATEGORY_COLORS[cat] || Colors.ocean;
   const isOwner = currentUser?.email === post.userEmail;
   const [galleryVisible, setGalleryVisible] = useState(false);
@@ -601,12 +617,32 @@ export default function MarketplaceScreen() {
     );
   };
 
+  const PARAM_TO_FILTER: Record<string, CategoryFilter> = {
+    summer: "summer_only",
+    summer_only: "summer_only",
+    short_term: "short_term",
+    semester_takeover: "semester_takeover",
+    roommate_openings: "roommate_openings",
+    august_gap: "august_gap",
+    all: "all",
+  };
+
   useEffect(() => {
-    if (params.category && Object.keys(CATEGORY_LABELS).includes(params.category)) {
-      setActiveFilter(params.category as CategoryFilter);
-      const cat = params.category as CategoryFilter;
-      if (params.subFilter && SUB_FILTERS[cat]?.includes(params.subFilter)) {
-        setSelectedSubFilters([params.subFilter]);
+    const resolvedCat = params.category ? (PARAM_TO_FILTER[params.category] || params.category) : undefined;
+    if (resolvedCat && Object.keys(CATEGORY_LABELS).includes(resolvedCat)) {
+      setActiveFilter(resolvedCat as CategoryFilter);
+      const cat = resolvedCat as CategoryFilter;
+      if (params.subFilter) {
+        const sf = params.subFilter;
+        if (SUB_FILTERS[cat]?.includes(sf)) {
+          setSelectedSubFilters([sf]);
+        } else {
+          const summerReverse = Object.entries(SUMMER_CHIP_TO_SUB).find(([, v]) => v === sf);
+          const semReverse = Object.entries(SEMESTER_CHIP_TO_CAT).find(([, v]) => v === sf);
+          if (summerReverse) setSelectedSubFilters([summerReverse[0]]);
+          else if (semReverse) setSelectedSubFilters([semReverse[0]]);
+          else setSelectedSubFilters([]);
+        }
       } else {
         setSelectedSubFilters([]);
       }
@@ -616,14 +652,46 @@ export default function MarketplaceScreen() {
     }
   }, [params.category, params.zone, params.subFilter]);
 
+  const catToFilter: Record<string, string> = {
+    summer: "summer_only",
+    spring: "semester_takeover",
+    fall: "semester_takeover",
+    full_year: "semester_takeover",
+    short_term: "short_term",
+    august_gap: "august_gap",
+    semester_takeover: "semester_takeover",
+    roommate_openings: "roommate_openings",
+  };
+
   const filtered = subleases.filter(s => {
     if (activeFilter === "roommate_openings") {
       if (s.listingType !== "roommate") return false;
     } else if (activeFilter !== "all") {
       if (s.listingType === "roommate") return false;
-      if ((s.category || "semester_takeover") !== activeFilter) return false;
+      const postCat = s.category || "semester_takeover";
+      const mappedFilter = catToFilter[postCat] || postCat;
+      if (mappedFilter !== activeFilter) return false;
     }
     if (zoneFilter !== "all" && s.zone !== zoneFilter) return false;
+
+    if (selectedSubFilters.length > 0) {
+      if (activeFilter === "short_term") {
+        if (!s.eventTag || !selectedSubFilters.includes(s.eventTag)) return false;
+      } else if (activeFilter === "summer_only") {
+        const parkingOnly = selectedSubFilters.includes("🚗 Parking Only");
+        const timelineFilters = selectedSubFilters.filter(f => f !== "🚗 Parking Only");
+        const subcatValues = timelineFilters.map(f => SUMMER_CHIP_TO_SUB[f]).filter(Boolean);
+        if (subcatValues.length > 0 && (!s.subCategory || !subcatValues.includes(s.subCategory))) return false;
+        if (parkingOnly && !s.hasParking) return false;
+      } else if (activeFilter === "semester_takeover") {
+        const catValues = selectedSubFilters.map(f => SEMESTER_CHIP_TO_CAT[f]).filter(Boolean);
+        if (catValues.length > 0) {
+          const sCat = s.category || "semester_takeover";
+          if (!catValues.includes(sCat)) return false;
+        }
+      }
+    }
+
     return true;
   }).sort((a, b) => {
     const aOwn = currentUser?.email === a.userEmail ? 1 : 0;

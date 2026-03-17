@@ -467,7 +467,7 @@ export default function PostSubleaseScreen() {
     } else if (finalCategory === "short_term") {
       router.replace("/marketplace?category=short_term");
     } else if (finalCategory === "summer") {
-      router.replace(`/marketplace?category=summer_only${subCategory ? `&filter=${subCategory}` : ""}`);
+      router.replace(`/marketplace?category=summer_only${subCategory ? `&subFilter=${subCategory}` : ""}`);
     } else {
       router.replace(`/marketplace?category=semester_takeover`);
     }
