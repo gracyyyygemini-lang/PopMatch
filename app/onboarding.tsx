@@ -218,7 +218,8 @@ export default function OnboardingScreen() {
   const [intent, setIntent] = useState<Intent>("joiner");
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
-  const STEPS = 6;
+  const isHost = intent === "host";
+  const STEPS = isHost ? 3 : 6;
 
   const startCountdown = (seconds = 60) => {
     setCountdown(seconds);
@@ -332,6 +333,10 @@ export default function OnboardingScreen() {
   const handleNext = () => {
     if (!isFormComplete) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isHost && step === 2) {
+      handleFinish();
+      return;
+    }
     setStep(s => Math.min(s + 1, STEPS - 1));
   };
 
@@ -349,9 +354,17 @@ export default function OnboardingScreen() {
     const user: UserProfile = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
       name: name.trim(), email: email.toLowerCase().trim(),
-      major: major || "Undeclared", bio: bio.trim(), budget, gender, genderPref,
-      cleanliness, noise, leaseType, zone, landlords,
-      staysThanksgiving, staysSpringBreak, avatarColor, intent,
+      major: major || "Undeclared", bio: bio.trim(),
+      budget: isHost ? 0 : budget,
+      gender, genderPref: isHost ? "mixed" : genderPref,
+      cleanliness: isHost ? 3 : cleanliness,
+      noise: isHost ? 3 : noise,
+      leaseType: isHost ? "full_year" : leaseType,
+      zone: isHost ? "campustown" : zone,
+      landlords: isHost ? [] : landlords,
+      staysThanksgiving: isHost ? false : staysThanksgiving,
+      staysSpringBreak: isHost ? false : staysSpringBreak,
+      avatarColor, intent,
       ...(profileImage ? { profileImage } : {}),
     };
     await setCurrentUser(user);
@@ -780,13 +793,21 @@ export default function OnboardingScreen() {
               styles.nextBtn,
               !isFormComplete && { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 },
             ]}
-            onPress={step === STEPS - 1 ? handleFinish : handleNext}
+            onPress={step === STEPS - 1 || (isHost && step === 2) ? handleFinish : handleNext}
             disabled={!isFormComplete}
           >
             <Text style={[styles.nextBtnText, !isFormComplete && { color: DISABLED_TEXT }]}>
-              {step === STEPS - 1 ? "Find My Match" : "Continue"}
+              {isHost && step === 2
+                ? "Post My Apartment"
+                : step === STEPS - 1
+                  ? "Find My Match"
+                  : "Continue"}
             </Text>
-            <Ionicons name={step === STEPS - 1 ? "heart" : "arrow-forward"} size={17} color={isFormComplete ? Colors.white : DISABLED_TEXT} />
+            <Ionicons
+              name={isHost && step === 2 ? "home" : step === STEPS - 1 ? "heart" : "arrow-forward"}
+              size={17}
+              color={isFormComplete ? Colors.white : DISABLED_TEXT}
+            />
           </TouchableOpacity>
         )}
       </View>

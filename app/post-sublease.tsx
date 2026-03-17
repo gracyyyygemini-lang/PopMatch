@@ -98,11 +98,24 @@ const AMENITY_SECTIONS: { title: string; items: { key: keyof Amenities; label: s
 
 const AVATAR_COLORS = ["#1A7AAF", "#CC5500", "#5A8A5A", "#9B59B6", "#E07B00", "#E0BC00"];
 
+const DISABLED_BG = "#E0E8E9";
+const DISABLED_TEXT = "#8A9FA3";
+
+function autoCategorize(moveIn: Date, moveOut: Date): LeaseType {
+  const durationDays = Math.round((moveOut.getTime() - moveIn.getTime()) / (1000 * 60 * 60 * 24));
+  const moveInMonth = moveIn.getMonth();
+  if (durationDays >= 330) return "full_year";
+  if (moveInMonth >= 4 && moveInMonth <= 6 && durationDays <= 120) return "summer_sublease";
+  if (moveInMonth >= 0 && moveInMonth <= 1 && durationDays >= 90 && durationDays <= 180) return "spring_sublease";
+  if (moveInMonth >= 7 && moveInMonth <= 8 && durationDays >= 90 && durationDays <= 180) return "fall_sublease";
+  return "fall_sublease";
+}
+
 const TOTAL_STEPS = 4;
 
 export default function PostSubleaseScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, addSublease } = useApp();
+  const { currentUser, addSublease, setCurrentUser } = useApp();
   const params = useLocalSearchParams<{ mode?: string }>();
   const isHostMode = params.mode === "host";
   const [step, setStep] = useState(0);
@@ -191,10 +204,15 @@ export default function PostSubleaseScreen() {
       setShowMoveInPicker(false);
       if (moveOutDate && moveOutDate <= selected) {
         setMoveOutDate(null);
+      } else if (moveOutDate) {
+        setLeaseType(autoCategorize(selected, moveOutDate));
       }
     } else {
       setMoveOutDate(selected);
       setShowMoveOutPicker(false);
+      if (moveInDate) {
+        setLeaseType(autoCategorize(moveInDate, selected));
+      }
     }
   };
 
@@ -389,6 +407,15 @@ export default function PostSubleaseScreen() {
     };
 
     await addSublease(post);
+
+    if (currentUser) {
+      await setCurrentUser({
+        ...currentUser,
+        zone,
+        leaseType,
+      });
+    }
+
     if (isHostMode) {
       router.replace("/marketplace?category=roommate_openings");
     } else {
@@ -777,6 +804,15 @@ export default function PostSubleaseScreen() {
               <Text style={styles.fieldHint}>Date for key handoff</Text>
             </View>
 
+            {moveInDate && moveOutDate && (
+              <View style={[styles.warningBox, { backgroundColor: Colors.ocean + "12", borderLeftColor: Colors.ocean }]}>
+                <Ionicons name="pricetag-outline" size={16} color={Colors.ocean} />
+                <Text style={styles.warningText}>
+                  Auto-tagged as: {LEASE_OPTIONS.find(o => o.key === leaseType)?.label || leaseType} ({Math.round((moveOutDate.getTime() - moveInDate.getTime()) / (1000 * 60 * 60 * 24))} days)
+                </Text>
+              </View>
+            )}
+
             <View style={styles.field}>
               <Text style={styles.label}>Move-Out Date *</Text>
               <TouchableOpacity style={styles.datePickerBtn} onPress={() => { setShowMoveOutPicker(!showMoveOutPicker); setShowMoveInPicker(false); }}>
@@ -799,21 +835,21 @@ export default function PostSubleaseScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 12 }]}>
         {step < TOTAL_STEPS - 1 ? (
           <TouchableOpacity
-            style={[styles.nextBtn, !stepValid(step) && { opacity: 0.5 }]}
+            style={[styles.nextBtn, !stepValid(step) && { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 }]}
             onPress={goNext}
             disabled={!stepValid(step)}
           >
-            <Text style={styles.nextBtnText}>Next</Text>
-            <Ionicons name="arrow-forward" size={18} color={Colors.white} />
+            <Text style={[styles.nextBtnText, !stepValid(step) && { color: DISABLED_TEXT }]}>Next</Text>
+            <Ionicons name="arrow-forward" size={18} color={stepValid(step) ? Colors.white : DISABLED_TEXT} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.submitBtn, !canSubmit && { opacity: 0.5 }]}
+            style={[styles.submitBtn, !canSubmit && { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 }]}
             onPress={handleSubmit}
             disabled={!canSubmit}
           >
-            <Ionicons name="checkmark" size={20} color={Colors.white} />
-            <Text style={styles.submitBtnText}>{isHostMode ? "Post Apartment" : "Post Sublease"}</Text>
+            <Ionicons name="checkmark" size={20} color={canSubmit ? Colors.white : DISABLED_TEXT} />
+            <Text style={[styles.submitBtnText, !canSubmit && { color: DISABLED_TEXT }]}>{isHostMode ? "Post Apartment" : "Post Sublease"}</Text>
           </TouchableOpacity>
         )}
       </View>
