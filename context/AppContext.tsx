@@ -189,6 +189,7 @@ export interface CrashPost {
   currencyLabel: string;
   timestamp: number;
   status: CrashPostStatus;
+  approxLocation?: string;
 }
 
 export interface MatchRecord {

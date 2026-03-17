@@ -118,7 +118,7 @@ function GridCard({
           </View>
           <View style={gc.essItem}>
             <Text style={gc.essIcon}>📍</Text>
-            <Text style={gc.essText} numberOfLines={1}>{ZONE_SHORT[post.zone] || post.zone}</Text>
+            <Text style={gc.essText} numberOfLines={1} ellipsizeMode="tail">{ZONE_SHORT[post.zone] || post.zone}{post.approxLocation ? ` (${post.approxLocation})` : ""}</Text>
           </View>
         </View>
 
@@ -243,12 +243,14 @@ function NewPostSheet({
   onSubmit: (data: {
     vibe: CrashVibe; story: string; dates: string; targetDate: number;
     zone: Zone; currency: CrashCurrency; currencyLabel: string; imageUrl: string;
+    approxLocation?: string;
   }) => void;
 }) {
   const [vibe, setVibe] = useState<CrashVibe>("sos");
   const [story, setStory] = useState("");
   const [selectedDateIdx, setSelectedDateIdx] = useState<number | null>(null);
   const [zone, setZone] = useState<Zone>("campustown");
+  const [approxLocation, setApproxLocation] = useState("");
   const [currency, setCurrency] = useState<CrashCurrency>("cash");
   const [customCurrencyLabel, setCustomCurrencyLabel] = useState("");
   const [imageUri, setImageUri] = useState("");
@@ -285,9 +287,11 @@ function NewPostSheet({
       currency,
       currencyLabel: label,
       imageUrl: imageUri,
+      approxLocation: approxLocation.trim() || undefined,
     });
     setStory("");
     setSelectedDateIdx(null);
+    setApproxLocation("");
     setCustomCurrencyLabel("");
     setImageUri("");
   };
@@ -360,6 +364,17 @@ function NewPostSheet({
                 </Pressable>
               ))}
             </ScrollView>
+
+            <Text style={np.label}>Approximate Location (Cross Streets or Building)</Text>
+            <TextInput
+              style={np.input}
+              placeholder="e.g., Green & 3rd, or Near County Market"
+              placeholderTextColor={SUBTITLE_GREY}
+              value={approxLocation}
+              onChangeText={setApproxLocation}
+              maxLength={80}
+            />
+            <Text style={np.safetyHint}>🔒 For your safety, never post your exact apartment number publicly. Share it in DMs once you approve your guest.</Text>
 
             <Text style={np.label}>Accepted Currency</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42 }} contentContainerStyle={{ gap: 8 }}>
@@ -441,6 +456,10 @@ const np = StyleSheet.create({
     fontFamily: "Nunito_400Regular", fontSize: 14, color: DARK_TEAL,
     backgroundColor: "#F0F5F5", borderRadius: 14, padding: 12, height: 44,
   },
+  safetyHint: {
+    fontFamily: "Nunito_400Regular", fontSize: 11, color: "rgba(44, 85, 92, 0.6)",
+    marginTop: 4, lineHeight: 15,
+  },
   dateChip: {
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20,
     borderWidth: 1.5, borderColor: "#E0E8E9", backgroundColor: Colors.white,
@@ -509,6 +528,7 @@ export default function CrashCashScreen() {
   const handleNewPost = (data: {
     vibe: CrashVibe; story: string; dates: string; targetDate: number;
     zone: Zone; currency: CrashCurrency; currencyLabel: string; imageUrl: string;
+    approxLocation?: string;
   }) => {
     if (!currentUser) return;
     const post: CrashPost = {
@@ -648,7 +668,7 @@ export default function CrashCashScreen() {
                   <View style={dm.essItem}>
                     <Text style={dm.essIcon}>📍</Text>
                     <Text style={dm.essLabel}>Where</Text>
-                    <Text style={dm.essValue}>{ZONE_SHORT[selectedPost.zone] || selectedPost.zone}</Text>
+                    <Text style={dm.essValue} numberOfLines={2}>{ZONE_SHORT[selectedPost.zone] || selectedPost.zone}{selectedPost.approxLocation ? ` (${selectedPost.approxLocation})` : ""}</Text>
                   </View>
                 </View>
               </View>
