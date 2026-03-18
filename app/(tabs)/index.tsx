@@ -16,6 +16,13 @@ const DARK_TEAL = "#2C555C";
 const SUBTITLE_GREY = "#6B8A8F";
 const SCREEN_BG = "#FBFBF9";
 
+const CARD_TINTS: Record<string, string> = {
+  roommate_openings: "rgba(200, 182, 255, 0.15)",
+  semester_takeover: "rgba(168, 218, 220, 0.15)",
+  summer_only: "rgba(255, 218, 185, 0.2)",
+  short_term: "rgba(162, 210, 255, 0.15)",
+};
+
 const CATEGORIES: {
   id: string;
   title: string;
@@ -80,6 +87,45 @@ const FEATURES = [
   },
 ];
 
+function CrashSubtitle() {
+  return (
+    <Text style={ccStyles.sub}>
+      Urgent couch for tonight — pay in{" "}
+      <View style={[ccStyles.tag, { backgroundColor: "rgba(144, 238, 144, 0.35)" }]}>
+        <Text style={ccStyles.tagText}>cash</Text>
+      </View>
+      ,{" "}
+      <View style={[ccStyles.tag, { backgroundColor: "rgba(255, 182, 193, 0.4)" }]}>
+        <Text style={ccStyles.tagText}>boba</Text>
+      </View>
+      , or{" "}
+      <View style={[ccStyles.tag, { backgroundColor: "rgba(255, 217, 102, 0.45)" }]}>
+        <Text style={ccStyles.tagText}>Lion cover</Text>
+      </View>
+    </Text>
+  );
+}
+
+const ccStyles = StyleSheet.create({
+  sub: {
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 12,
+    color: DARK_TEAL,
+    lineHeight: 22,
+    marginTop: 2,
+  },
+  tag: {
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  tagText: {
+    fontFamily: "Nunito_700Bold",
+    fontSize: 12,
+    color: DARK_TEAL,
+  },
+});
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, friends, subleases } = useApp();
@@ -97,6 +143,42 @@ export default function HomeScreen() {
 
   const halfCards = CATEGORIES.filter(c => c.layout === "half");
   const fullCards = CATEGORIES.filter(c => c.layout === "full");
+
+  const renderFeatureCard = (f: typeof FEATURES[0], pressed: boolean) => {
+    if (f.route === "/matchmaker") {
+      return (
+        <View style={[styles.matchmakerCard, pressed && { transform: [{ scale: 0.98 }], opacity: 0.92 }]}>
+          <View style={styles.watermarkWrap}>
+            <Ionicons name="heart" size={120} color="rgba(255,255,255,0.15)" />
+          </View>
+          <View style={styles.matchmakerIcon}>
+            <Ionicons name="heart" size={22} color="#FFFFFF" />
+          </View>
+          <View style={styles.featureText}>
+            <Text style={styles.matchmakerTitle}>{f.title}</Text>
+            <Text style={styles.matchmakerSub}>{f.subtitle}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color="rgba(255,255,255,0.7)" />
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.crashCard, pressed && { transform: [{ scale: 0.98 }], opacity: 0.92 }]}>
+        <View style={styles.crashWatermarkWrap}>
+          <Ionicons name="flash" size={100} color="rgba(255,255,255,0.2)" />
+        </View>
+        <View style={styles.crashIcon}>
+          <Ionicons name="flash" size={22} color="#FFFFFF" />
+        </View>
+        <View style={styles.featureText}>
+          <Text style={styles.crashTitle}>{f.title}</Text>
+          <CrashSubtitle />
+        </View>
+        <Ionicons name="chevron-forward" size={17} color={DARK_TEAL + "80"} />
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: SCREEN_BG }]}>
@@ -143,7 +225,12 @@ export default function HomeScreen() {
                 onPress={() => navigateToCategory(cat.id)}
               >
                 {({ pressed }) => (
-                  <View style={[styles.categoryCard, styles.halfCard, pressed && styles.cardPressed]}>
+                  <View style={[
+                    styles.categoryCard,
+                    styles.halfCard,
+                    { backgroundColor: CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)" },
+                    pressed && styles.cardPressed,
+                  ]}>
                     <View style={[styles.catIconWrap, { backgroundColor: cat.iconBg }]}>
                       <Ionicons name={cat.icon} size={20} color={cat.color} />
                     </View>
@@ -161,7 +248,12 @@ export default function HomeScreen() {
               onPress={() => navigateToCategory(cat.id)}
             >
               {({ pressed }) => (
-                <View style={[styles.categoryCard, styles.fullCard, pressed && styles.cardPressed]}>
+                <View style={[
+                  styles.categoryCard,
+                  styles.fullCard,
+                  { backgroundColor: CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)" },
+                  pressed && styles.cardPressed,
+                ]}>
                   <View style={[styles.catIconWrap, { backgroundColor: cat.iconBg }]}>
                     <Ionicons name={cat.icon} size={20} color={cat.color} />
                   </View>
@@ -186,19 +278,9 @@ export default function HomeScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     router.push(f.route);
                   }}
+                  style={{ marginBottom: 10 }}
                 >
-                  {({ pressed }) => (
-                    <View style={[styles.featureCard, { marginBottom: 10 }, pressed && styles.cardPressed]}>
-                      <View style={[styles.featureIcon, { backgroundColor: f.color }]}>
-                        <Ionicons name={f.icon} size={22} color={Colors.white} />
-                      </View>
-                      <View style={styles.featureText}>
-                        <Text style={styles.featureTitle}>{f.title}</Text>
-                        <Text style={styles.featureSub}>{f.subtitle}</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={17} color={Colors.textLight} />
-                    </View>
-                  )}
+                  {({ pressed }) => renderFeatureCard(f, pressed)}
                 </Pressable>
               ))}
             </View>
@@ -246,18 +328,7 @@ export default function HomeScreen() {
                   router.push(f.route);
                 }}
               >
-                {({ pressed }) => (
-                  <View style={[styles.featureCard, pressed && styles.cardPressed]}>
-                    <View style={[styles.featureIcon, { backgroundColor: f.color }]}>
-                      <Ionicons name={f.icon} size={22} color={Colors.white} />
-                    </View>
-                    <View style={styles.featureText}>
-                      <Text style={styles.featureTitle}>{f.title}</Text>
-                      <Text style={styles.featureSub}>{f.subtitle}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={17} color={Colors.textLight} />
-                  </View>
-                )}
+                {({ pressed }) => renderFeatureCard(f, pressed)}
               </Pressable>
             ))}
 
@@ -327,14 +398,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   categoryCard: {
-    backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 18,
-    shadowColor: "#8FAFB2",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.10,
-    shadowRadius: 12,
-    elevation: 3,
+    borderWidth: 0,
+    shadowColor: "rgba(44, 85, 92, 0.08)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    elevation: 2,
   },
   halfCard: {
     gap: 8,
@@ -348,7 +419,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardPressed: {
-    backgroundColor: "#F2F7F7",
+    opacity: 0.85,
     transform: [{ scale: 0.98 }],
   },
   catIconWrap: {
@@ -357,18 +428,81 @@ const styles = StyleSheet.create({
   },
   catTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: DARK_TEAL },
   catSubtitle: { fontFamily: "Nunito_400Regular", fontSize: 12, color: SUBTITLE_GREY, lineHeight: 17 },
-  featureCard: {
-    flexDirection: "row", alignItems: "center", gap: 14,
-    backgroundColor: "#FFFFFF", borderRadius: 20,
+
+  matchmakerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#FF9E9D",
+    borderRadius: 20,
     padding: 14,
-    shadowColor: "#8FAFB2",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08, shadowRadius: 10, elevation: 2,
+    overflow: "hidden" as const,
+    shadowColor: "rgba(255, 158, 157, 0.4)",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 4,
   },
-  featureIcon: { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  watermarkWrap: {
+    position: "absolute" as const,
+    right: -20,
+    bottom: -20,
+  },
+  matchmakerIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+  matchmakerTitle: {
+    fontFamily: "Nunito_800ExtraBold",
+    fontSize: 15,
+    color: "#FFFFFF",
+  },
+  matchmakerSub: {
+    fontFamily: "Nunito_400Regular",
+    fontSize: 12,
+    color: "rgba(255,255,255,0.85)",
+    lineHeight: 17,
+    marginTop: 2,
+  },
+
+  crashCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#FFD6A5",
+    borderRadius: 20,
+    padding: 14,
+    overflow: "hidden" as const,
+    shadowColor: "rgba(255, 183, 120, 0.35)",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  crashWatermarkWrap: {
+    position: "absolute" as const,
+    right: -10,
+    bottom: -10,
+  },
+  crashIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(44, 85, 92, 0.2)",
+  },
+  crashTitle: {
+    fontFamily: "Nunito_800ExtraBold",
+    fontSize: 15,
+    color: DARK_TEAL,
+  },
+
   featureText: { flex: 1 },
-  featureTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: DARK_TEAL },
-  featureSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: SUBTITLE_GREY, lineHeight: 17, marginTop: 2 },
   statsRow: { flexDirection: "row", gap: 10 },
   statBox: {
     flex: 1, backgroundColor: "#FFFFFF", borderRadius: 14,
