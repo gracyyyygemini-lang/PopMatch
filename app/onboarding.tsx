@@ -1,16 +1,20 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, Animated, Easing, ActivityIndicator, Dimensions, Image
+  KeyboardAvoidingView, Platform, Animated, Easing, ActivityIndicator, Dimensions, Image, Alert
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as WebBrowser from "expo-web-browser";
+import * as AuthSession from "expo-auth-session";
 import Colors from "@/constants/colors";
 import { useApp, UserProfile, LeaseType, GenderPref, Zone, Landlord, Intent } from "@/context/AppContext";
-import { getApiUrl } from "@/lib/query-client";
+import { supabase } from "@/lib/supabase";
+
+WebBrowser.maybeCompleteAuthSession();
 
 const MAJORS = [
   "Accountancy", "Aerospace Engineering", "Agricultural & Biological Engineering",
@@ -135,56 +139,6 @@ function PonyoProgress({ step, total }: { step: number; total: number }) {
   );
 }
 
-function OtpDigitInput({ value, onChange, onSubmit }: {
-  value: string;
-  onChange: (v: string) => void;
-  onSubmit: () => void;
-}) {
-  const inputRef = useRef<TextInput>(null);
-  const digits = value.padEnd(6, " ").split("").slice(0, 6);
-
-  useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 200);
-  }, []);
-
-  return (
-    <TouchableOpacity activeOpacity={1} onPress={() => inputRef.current?.focus()}>
-      <View style={otp.row}>
-        {digits.map((d, i) => (
-          <View key={i} style={[
-            otp.box,
-            value.length === i && otp.boxActive,
-            d.trim() && otp.boxFilled,
-          ]}>
-            <Text style={otp.digit}>{d.trim()}</Text>
-          </View>
-        ))}
-      </View>
-      <TextInput
-        ref={inputRef}
-        style={otp.hidden}
-        value={value}
-        onChangeText={t => { onChange(t.replace(/\D/g, "").slice(0, 6)); }}
-        keyboardType="number-pad"
-        maxLength={6}
-        onSubmitEditing={onSubmit}
-      />
-    </TouchableOpacity>
-  );
-}
-
-const otp = StyleSheet.create({
-  row: { flexDirection: "row", gap: 10, justifyContent: "center" },
-  box: {
-    width: 46, height: 56, borderRadius: 14,
-    backgroundColor: Colors.white, borderWidth: 2, borderColor: Colors.borderSoft,
-    alignItems: "center", justifyContent: "center",
-  },
-  boxActive: { borderColor: Colors.teal },
-  boxFilled: { backgroundColor: Colors.teal + "0E", borderColor: Colors.teal },
-  digit: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.charcoal },
-  hidden: { position: "absolute", opacity: 0, width: 0, height: 0 },
-});
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -192,14 +146,8 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(0);
 
   const [email, setEmail] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [sendingOtp, setSendingOtp] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
-  const [otpError, setOtpError] = useState("");
-  const [verifyingOtp, setVerifyingOtp] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
+  const [authError, setAuthError] = useState("");
 
   const [name, setName] = useState("");
   const [major, setMajor] = useState("");
@@ -221,82 +169,83 @@ export default function OnboardingScreen() {
   const isSupplySide = intent === "host" || intent === "sublessor";
   const STEPS = isSupplySide ? 3 : 6;
 
-  const startCountdown = (seconds = 60) => {
-    setCountdown(seconds);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    countdownRef.current = setInterval(() => {
-      setCountdown(c => {
-        if (c <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-  };
-
-  const handleSendOtp = async () => {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed.endsWith("@illinois.edu")) {
-      setEmailError("Must be a valid UIUC email.");
-      return;
-    }
-    setEmailError("");
-    setSendingOtp(true);
+  const handleNetIdLogin = async () => {
+    setSigningIn(true);
+    setAuthError("");
     try {
-      const url = new URL("/api/auth/send-otp", getApiUrl()).toString();
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
+      const redirectTo = AuthSession.makeRedirectUri();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "azure",
+        options: {
+          redirectTo,
+          scopes: "email profile openid",
+        },
       });
-      if (!res.ok) {
-        const data = await res.json();
-        setEmailError(data.error || "Failed to send code. Try again.");
-      } else {
-        setEmail(trimmed);
-        setOtpSent(true);
-        setOtpCode("");
-        setOtpError("");
-        startCountdown(60);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch {
-      setEmailError("Network error. Please try again.");
-    } finally {
-      setSendingOtp(false);
-    }
-  };
 
-  const handleVerifyOtp = async () => {
-    if (otpCode.length !== 6) {
-      setOtpError("Please enter the full 6-digit code.");
-      return;
-    }
-    setVerifyingOtp(true);
-    setOtpError("");
-    try {
-      const url = new URL("/api/auth/verify-otp", getApiUrl()).toString();
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: otpCode }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        setOtpError(data.error || "Incorrect code. Please try again.");
+      if (error) {
+        setAuthError(error.message);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      } else {
-        setOtpVerifiedEmail(email);
-        if (countdownRef.current) clearInterval(countdownRef.current);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setOtpSent(false);
-        setStep(1);
+        return;
       }
-    } catch {
-      setOtpError("Network error. Please try again.");
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+        if (result.type === "success" && result.url) {
+          const url = new URL(result.url);
+          const params = Object.fromEntries(url.searchParams.entries());
+          const hashParams = Object.fromEntries(new URLSearchParams(url.hash.replace("#", "")));
+
+          const code = params.code || hashParams.code;
+          const accessToken = params.access_token || hashParams.access_token;
+          const refreshToken = params.refresh_token || hashParams.refresh_token;
+
+          let sessionData: any = null;
+          let sessionError: any = null;
+
+          if (code) {
+            const resp = await supabase.auth.exchangeCodeForSession(code);
+            sessionData = resp.data;
+            sessionError = resp.error;
+          } else if (accessToken && refreshToken) {
+            const resp = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            sessionData = resp.data;
+            sessionError = resp.error;
+          } else {
+            setAuthError("Sign-in was not completed. Please try again.");
+            return;
+          }
+
+          if (sessionError) {
+            setAuthError(sessionError.message);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            return;
+          }
+
+          const userEmail = sessionData?.user?.email || sessionData?.session?.user?.email || "";
+          if (!userEmail.endsWith("@illinois.edu")) {
+            await supabase.auth.signOut();
+            setAuthError("Only @illinois.edu accounts can sign in.");
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            return;
+          }
+
+          setEmail(userEmail);
+          setOtpVerifiedEmail(userEmail);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setStep(1);
+        } else if (result.type === "cancel" || result.type === "dismiss") {
+          setAuthError("");
+        }
+      }
+    } catch (e: any) {
+      setAuthError(e?.message || "Something went wrong. Please try again.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
-      setVerifyingOtp(false);
+      setSigningIn(false);
     }
   };
 
@@ -408,84 +357,6 @@ export default function OnboardingScreen() {
   const contentMaxWidthOnb = isDesktopOnb ? 720 : onbWidth;
   const topPadding = Platform.OS === "web" ? (isDesktopOnb ? 24 : 67) : insets.top;
 
-  if (step === 0 && otpSent) {
-    return (
-      <KeyboardAvoidingView
-        style={[styles.container]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <View style={[styles.header, { paddingTop: topPadding + 20 }]}>
-          <PonyoProgress step={0} total={STEPS} />
-        </View>
-
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={styles.stepContainer}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="mail" size={38} color={Colors.teal} />
-            </View>
-            <Text style={styles.stepTitle}>Check your email</Text>
-            <Text style={styles.stepSubtitle}>
-              We sent a 6-digit code to{"\n"}
-              <Text style={{ fontFamily: "Nunito_700Bold", color: Colors.charcoal }}>{email}</Text>
-            </Text>
-
-            <View style={{ marginVertical: 8 }}>
-              <OtpDigitInput
-                value={otpCode}
-                onChange={v => { setOtpCode(v); setOtpError(""); }}
-                onSubmit={handleVerifyOtp}
-              />
-            </View>
-
-            {otpError ? (
-              <View style={styles.errorRow}>
-                <Ionicons name="warning-outline" size={13} color={Colors.errorRed} />
-                <Text style={styles.errorText}>{otpError}</Text>
-              </View>
-            ) : null}
-
-            <View style={styles.codeInfoBox}>
-              <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
-              <Text style={styles.codeInfoText}>Code is valid for 10 minutes</Text>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.verifyBtn, (verifyingOtp || otpCode.length < 6) && { opacity: 0.6 }]}
-              onPress={handleVerifyOtp}
-              disabled={verifyingOtp || otpCode.length < 6}
-            >
-              {verifyingOtp ? (
-                <ActivityIndicator color={Colors.white} size="small" />
-              ) : (
-                <>
-                  <Text style={styles.verifyBtnText}>Verify Code</Text>
-                  <Ionicons name="checkmark" size={18} color={Colors.white} />
-                </>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.resendRow}>
-              <Text style={styles.resendHint}>Didn't receive it? </Text>
-              {countdown > 0 ? (
-                <Text style={styles.resendCountdown}>Resend in {countdown}s</Text>
-              ) : (
-                <TouchableOpacity onPress={handleSendOtp}>
-                  <Text style={styles.resendLink}>Resend code</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <TouchableOpacity onPress={() => { setOtpSent(false); setOtpCode(""); setOtpError(""); }}
-              style={styles.changeEmailBtn}>
-              <Ionicons name="arrow-back" size={14} color={Colors.textMuted} />
-              <Text style={styles.changeEmailText}>Change email</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -507,38 +378,34 @@ export default function OnboardingScreen() {
             <Text style={styles.stepTitle}>Welcome to PopMatch</Text>
             <Text style={styles.stepSubtitle}>UIUC's student-first housing matchmaker</Text>
 
-            <Text style={styles.label}>Illinois Email</Text>
-            <TextInput style={[styles.input, emailError ? styles.inputError : null]}
-              value={email} onChangeText={t => { setEmail(t); setEmailError(""); }}
-              placeholder="yournetid@illinois.edu" placeholderTextColor={Colors.textLight}
-              keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
-              returnKeyType="send" onSubmitEditing={handleSendOtp} />
-            {emailError ? (
+            <View style={styles.gateBox}>
+              <Ionicons name="shield-checkmark-outline" size={15} color={Colors.grassGreen} />
+              <Text style={styles.gateText}>Verified @illinois.edu accounts only</Text>
+            </View>
+
+            {authError ? (
               <View style={styles.errorRow}>
                 <Ionicons name="warning-outline" size={13} color={Colors.errorRed} />
-                <Text style={styles.errorText}>{emailError}</Text>
+                <Text style={styles.errorText}>{authError}</Text>
               </View>
             ) : null}
 
-            <View style={styles.gateBox}>
-              <Ionicons name="shield-checkmark-outline" size={15} color={Colors.grassGreen} />
-              <Text style={styles.gateText}>Only @illinois.edu emails accepted — we'll verify with a code</Text>
-            </View>
-
             <TouchableOpacity
-              style={[styles.otpSendBtn, sendingOtp && { opacity: 0.7 }]}
-              onPress={handleSendOtp}
-              disabled={sendingOtp}
+              style={[styles.netIdBtn, signingIn && { opacity: 0.7 }]}
+              onPress={handleNetIdLogin}
+              disabled={signingIn}
             >
-              {sendingOtp ? (
+              {signingIn ? (
                 <ActivityIndicator color={Colors.white} size="small" />
               ) : (
                 <>
-                  <Ionicons name="send" size={16} color={Colors.white} />
-                  <Text style={styles.otpSendBtnText}>Send Verification Code</Text>
+                  <Ionicons name="log-in-outline" size={20} color={Colors.white} />
+                  <Text style={styles.netIdBtnText}>Sign in with NetID</Text>
                 </>
               )}
             </TouchableOpacity>
+
+            <Text style={styles.netIdHint}>Uses your University of Illinois Microsoft account</Text>
           </View>
         )}
 
@@ -876,28 +743,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.grassGreen + "18", borderRadius: 12, padding: 11,
   },
   gateText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.grassGreen, flex: 1 },
-  otpSendBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.teal, borderRadius: 14, paddingVertical: 16, marginTop: 4,
+  netIdBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    backgroundColor: Colors.ponyo, borderRadius: 100, paddingVertical: 18,
+    paddingHorizontal: 40, marginTop: 16,
+    shadowColor: Colors.ponyo, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25, shadowRadius: 12, elevation: 8,
   },
-  otpSendBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
-  verifyBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.teal, borderRadius: 14, paddingVertical: 16, marginTop: 8,
+  netIdBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 17, color: Colors.white },
+  netIdHint: {
+    fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted,
+    textAlign: "center", marginTop: 14, fontStyle: "italic",
   },
-  verifyBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
-  codeInfoBox: {
-    flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 4,
-  },
-  codeInfoText: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
-  resendRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 4 },
-  resendHint: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
-  resendCountdown: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textLight },
-  resendLink: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.teal },
-  changeEmailBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5, justifyContent: "center", marginTop: 8,
-  },
-  changeEmailText: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
   avatarPicker: { alignSelf: "center", marginVertical: 8 },
   avatarImage: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#D0F0E0" },
   avatarPlaceholder: {
