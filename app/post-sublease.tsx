@@ -403,7 +403,8 @@ export default function PostSubleaseScreen() {
     hasAtLeastOnePhoto &&
     moveInDate !== null && moveOutDate !== null &&
     (!isShortTerm || eventTag) &&
-    (!isSummer || subCategory)
+    (!isSummer || subCategory) &&
+    (!isHostMode || roommatePreference)
   );
 
   const handleSubmit = async () => {
@@ -711,7 +712,7 @@ export default function PostSubleaseScreen() {
                 </View>
 
                 <View style={styles.field}>
-                  <Text style={styles.label}>Roommate Preference</Text>
+                  <Text style={styles.label}>Roommate Preference <Text style={{ color: "#FF6B4E" }}>*</Text></Text>
                   <View style={styles.chipRow}>
                     {["Girls Only", "Guys Only", "Co-ed", "Grainger Grind", "Grad/PhD"].map(pref => (
                       <TouchableOpacity key={pref} style={[styles.chip, roommatePreference === pref && styles.chipActive]}
@@ -720,7 +721,7 @@ export default function PostSubleaseScreen() {
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <Text style={styles.fieldHint}>Optional — helps seekers filter by vibe</Text>
+                  <Text style={styles.fieldHint}>Helps seekers filter by vibe</Text>
                 </View>
 
                 <View style={styles.field}>
