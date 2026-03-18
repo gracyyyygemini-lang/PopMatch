@@ -114,7 +114,7 @@ const DISABLED_TEXT = "#8A9FA3";
 
 function autoCategorize(moveIn: Date, moveOut: Date): LeaseType {
   const durationDays = Math.round((moveOut.getTime() - moveIn.getTime()) / (1000 * 60 * 60 * 24));
-  if (durationDays <= 10) return "fall_sublease";
+  if (durationDays <= 14) return "fall_sublease";
   const moveInMonth = moveIn.getMonth();
   if (durationDays >= 330) return "full_year";
   if (moveInMonth >= 4 && moveInMonth <= 6 && durationDays <= 120) return "summer_sublease";
@@ -392,7 +392,7 @@ export default function PostSubleaseScreen() {
   const hasAtLeastOnePhoto = images.some(img => img !== null);
 
   const days = getDurationDays(moveInDate, moveOutDate);
-  const isShortTerm = days > 0 && days <= 10;
+  const isShortTerm = days > 0 && days <= 14;
   const isSummer = leaseType === "summer_sublease" && !isShortTerm;
 
   const canSubmit = !!(
@@ -404,7 +404,7 @@ export default function PostSubleaseScreen() {
     moveInDate !== null && moveOutDate !== null &&
     (!isShortTerm || eventTag) &&
     (!isSummer || subCategory) &&
-    (!isHostMode || roommatePreference)
+    roommatePreference
   );
 
   const handleSubmit = async () => {
@@ -442,7 +442,7 @@ export default function PostSubleaseScreen() {
       floorPlanUrl: floorPlanImage || undefined,
       roomsAvailable: isHostMode && roomsAvailable ? Number(roomsAvailable) : undefined,
       currentResidentBio: isHostMode && currentResidentBio.trim() ? currentResidentBio.trim() : undefined,
-      roommatePreference: isHostMode && roommatePreference ? roommatePreference : undefined,
+      roommatePreference: roommatePreference || undefined,
       listingType: isHostMode ? "roommate" : "sublease",
       moveInDate: moveInDate!.toISOString(),
       moveOutDate: moveOutDate!.toISOString(),
@@ -495,7 +495,7 @@ export default function PostSubleaseScreen() {
   };
 
   const stepValid = (s: number) => {
-    if (s === 0) return !!(buildingName.trim() && price.trim() && !isNaN(Number(price)) && Number(price) > 0 && landlords.length > 0);
+    if (s === 0) return !!(buildingName.trim() && price.trim() && !isNaN(Number(price)) && Number(price) > 0 && landlords.length > 0 && roommatePreference);
     if (s === 1) {
       if (!hasAtLeastOnePhoto) return false;
       if (isHostMode && !unitType.trim()) return false;
@@ -570,61 +570,46 @@ export default function PostSubleaseScreen() {
               </View>
             </View>
 
-            {getDurationDays(moveInDate, moveOutDate) > 0 && getDurationDays(moveInDate, moveOutDate) <= 10 ? (
-              <View style={styles.field}>
-                <Text style={styles.label}>Event / Category *</Text>
-                <Text style={[styles.fieldHint, { marginBottom: 8 }]}>Short stay ({getDurationDays(moveInDate, moveOutDate)} days) — select the event</Text>
-                <View style={styles.chipRow}>
-                  {SHORT_TERM_EVENTS.map(evt => (
-                    <TouchableOpacity key={evt} style={[styles.chip, eventTag === evt && styles.chipActive]}
-                      onPress={() => { setEventTag(evt); Haptics.selectionAsync(); }}>
-                      <Text style={[styles.chipText, eventTag === evt && styles.chipTextActive]}>{evt}</Text>
+            <View style={styles.field}>
+              <Text style={styles.label}>Lease Type *</Text>
+              {LEASE_OPTIONS.map(opt => (
+                <TouchableOpacity key={opt.key} style={[styles.optionCard, leaseType === opt.key && styles.optionCardActive]}
+                  onPress={() => { setLeaseType(opt.key); setEventTag(""); Haptics.selectionAsync(); }}>
+                  <View style={styles.optionLeft}>
+                    <Text style={[styles.optionLabel, leaseType === opt.key && styles.optionLabelActive]}>{opt.label}</Text>
+                    <Text style={styles.optionDesc}>{opt.desc}</Text>
+                  </View>
+                  {leaseType === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
+                </TouchableOpacity>
+              ))}
+
+              {leaseType === "summer_sublease" && (
+                <View style={styles.summerSubmenu}>
+                  <Text style={[styles.label, { marginBottom: 8 }]}>Summer Timeline *</Text>
+                  {SUMMER_TIMELINE_OPTIONS.map(opt => (
+                    <TouchableOpacity key={opt.key}
+                      style={[styles.optionCard, subCategory === opt.key && styles.optionCardActive]}
+                      onPress={() => { setSubCategory(opt.key); Haptics.selectionAsync(); }}>
+                      <View style={styles.optionLeft}>
+                        <Text style={[styles.optionLabel, subCategory === opt.key && styles.optionLabelActive]}>{opt.label}</Text>
+                        <Text style={styles.optionDesc}>{opt.desc}</Text>
+                      </View>
+                      {subCategory === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
                     </TouchableOpacity>
                   ))}
-                </View>
-              </View>
-            ) : (
-              <View style={styles.field}>
-                <Text style={styles.label}>Lease Type *</Text>
-                {LEASE_OPTIONS.map(opt => (
-                  <TouchableOpacity key={opt.key} style={[styles.optionCard, leaseType === opt.key && styles.optionCardActive]}
-                    onPress={() => { setLeaseType(opt.key); setEventTag(""); Haptics.selectionAsync(); }}>
-                    <View style={styles.optionLeft}>
-                      <Text style={[styles.optionLabel, leaseType === opt.key && styles.optionLabelActive]}>{opt.label}</Text>
-                      <Text style={styles.optionDesc}>{opt.desc}</Text>
+
+                  <TouchableOpacity style={styles.parkingToggle}
+                    onPress={() => { setHasParking(!hasParking); Haptics.selectionAsync(); }}>
+                    <Text style={styles.parkingLabel}>🚗 Parking Included</Text>
+                    <View style={[styles.toggle, hasParking && { backgroundColor: "#2C555C" }]}>
+                      <Text style={[styles.toggleText, hasParking && styles.toggleTextOn]}>
+                        {hasParking ? "Yes" : "No"}
+                      </Text>
                     </View>
-                    {leaseType === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
                   </TouchableOpacity>
-                ))}
-
-                {leaseType === "summer_sublease" && (
-                  <View style={styles.summerSubmenu}>
-                    <Text style={[styles.label, { marginBottom: 8 }]}>Summer Timeline *</Text>
-                    {SUMMER_TIMELINE_OPTIONS.map(opt => (
-                      <TouchableOpacity key={opt.key}
-                        style={[styles.optionCard, subCategory === opt.key && styles.optionCardActive]}
-                        onPress={() => { setSubCategory(opt.key); Haptics.selectionAsync(); }}>
-                        <View style={styles.optionLeft}>
-                          <Text style={[styles.optionLabel, subCategory === opt.key && styles.optionLabelActive]}>{opt.label}</Text>
-                          <Text style={styles.optionDesc}>{opt.desc}</Text>
-                        </View>
-                        {subCategory === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.ocean} />}
-                      </TouchableOpacity>
-                    ))}
-
-                    <TouchableOpacity style={styles.parkingToggle}
-                      onPress={() => { setHasParking(!hasParking); Haptics.selectionAsync(); }}>
-                      <Text style={styles.parkingLabel}>🚗 Parking Included</Text>
-                      <View style={[styles.toggle, hasParking && { backgroundColor: "#2C555C" }]}>
-                        <Text style={[styles.toggleText, hasParking && styles.toggleTextOn]}>
-                          {hasParking ? "Yes" : "No"}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            )}
+                </View>
+              )}
+            </View>
 
             <View style={styles.field}>
               <Text style={styles.label}>Landlord(s) *</Text>
@@ -697,6 +682,19 @@ export default function PostSubleaseScreen() {
               )}
             </View>
 
+            <View style={styles.field}>
+              <Text style={styles.label}>Roommate Preference <Text style={{ color: "#FF6B4E" }}>*</Text></Text>
+              <View style={styles.chipRow}>
+                {["Girls Only", "Guys Only", "Co-ed", "Grainger Grind"].map(pref => (
+                  <TouchableOpacity key={pref} style={[styles.chip, roommatePreference === pref && styles.chipActive]}
+                    onPress={() => { setRoommatePreference(roommatePreference === pref ? "" : pref); Haptics.selectionAsync(); }}>
+                    <Text style={[styles.chipText, roommatePreference === pref && styles.chipTextActive]}>{pref}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.fieldHint}>Helps seekers filter by vibe</Text>
+            </View>
+
             {isHostMode && (
               <>
                 <View style={styles.field}>
@@ -709,19 +707,6 @@ export default function PostSubleaseScreen() {
                       </TouchableOpacity>
                     ))}
                   </View>
-                </View>
-
-                <View style={styles.field}>
-                  <Text style={styles.label}>Roommate Preference <Text style={{ color: "#FF6B4E" }}>*</Text></Text>
-                  <View style={styles.chipRow}>
-                    {["Girls Only", "Guys Only", "Co-ed", "Grainger Grind", "Grad/PhD"].map(pref => (
-                      <TouchableOpacity key={pref} style={[styles.chip, roommatePreference === pref && styles.chipActive]}
-                        onPress={() => { setRoommatePreference(roommatePreference === pref ? "" : pref); Haptics.selectionAsync(); }}>
-                        <Text style={[styles.chipText, roommatePreference === pref && styles.chipTextActive]}>{pref}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <Text style={styles.fieldHint}>Helps seekers filter by vibe</Text>
                 </View>
 
                 <View style={styles.field}>
@@ -933,8 +918,8 @@ export default function PostSubleaseScreen() {
               <View style={[styles.warningBox, { backgroundColor: Colors.ocean + "12", borderLeftColor: Colors.ocean }]}>
                 <Ionicons name="pricetag-outline" size={16} color={Colors.ocean} />
                 <Text style={styles.warningText}>
-                  {getDurationDays(moveInDate, moveOutDate) <= 10
-                    ? `Short-Term (${getDurationDays(moveInDate, moveOutDate)} days) — select event below`
+                  {getDurationDays(moveInDate, moveOutDate) <= 14
+                    ? `Short-Term (${getDurationDays(moveInDate, moveOutDate)} days) — select an event tag below`
                     : `Auto-tagged as: ${LEASE_OPTIONS.find(o => o.key === leaseType)?.label || leaseType} (${getDurationDays(moveInDate, moveOutDate)} days)`}
                 </Text>
               </View>
@@ -955,6 +940,21 @@ export default function PostSubleaseScreen() {
               )}
               <Text style={styles.fieldHint}>Date for key return</Text>
             </View>
+
+            {moveInDate && moveOutDate && getDurationDays(moveInDate, moveOutDate) > 0 && getDurationDays(moveInDate, moveOutDate) <= 14 && (
+              <View style={styles.field}>
+                <Text style={styles.label}>Event / Category <Text style={{ color: "#FF6B4E" }}>*</Text></Text>
+                <Text style={[styles.fieldHint, { marginBottom: 8 }]}>Short stay ({getDurationDays(moveInDate, moveOutDate)} days) — select the event</Text>
+                <View style={styles.chipRow}>
+                  {SHORT_TERM_EVENTS.map(evt => (
+                    <TouchableOpacity key={evt} style={[styles.chip, eventTag === evt && styles.chipActive]}
+                      onPress={() => { setEventTag(evt); Haptics.selectionAsync(); }}>
+                      <Text style={[styles.chipText, eventTag === evt && styles.chipTextActive]}>{evt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
