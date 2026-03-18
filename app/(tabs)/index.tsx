@@ -14,13 +14,13 @@ import { useResponsive } from "@/hooks/useResponsive";
 
 const DARK_TEAL = "#2C555C";
 const SUBTITLE_GREY = "#6B8A8F";
-const SCREEN_BG = "#FBFBF9";
+const SCREEN_BG = "#F0F2F0";
 
 const CARD_TINTS: Record<string, string> = {
-  roommate_openings: "rgba(200, 182, 255, 0.15)",
-  semester_takeover: "rgba(168, 218, 220, 0.15)",
-  summer_only: "rgba(255, 218, 185, 0.2)",
-  short_term: "rgba(162, 210, 255, 0.15)",
+  roommate_openings: "#E2EAF4",
+  semester_takeover: "#E4F1E9",
+  summer_only: "#FDF0D5",
+  short_term: "#E0F0F5",
 };
 
 const CATEGORIES: {
@@ -91,15 +91,15 @@ function CrashSubtitle() {
   return (
     <Text style={ccStyles.sub}>
       Urgent couch for tonight — pay in{" "}
-      <View style={[ccStyles.tag, { backgroundColor: "rgba(144, 238, 144, 0.35)" }]}>
+      <View style={[ccStyles.tag, { backgroundColor: "#A8DADC" }]}>
         <Text style={ccStyles.tagText}>cash</Text>
       </View>
       ,{" "}
-      <View style={[ccStyles.tag, { backgroundColor: "rgba(255, 182, 193, 0.4)" }]}>
+      <View style={[ccStyles.tag, { backgroundColor: "#A2D2FF" }]}>
         <Text style={ccStyles.tagText}>boba</Text>
       </View>
       , or{" "}
-      <View style={[ccStyles.tag, { backgroundColor: "rgba(255, 217, 102, 0.45)" }]}>
+      <View style={[ccStyles.tag, { backgroundColor: "#FEE440" }]}>
         <Text style={ccStyles.tagText}>Lion cover</Text>
       </View>
     </Text>
@@ -149,7 +149,7 @@ export default function HomeScreen() {
       return (
         <View style={[styles.matchmakerCard, pressed && { transform: [{ scale: 0.98 }], opacity: 0.92 }]}>
           <View style={styles.watermarkWrap}>
-            <Ionicons name="heart" size={120} color="rgba(255,255,255,0.15)" />
+            <Ionicons name="heart" size={120} color="rgba(255,255,255,0.1)" />
           </View>
           <View style={styles.matchmakerIcon}>
             <Ionicons name="heart" size={22} color="#FFFFFF" />
@@ -401,11 +401,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 18,
     borderWidth: 0,
-    shadowColor: "rgba(44, 85, 92, 0.08)",
+    shadowColor: "#1A2F33",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 14,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   halfCard: {
     gap: 8,
@@ -433,14 +433,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: "#FF9E9D",
+    backgroundColor: "#D96C5B",
     borderRadius: 20,
     padding: 14,
     overflow: "hidden" as const,
-    shadowColor: "rgba(255, 158, 157, 0.4)",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 1,
-    shadowRadius: 16,
+    borderWidth: 0,
+    shadowColor: "#1A2F33",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
     elevation: 4,
   },
   watermarkWrap: {
@@ -473,14 +474,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: "#FFD6A5",
+    backgroundColor: "#EBAE61",
     borderRadius: 20,
     padding: 14,
     overflow: "hidden" as const,
-    shadowColor: "rgba(255, 183, 120, 0.35)",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 1,
-    shadowRadius: 16,
+    borderWidth: 0,
+    shadowColor: "#1A2F33",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
     elevation: 4,
   },
   crashWatermarkWrap: {
