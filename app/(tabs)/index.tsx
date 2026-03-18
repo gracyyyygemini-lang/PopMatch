@@ -14,13 +14,20 @@ import { useResponsive } from "@/hooks/useResponsive";
 
 const DARK_TEAL = "#2C555C";
 const SUBTITLE_GREY = "#6B8A8F";
-const SCREEN_BG = "#F0F2F0";
+const SCREEN_BG = "#FBFBF9";
 
 const CARD_TINTS: Record<string, string> = {
   roommate_openings: "#E2EAF4",
   semester_takeover: "#E4F1E9",
   summer_only: "#FDF0D5",
   short_term: "#E0F0F5",
+};
+
+const CARD_BORDERS: Record<string, string> = {
+  roommate_openings: "#AEC4DE",
+  semester_takeover: "#B1D4C0",
+  summer_only: "#E8CFA6",
+  short_term: "#A8D2DF",
 };
 
 const CATEGORIES: {
@@ -228,7 +235,7 @@ export default function HomeScreen() {
                   <View style={[
                     styles.categoryCard,
                     styles.halfCard,
-                    { backgroundColor: CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)" },
+                    { backgroundColor: CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)", borderColor: CARD_BORDERS[cat.id] || "#E0E0E0" },
                     pressed && styles.cardPressed,
                   ]}>
                     <View style={[styles.catIconWrap, { backgroundColor: cat.iconBg }]}>
@@ -251,7 +258,7 @@ export default function HomeScreen() {
                 <View style={[
                   styles.categoryCard,
                   styles.fullCard,
-                  { backgroundColor: CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)" },
+                  { backgroundColor: CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)", borderColor: CARD_BORDERS[cat.id] || "#E0E0E0" },
                   pressed && styles.cardPressed,
                 ]}>
                   <View style={[styles.catIconWrap, { backgroundColor: cat.iconBg }]}>
@@ -400,7 +407,7 @@ const styles = StyleSheet.create({
   categoryCard: {
     borderRadius: 20,
     padding: 18,
-    borderWidth: 0,
+    borderWidth: 1.5,
     shadowColor: "#1A2F33",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
