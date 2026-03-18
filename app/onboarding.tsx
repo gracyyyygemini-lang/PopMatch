@@ -75,7 +75,7 @@ function PonyoProgress({ step, total }: { step: number; total: number }) {
   const BUCKET_SIZE = 28;
 
   useEffect(() => {
-    const target = progress * Math.max(0, trackWidth - BUCKET_SIZE - FISH_SIZE - 4);
+    const target = progress * Math.max(0, trackWidth - FISH_SIZE);
     Animated.spring(fishPx, {
       toValue: target,
       tension: 55,
@@ -817,7 +817,7 @@ export default function OnboardingScreen() {
 
 const pStyles = StyleSheet.create({
   wrapper: {
-    flexDirection: "row", alignItems: "center", gap: 8, paddingBottom: 4,
+    flexDirection: "row", alignItems: "center", gap: 2, paddingBottom: 4,
   },
   trackContainer: {
     flex: 1, height: 48, position: "relative", justifyContent: "center",
