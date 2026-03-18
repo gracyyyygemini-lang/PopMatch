@@ -138,6 +138,7 @@ export interface SubleasePost {
   eventTag?: string;
   subCategory?: string;
   hasParking?: boolean;
+  roommatePreference?: string;
 }
 
 export type ConversationSource = "sublease" | "coseeker" | "crash_cash";
@@ -273,6 +274,45 @@ const DEMO_POSTS: SubleasePost[] = [
     kitchenType: "communal", moveInDate: "2026-08-15T12:00:00Z", moveOutDate: "2027-08-14T12:00:00Z",
     amenities: { isFurnished: false, hasLaundry: true, hasWifi: true, hasAC: true, hasStudyLounge: true, hasPrinting: true, hasBikeStorage: false, hasSecurity: true, utilsIncluded: false, noDeposit: false, parkingIncluded: true, hasGym: true, hasPool: false, hasElevator: true, hasRooftop: false, hasLockers: true },
     cleaningFrequency: "weekly", shoePolicy: "no_policy", images: [],
+  },
+  {
+    id: "sp7", userId: "u4", userName: "Emily Chen", userEmail: "echen4@illinois.edu",
+    buildingName: "309 E Chalmers", address: "309 E Chalmers St", leaseType: "fall_sublease",
+    pricePerMonth: 680, landlords: ["jsm"], zone: "campustown",
+    availableDuringBreaks: true, breakTypes: ["thanksgiving"],
+    description: "Looking for a clean, quiet roommate to join our 4B4B. Girls preferred. Common area furnished.",
+    avatarColor: "#D4748E", timestamp: Date.now() - 600000000, category: "semester_takeover",
+    listingType: "roommate", roommatePreference: "Girls Only",
+    roomsAvailable: 1, currentResidentBio: "3 junior girls, CS and business majors",
+    kitchenType: "private", moveInDate: "2026-08-15T14:00:00Z", moveOutDate: "2027-08-14T12:00:00Z",
+    amenities: { isFurnished: true, hasLaundry: true, hasWifi: true, hasAC: true, hasStudyLounge: false, hasPrinting: false, hasBikeStorage: true, hasSecurity: true, utilsIncluded: false, noDeposit: false, parkingIncluded: false, hasGym: false, hasPool: false, hasElevator: false, hasRooftop: false, hasLockers: false },
+    cleaningFrequency: "weekly", shoePolicy: "shoes_off", images: [],
+  },
+  {
+    id: "sp8", userId: "u9", userName: "Raj Patel", userEmail: "rpatel8@illinois.edu",
+    buildingName: "Illini Tower", address: "409 E Chalmers St", leaseType: "spring_sublease",
+    pricePerMonth: 820, landlords: ["american"], zone: "campustown",
+    availableDuringBreaks: false, breakTypes: [],
+    description: "Need 1 more for our 3B2B. We're all engineers, study hard and game on weekends.",
+    avatarColor: "#4A90D9", timestamp: Date.now() - 700000000, category: "semester_takeover",
+    listingType: "roommate", roommatePreference: "Grainger Grind",
+    roomsAvailable: 1, currentResidentBio: "2 sophomore ECE/CS majors, clean and chill",
+    kitchenType: "communal", moveInDate: "2026-01-10T15:00:00Z", moveOutDate: "2026-05-15T12:00:00Z",
+    amenities: { isFurnished: true, hasLaundry: true, hasWifi: true, hasAC: true, hasStudyLounge: true, hasPrinting: true, hasBikeStorage: false, hasSecurity: true, utilsIncluded: true, noDeposit: false, parkingIncluded: false, hasGym: true, hasPool: false, hasElevator: true, hasRooftop: false, hasLockers: true },
+    cleaningFrequency: "weekly", shoePolicy: "no_policy", images: [],
+  },
+  {
+    id: "sp9", userId: "u2", userName: "Jordan Kim", userEmail: "jkim12@illinois.edu",
+    buildingName: "512 E Stoughton", address: "512 E Stoughton St", leaseType: "full_year",
+    pricePerMonth: 590, landlords: ["cpm"], zone: "north",
+    availableDuringBreaks: true, breakTypes: ["thanksgiving", "spring_break"],
+    description: "Open to anyone! 4B2B house near engineering quad. Super chill vibe, backyard + grill.",
+    avatarColor: "#2ECC71", timestamp: Date.now() - 800000000, category: "semester_takeover",
+    listingType: "roommate", roommatePreference: "Co-ed",
+    roomsAvailable: 2, currentResidentBio: "1 junior MechE, 1 senior LAS. We host cookouts.",
+    kitchenType: "private", moveInDate: "2026-08-15T14:00:00Z", moveOutDate: "2027-08-14T12:00:00Z",
+    amenities: { isFurnished: false, hasLaundry: true, hasWifi: true, hasAC: false, hasStudyLounge: false, hasPrinting: false, hasBikeStorage: true, hasSecurity: false, utilsIncluded: false, noDeposit: true, parkingIncluded: true, hasGym: false, hasPool: false, hasElevator: false, hasRooftop: false, hasLockers: false },
+    cleaningFrequency: "monthly", shoePolicy: "front_door", images: [],
   },
 ];
 

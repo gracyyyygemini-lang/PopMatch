@@ -675,7 +675,9 @@ export default function MarketplaceScreen() {
     if (zoneFilter !== "all" && s.zone !== zoneFilter) return false;
 
     if (selectedSubFilters.length > 0) {
-      if (activeFilter === "short_term") {
+      if (activeFilter === "roommate_openings") {
+        if (!s.roommatePreference || !selectedSubFilters.includes(s.roommatePreference)) return false;
+      } else if (activeFilter === "short_term") {
         if (!s.eventTag || !selectedSubFilters.includes(s.eventTag)) return false;
       } else if (activeFilter === "summer_only") {
         const parkingOnly = selectedSubFilters.includes("🚗 Parking Only");

@@ -159,6 +159,7 @@ export default function PostSubleaseScreen() {
   const [floorPlanImage, setFloorPlanImage] = useState<string | null>(null);
   const [roomsAvailable, setRoomsAvailable] = useState("1");
   const [currentResidentBio, setCurrentResidentBio] = useState("");
+  const [roommatePreference, setRoommatePreference] = useState("");
 
   const [amenities, setAmenities] = useState<Amenities>({ ...DEFAULT_AMENITIES });
   const [eventTag, setEventTag] = useState("");
@@ -440,6 +441,7 @@ export default function PostSubleaseScreen() {
       floorPlanUrl: floorPlanImage || undefined,
       roomsAvailable: isHostMode && roomsAvailable ? Number(roomsAvailable) : undefined,
       currentResidentBio: isHostMode && currentResidentBio.trim() ? currentResidentBio.trim() : undefined,
+      roommatePreference: isHostMode && roommatePreference ? roommatePreference : undefined,
       listingType: isHostMode ? "roommate" : "sublease",
       moveInDate: moveInDate!.toISOString(),
       moveOutDate: moveOutDate!.toISOString(),
@@ -706,6 +708,19 @@ export default function PostSubleaseScreen() {
                       </TouchableOpacity>
                     ))}
                   </View>
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label}>Roommate Preference</Text>
+                  <View style={styles.chipRow}>
+                    {["Girls Only", "Guys Only", "Co-ed", "Grainger Grind", "Grad/PhD"].map(pref => (
+                      <TouchableOpacity key={pref} style={[styles.chip, roommatePreference === pref && styles.chipActive]}
+                        onPress={() => { setRoommatePreference(roommatePreference === pref ? "" : pref); Haptics.selectionAsync(); }}>
+                        <Text style={[styles.chipText, roommatePreference === pref && styles.chipTextActive]}>{pref}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={styles.fieldHint}>Optional — helps seekers filter by vibe</Text>
                 </View>
 
                 <View style={styles.field}>
