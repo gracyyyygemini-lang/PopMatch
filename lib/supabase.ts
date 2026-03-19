@@ -1,14 +1,8 @@
 import "react-native-url-polyfill/auto";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+// Using your corrected "g" URL and your publishable key
+const supabaseUrl = "https://mbcibjbwxtuonjfsgzaa.supabase.co";
+const supabaseAnonKey = "sb_publishable_SOQw2OP0Br29KXeMxm_uCw_fAFI-ZX8";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Supabase env vars missing — auth will not work until EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set.");
-}
-
-export const supabase = createClient(
-  supabaseUrl || "https://placeholder.supabase.co",
-  supabaseAnonKey || "placeholder"
-);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
