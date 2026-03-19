@@ -2,7 +2,7 @@
 
 ## Overview
 PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Expo/React Native).
-@illinois.edu email gate enforced via Supabase Azure OAuth (NetID sign-in). PostgreSQL backend for social trust graph, messaging, feedback, and stats.
+@illinois.edu email gate enforced via real OTP verification. PostgreSQL backend for social trust graph, messaging, OTP codes, feedback, and stats.
 5-pathway intent system (Host, Joiner, Co-Seeker, Sublessor, Sublessee) with 16-point amenity tracking, zone-filtered marketplace, and integrated real-time messaging.
 
 ## Architecture
@@ -13,7 +13,6 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 - **State**: React Context + AsyncStorage (persistent) + PostgreSQL (social trust + chat)
 - **Fonts**: Nunito (400, 600, 700, 800) via @expo-google-fonts/nunito
 - **Icons**: @expo/vector-icons (Ionicons only — NO emojis in UI)
-- **Auth**: Supabase Azure OAuth (NetID) via `@supabase/supabase-js` + `expo-auth-session` + `expo-web-browser`
 - **Email**: Resend (`resend` npm package) — falls back to console.log if RESEND_API_KEY not set
 - **Images**: expo-image-picker for listing photo uploads
 
@@ -31,7 +30,7 @@ PopMatch is a UIUC student-first housing matchmaker and sublease mobile app (Exp
 
 ### Entry
 - `app/index.tsx` — Redirects to /onboarding or /(tabs) based on AsyncStorage
-- `app/onboarding.tsx` — NetID sign-in (Step 0, via Supabase Azure OAuth) → Intent step (Step 1) → About You (Step 2). Supply-side roles (Host/Sublessor) finish after 3 steps and route to mandatory post-sublease gateway. Demand-side roles (Joiner/CoSeeker/Sublessee) continue through 6 steps (Preferences, Location, Breaks).
+- `app/onboarding.tsx` — Email OTP step (Step 0) → Intent step (Step 1) → About You (Step 2). Supply-side roles (Host/Sublessor) finish after 3 steps and route to mandatory post-sublease gateway. Demand-side roles (Joiner/CoSeeker/Sublessee) continue through 6 steps (Preferences, Location, Breaks).
 - `app/admin.tsx` — Hidden admin dashboard (5-tap on profile version label)
 
 ### Tabs (app/(tabs)/) — 3 tabs
