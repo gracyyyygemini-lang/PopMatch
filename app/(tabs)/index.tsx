@@ -1,19 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Platform,
+  View, Text, StyleSheet, ScrollView, Pressable, Platform
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useAppContext } from "../../context/AppContext";
-import { supabase } from "../../lib/supabase";
+import { useApp, Zone } from "@/context/AppContext";
 import { ScamBanner } from "@/components/ScamBanner";
 import ZonePicker from "@/components/ZonePicker";
 import { useResponsive } from "@/hooks/useResponsive";
@@ -141,36 +135,12 @@ const ccStyles = StyleSheet.create({
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-
-  // 1. Updated Context Hook
-  const { userProfile } = useAppContext();
-
-  // 2. Added local state for missing variables
-  const [friends, setFriends] = useState<any[]>([]);
-  const [subleases, setSubleases] = useState<any[]>([]);
-
-  // 3. Keep the rest of your original state hooks
-  const [zoneFilter, setZoneFilter] = useState<any | "all">("all");
+  const { currentUser, friends, subleases } = useApp();
+  const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
   const { isDesktop, isTablet, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
 
-  // 4. Added Supabase fetch for listings
-  useEffect(() => {
-    async function loadData() {
-      // Pull down your marketplace listings
-      const { data: listingsData } = await supabase
-        .from("listings") // Make sure this matches your table name in schema.ts
-        .select("*");
-
-      if (listingsData) {
-        setSubleases(listingsData);
-      }
-    }
-    loadData();
-  }, []);
-
-  // Added optional chaining (?.) to name just in case the profile is still loading
-  const firstName = userProfile?.name?.split(" ")[0] ?? "there";
+  const firstName = currentUser?.name.split(" ")[0] ?? "there";
 
   const navigateToCategory = (catId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -178,18 +148,13 @@ export default function HomeScreen() {
     router.push(`/marketplace?category=${catId}${zoneParam}` as any);
   };
 
-  const halfCards = CATEGORIES.filter((c) => c.layout === "half");
-  const fullCards = CATEGORIES.filter((c) => c.layout === "full");
+  const halfCards = CATEGORIES.filter(c => c.layout === "half");
+  const fullCards = CATEGORIES.filter(c => c.layout === "full");
 
-  const renderFeatureCard = (f: (typeof FEATURES)[0], pressed: boolean) => {
+  const renderFeatureCard = (f: typeof FEATURES[0], pressed: boolean) => {
     if (f.route === "/matchmaker") {
       return (
-        <View
-          style={[
-            styles.matchmakerCard,
-            pressed && { transform: [{ scale: 0.98 }], opacity: 0.92 },
-          ]}
-        >
+        <View style={[styles.matchmakerCard, pressed && { transform: [{ scale: 0.98 }], opacity: 0.92 }]}>
           <View style={styles.watermarkWrap}>
             <Ionicons name="heart" size={120} color="rgba(255,255,255,0.1)" />
           </View>
@@ -200,22 +165,13 @@ export default function HomeScreen() {
             <Text style={styles.matchmakerTitle}>{f.title}</Text>
             <Text style={styles.matchmakerSub}>{f.subtitle}</Text>
           </View>
-          <Ionicons
-            name="chevron-forward"
-            size={17}
-            color="rgba(255,255,255,0.7)"
-          />
+          <Ionicons name="chevron-forward" size={17} color="rgba(255,255,255,0.7)" />
         </View>
       );
     }
 
     return (
-      <View
-        style={[
-          styles.crashCard,
-          pressed && { transform: [{ scale: 0.98 }], opacity: 0.92 },
-        ]}
-      >
+      <View style={[styles.crashCard, pressed && { transform: [{ scale: 0.98 }], opacity: 0.92 }]}>
         <View style={styles.crashWatermarkWrap}>
           <Ionicons name="flash" size={100} color="rgba(255,255,255,0.2)" />
         </View>
@@ -238,10 +194,7 @@ export default function HomeScreen() {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingBottom:
-              insets.bottom +
-              (Platform.OS === "web" ? 34 : 0) +
-              (isDesktop ? 40 : 90),
+            paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + (isDesktop ? 40 : 90),
             maxWidth: contentMaxWidth,
             alignSelf: "center" as const,
             width: "100%",
@@ -250,12 +203,7 @@ export default function HomeScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View
-          style={[
-            styles.header,
-            { paddingTop: topPadding + 12, paddingHorizontal: 0 },
-          ]}
-        >
+        <View style={[styles.header, { paddingTop: topPadding + 12, paddingHorizontal: 0 }]}>
           <View>
             <Text style={styles.greeting}>Hey, {firstName}</Text>
             <Text style={styles.tagline}>UIUC Housing — Find your match</Text>
@@ -269,12 +217,9 @@ export default function HomeScreen() {
 
         <ScamBanner />
 
-        <ZonePicker
-          selected={zoneFilter}
-          onSelect={(z) => {
-            setZoneFilter(z);
-          }}
-        />
+        <ZonePicker selected={zoneFilter} onSelect={z => {
+          setZoneFilter(z);
+        }} />
 
         <Text style={styles.sectionLabel}>Browse by housing type</Text>
 
@@ -287,24 +232,13 @@ export default function HomeScreen() {
                 onPress={() => navigateToCategory(cat.id)}
               >
                 {({ pressed }) => (
-                  <View
-                    style={[
-                      styles.categoryCard,
-                      styles.halfCard,
-                      {
-                        backgroundColor:
-                          CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)",
-                        borderColor: CARD_BORDERS[cat.id] || "#E0E0E0",
-                      },
-                      pressed && styles.cardPressed,
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.catIconWrap,
-                        { backgroundColor: cat.iconBg },
-                      ]}
-                    >
+                  <View style={[
+                    styles.categoryCard,
+                    styles.halfCard,
+                    { backgroundColor: CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)", borderColor: CARD_BORDERS[cat.id] || "#E0E0E0" },
+                    pressed && styles.cardPressed,
+                  ]}>
+                    <View style={[styles.catIconWrap, { backgroundColor: cat.iconBg }]}>
                       <Ionicons name={cat.icon} size={20} color={cat.color} />
                     </View>
                     <Text style={styles.catTitle}>{cat.title}</Text>
@@ -316,26 +250,18 @@ export default function HomeScreen() {
           </View>
 
           {fullCards.map((cat) => (
-            <Pressable key={cat.id} onPress={() => navigateToCategory(cat.id)}>
+            <Pressable
+              key={cat.id}
+              onPress={() => navigateToCategory(cat.id)}
+            >
               {({ pressed }) => (
-                <View
-                  style={[
-                    styles.categoryCard,
-                    styles.fullCard,
-                    {
-                      backgroundColor:
-                        CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)",
-                      borderColor: CARD_BORDERS[cat.id] || "#E0E0E0",
-                    },
-                    pressed && styles.cardPressed,
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.catIconWrap,
-                      { backgroundColor: cat.iconBg },
-                    ]}
-                  >
+                <View style={[
+                  styles.categoryCard,
+                  styles.fullCard,
+                  { backgroundColor: CARD_TINTS[cat.id] || "rgba(200,200,200,0.1)", borderColor: CARD_BORDERS[cat.id] || "#E0E0E0" },
+                  pressed && styles.cardPressed,
+                ]}>
+                  <View style={[styles.catIconWrap, { backgroundColor: cat.iconBg }]}>
                     <Ionicons name={cat.icon} size={20} color={cat.color} />
                   </View>
                   <View style={styles.fullCardText}>
@@ -380,11 +306,7 @@ export default function HomeScreen() {
               </View>
               <View style={[styles.trustCard, { marginTop: 10 }]}>
                 <View style={styles.trustHeader}>
-                  <Ionicons
-                    name="shield-checkmark"
-                    size={16}
-                    color={Colors.ocean}
-                  />
+                  <Ionicons name="shield-checkmark" size={16} color={Colors.ocean} />
                   <Text style={styles.trustTitle}>PopMatch Protection</Text>
                 </View>
                 {[
@@ -430,11 +352,7 @@ export default function HomeScreen() {
 
             <View style={styles.trustCard}>
               <View style={styles.trustHeader}>
-                <Ionicons
-                  name="shield-checkmark"
-                  size={16}
-                  color={Colors.ocean}
-                />
+                <Ionicons name="shield-checkmark" size={16} color={Colors.ocean} />
                 <Text style={styles.trustTitle}>PopMatch Protection</Text>
               </View>
               {[
@@ -459,49 +377,28 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: SCREEN_BG,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
+    paddingHorizontal: 20, paddingBottom: 16, backgroundColor: SCREEN_BG,
   },
-  greeting: {
-    fontFamily: "Nunito_800ExtraBold",
-    fontSize: 28,
-    color: Colors.ocean,
-  },
-  tagline: {
-    fontFamily: "Nunito_400Regular",
-    fontSize: 13,
-    color: Colors.textMuted,
-  },
+  greeting: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
+  tagline: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
   logoMark: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 44, height: 44, borderRadius: 14,
     backgroundColor: Colors.ocean + "18",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: Colors.ocean + "30",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1.5, borderColor: Colors.ocean + "30",
   },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 4, gap: 12 },
   sectionLabel: {
-    fontFamily: "Nunito_700Bold",
-    fontSize: 13,
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginTop: 4,
+    fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted,
+    textTransform: "uppercase", letterSpacing: 0.8, marginTop: 4,
   },
   catColumn: {
     gap: 16,
   },
   catTopRow: {
-    flexDirection: "row",
-    gap: 16,
+    flexDirection: "row", gap: 16,
   },
   desktopFeaturesRow: {
     flexDirection: "row",
@@ -533,19 +430,11 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   catIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 40, height: 40, borderRadius: 12,
+    alignItems: "center", justifyContent: "center",
   },
   catTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: DARK_TEAL },
-  catSubtitle: {
-    fontFamily: "Nunito_400Regular",
-    fontSize: 12,
-    color: SUBTITLE_GREY,
-    lineHeight: 17,
-  },
+  catSubtitle: { fontFamily: "Nunito_400Regular", fontSize: 12, color: SUBTITLE_GREY, lineHeight: 17 },
 
   matchmakerCard: {
     flexDirection: "row",
@@ -625,54 +514,23 @@ const styles = StyleSheet.create({
   featureText: { flex: 1 },
   statsRow: { flexDirection: "row", gap: 10 },
   statBox: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
-    alignItems: "center",
-    gap: 2,
+    flex: 1, backgroundColor: "#FFFFFF", borderRadius: 14,
+    padding: 14, alignItems: "center", gap: 2,
     shadowColor: "#8FAFB2",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 1,
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 1,
   },
   statBoxMid: { backgroundColor: Colors.ocean + "12" },
-  statNum: {
-    fontFamily: "Nunito_800ExtraBold",
-    fontSize: 24,
-    color: Colors.ocean,
-  },
-  statLabel: {
-    fontFamily: "Nunito_400Regular",
-    fontSize: 11,
-    color: Colors.textMuted,
-  },
+  statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 24, color: Colors.ocean },
+  statLabel: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
   trustCard: {
     backgroundColor: Colors.ocean + "10",
     borderRadius: 16,
-    padding: 16,
-    gap: 10,
+    padding: 16, gap: 10,
   },
   trustHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  trustTitle: {
-    fontFamily: "Nunito_700Bold",
-    fontSize: 14,
-    color: Colors.ocean,
-  },
+  trustTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
   tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  tipDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.ocean,
-    marginTop: 6,
-  },
-  tipText: {
-    fontFamily: "Nunito_400Regular",
-    fontSize: 13,
-    color: Colors.charcoal,
-    flex: 1,
-    lineHeight: 19,
-  },
+  tipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.ocean, marginTop: 6 },
+  tipText: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, flex: 1, lineHeight: 19 },
 });
