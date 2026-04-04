@@ -7,9 +7,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signOut } from "firebase/auth";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
+import { auth } from "@/lib/firebase";
 import { useResponsive } from "@/hooks/useResponsive";
 import BottomSheetModal from "@/components/BottomSheetModal";
 import CustomAvatar from "@/components/CustomAvatar";
@@ -252,25 +254,36 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleSignOut = () => {
-    Alert.alert(
-      "Sign Out",
-      "You'll need to verify your @illinois.edu email to sign back in.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: async () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            await AsyncStorage.multiRemove(["@popmatch_user", "@popmatch_onboarded"]);
-            await setCurrentUser(null);
-            await setIsOnboarded(false);
-            router.replace("/onboarding");
-          }
-        }
-      ]
-    );
+  const handleSignOut = async () => {
+    const confirmed =
+      Platform.OS === "web"
+        ? window.confirm("You'll need to verify your @illinois.edu email to sign back in.")
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              "Sign Out",
+              "You'll need to verify your @illinois.edu email to sign back in.",
+              [
+                { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+                { text: "Sign Out", style: "destructive", onPress: () => resolve(true) },
+              ]
+            );
+          });
+  
+    if (!confirmed) return;
+  
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      await signOut(auth);
+      await AsyncStorage.multiRemove(["@popmatch_user", "@popmatch_onboarded"]);
+      await setCurrentUser(null);
+      await setIsOnboarded(false);
+      router.replace("/onboarding");
+    } catch (error) {
+      console.error("Sign out failed:", error);
+      if (Platform.OS === "web") {
+        window.alert("Sign out failed. Please try again.");
+      }
+    }
   };
 
   const handleReset = () => {
@@ -284,6 +297,7 @@ export default function ProfileScreen() {
           style: "destructive",
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            await signOut(auth);
             await AsyncStorage.multiRemove([
               "@popmatch_user", "@popmatch_onboarded", "@popmatch_matches",
               "@popmatch_liked", "@popmatch_passed", "@popmatch_scam",

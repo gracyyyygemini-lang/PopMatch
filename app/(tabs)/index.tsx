@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform
 } from "react-native";
@@ -7,9 +7,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp, Zone } from "@/context/AppContext";
+import { useApp } from "@/context/AppContext";
 import { ScamBanner } from "@/components/ScamBanner";
-import ZonePicker from "@/components/ZonePicker";
 import { useResponsive } from "@/hooks/useResponsive";
 
 const DARK_TEAL = "#2C555C";
@@ -136,7 +135,6 @@ const ccStyles = StyleSheet.create({
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, friends, subleases } = useApp();
-  const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
   const { isDesktop, isTablet, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
 
@@ -144,8 +142,7 @@ export default function HomeScreen() {
 
   const navigateToCategory = (catId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const zoneParam = zoneFilter !== "all" ? `&zone=${zoneFilter}` : "";
-    router.push(`/marketplace?category=${catId}${zoneParam}` as any);
+    router.push(`/marketplace?category=${catId}` as any);
   };
 
   const halfCards = CATEGORIES.filter(c => c.layout === "half");
@@ -216,10 +213,6 @@ export default function HomeScreen() {
         </View>
 
         <ScamBanner />
-
-        <ZonePicker selected={zoneFilter} onSelect={z => {
-          setZoneFilter(z);
-        }} />
 
         <Text style={styles.sectionLabel}>Browse by housing type</Text>
 
