@@ -2,6 +2,8 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import { query } from "./db";
 import { sendOtp } from "./email";
+import { isSupabaseMvpEnabled } from "./lib/supabaseAdmin";
+import { registerMvpRoutes } from "./mvp/registerMvpRoutes";
 
 async function initDb() {
   await query(`
@@ -152,6 +154,10 @@ function randomCode(): string {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await initDb();
+
+  if (isSupabaseMvpEnabled()) {
+    registerMvpRoutes(app);
+  }
 
   // ─── AUTH / OTP ───────────────────────────────────────────────────────────────
 
@@ -458,68 +464,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ─── LISTINGS ────────────────────────────────────────────────────────────────
+  // ─── LISTINGS (legacy pg; disabled when Supabase MVP is enabled) ─────────────
 
-  app.get("/api/listings", async (req: Request, res: Response) => {
-    try {
-      const { category } = req.query;
-      const sql = category
-        ? `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
-           FROM listings l LEFT JOIN users u ON l.user_id = u.id
-           WHERE l.category = $1 AND l.leased = FALSE ORDER BY l.created_at DESC`
-        : `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
-           FROM listings l LEFT JOIN users u ON l.user_id = u.id
-           WHERE l.leased = FALSE ORDER BY l.created_at DESC`;
-      const params = category ? [category] : [];
-      const rows = await query(sql, params);
-      return res.json(rows);
-    } catch (err) {
-      console.error("GET /api/listings", err);
-      return res.status(500).json({ error: "Failed to fetch listings" });
-    }
-  });
-
-  app.post("/api/listings", async (req: Request, res: Response) => {
-    try {
-      const {
-        id, userId, buildingName, address = "", category = "semester_takeover",
-        leaseType = "full_year", pricePerMonth = 0, landlords = ["other"],
-        zone = "campustown", availableDuringBreaks = false, breakTypes = [],
-        description = "", eventName = "", startDate = "", endDate = "",
-      } = req.body;
-
-      if (!id || !userId || !buildingName) {
-        return res.status(400).json({ error: "id, userId, and buildingName are required" });
+  if (!isSupabaseMvpEnabled()) {
+    app.get("/api/listings", async (req: Request, res: Response) => {
+      try {
+        const { category } = req.query;
+        const sql = category
+          ? `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
+             FROM listings l LEFT JOIN users u ON l.user_id = u.id
+             WHERE l.category = $1 AND l.leased = FALSE ORDER BY l.created_at DESC`
+          : `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
+             FROM listings l LEFT JOIN users u ON l.user_id = u.id
+             WHERE l.leased = FALSE ORDER BY l.created_at DESC`;
+        const params = category ? [category] : [];
+        const rows = await query(sql, params);
+        return res.json(rows);
+      } catch (err) {
+        console.error("GET /api/listings", err);
+        return res.status(500).json({ error: "Failed to fetch listings" });
       }
+    });
 
-      const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
-      await query(
-        `INSERT INTO listings (id, user_id, building_name, address, category, lease_type,
-          price_per_month, landlord, zone, available_during_breaks, break_types,
-          description, event_name, start_date, end_date)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-         ON CONFLICT (id) DO NOTHING`,
-        [id, userId, buildingName, address, category, leaseType, pricePerMonth,
-          landlordJson, zone, availableDuringBreaks, breakTypes, description,
-          eventName, startDate, endDate]
-      );
-      return res.json({ success: true });
-    } catch (err) {
-      console.error("POST /api/listings", err);
-      return res.status(500).json({ error: "Failed to save listing" });
-    }
-  });
+    app.post("/api/listings", async (req: Request, res: Response) => {
+      try {
+        const {
+          id, userId, buildingName, address = "", category = "semester_takeover",
+          leaseType = "full_year", pricePerMonth = 0, landlords = ["other"],
+          zone = "campustown", availableDuringBreaks = false, breakTypes = [],
+          description = "", eventName = "", startDate = "", endDate = "",
+        } = req.body;
 
-  app.delete("/api/listings/:id", async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      await query("UPDATE listings SET leased = TRUE WHERE id = $1", [id]);
-      return res.json({ success: true });
-    } catch (err) {
-      console.error("DELETE /api/listings/:id", err);
-      return res.status(500).json({ error: "Failed to mark listing as leased" });
-    }
-  });
+        if (!id || !userId || !buildingName) {
+          return res.status(400).json({ error: "id, userId, and buildingName are required" });
+        }
+
+        const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
+        await query(
+          `INSERT INTO listings (id, user_id, building_name, address, category, lease_type,
+            price_per_month, landlord, zone, available_during_breaks, break_types,
+            description, event_name, start_date, end_date)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+           ON CONFLICT (id) DO NOTHING`,
+          [id, userId, buildingName, address, category, leaseType, pricePerMonth,
+            landlordJson, zone, availableDuringBreaks, breakTypes, description,
+            eventName, startDate, endDate]
+        );
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("POST /api/listings", err);
+        return res.status(500).json({ error: "Failed to save listing" });
+      }
+    });
+
+    app.delete("/api/listings/:id", async (req: Request, res: Response) => {
+      try {
+        const { id } = req.params;
+        await query("UPDATE listings SET leased = TRUE WHERE id = $1", [id]);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("DELETE /api/listings/:id", err);
+        return res.status(500).json({ error: "Failed to mark listing as leased" });
+      }
+    });
+  }
 
   // ─── STATS ───────────────────────────────────────────────────────────────────
 
@@ -629,108 +637,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ─── CONVERSATIONS & MESSAGES ────────────────────────────────────────────────
+  // ─── CONVERSATIONS & MESSAGES (legacy pg) ───────────────────────────────────
 
-  app.post("/api/conversations", async (req: Request, res: Response) => {
-    try {
-      const { participant1Id, participant2Id, listingId = "", listingBuilding = "", listingPrice = 0 } = req.body;
-      if (!participant1Id || !participant2Id) {
-        return res.status(400).json({ error: "participant1Id and participant2Id are required" });
-      }
+  if (!isSupabaseMvpEnabled()) {
+    app.post("/api/conversations", async (req: Request, res: Response) => {
+      try {
+        const { participant1Id, participant2Id, listingId = "", listingBuilding = "", listingPrice = 0 } = req.body;
+        if (!participant1Id || !participant2Id) {
+          return res.status(400).json({ error: "participant1Id and participant2Id are required" });
+        }
 
-      const existing = await query<{ id: string }>(
-        `SELECT id FROM conversations
-         WHERE ((participant1_id = $1 AND participant2_id = $2)
-            OR (participant1_id = $2 AND participant2_id = $1))
-           AND listing_id = $3`,
-        [participant1Id, participant2Id, listingId]
-      );
+        const existing = await query<{ id: string }>(
+          `SELECT id FROM conversations
+           WHERE ((participant1_id = $1 AND participant2_id = $2)
+              OR (participant1_id = $2 AND participant2_id = $1))
+             AND listing_id = $3`,
+          [participant1Id, participant2Id, listingId]
+        );
 
-      if (existing.length > 0) {
-        const [conv] = await query("SELECT * FROM conversations WHERE id = $1", [existing[0].id]);
+        if (existing.length > 0) {
+          const [conv] = await query("SELECT * FROM conversations WHERE id = $1", [existing[0].id]);
+          return res.json(conv);
+        }
+
+        const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        await query(
+          `INSERT INTO conversations (id, participant1_id, participant2_id, listing_id, listing_building, listing_price)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [id, participant1Id, participant2Id, listingId, listingBuilding, listingPrice]
+        );
+
+        const [conv] = await query("SELECT * FROM conversations WHERE id = $1", [id]);
         return res.json(conv);
+      } catch (err) {
+        console.error("POST /api/conversations", err);
+        return res.status(500).json({ error: "Failed to create conversation" });
       }
+    });
 
-      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-      await query(
-        `INSERT INTO conversations (id, participant1_id, participant2_id, listing_id, listing_building, listing_price)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [id, participant1Id, participant2Id, listingId, listingBuilding, listingPrice]
-      );
-
-      const [conv] = await query("SELECT * FROM conversations WHERE id = $1", [id]);
-      return res.json(conv);
-    } catch (err) {
-      console.error("POST /api/conversations", err);
-      return res.status(500).json({ error: "Failed to create conversation" });
-    }
-  });
-
-  app.get("/api/conversations/:userId", async (req: Request, res: Response) => {
-    try {
-      const { userId } = req.params;
-      const rows = await query(
-        `SELECT c.*,
-          u1.name as participant1_name, u1.avatar_color as participant1_avatar,
-          u2.name as participant2_name, u2.avatar_color as participant2_avatar,
-          (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
-          (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_at
-         FROM conversations c
-         LEFT JOIN users u1 ON c.participant1_id = u1.id
-         LEFT JOIN users u2 ON c.participant2_id = u2.id
-         WHERE c.participant1_id = $1 OR c.participant2_id = $1
-         ORDER BY COALESCE(
-           (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1),
-           c.created_at
-         ) DESC`,
-        [userId]
-      );
-      return res.json(rows);
-    } catch (err) {
-      console.error("GET /api/conversations/:userId", err);
-      return res.status(500).json({ error: "Failed to fetch conversations" });
-    }
-  });
-
-  app.post("/api/messages", async (req: Request, res: Response) => {
-    try {
-      const { conversationId, senderId, content } = req.body;
-      if (!conversationId || !senderId || !content) {
-        return res.status(400).json({ error: "conversationId, senderId, and content are required" });
+    app.get("/api/conversations/:userId", async (req: Request, res: Response) => {
+      try {
+        const { userId } = req.params;
+        const rows = await query(
+          `SELECT c.*,
+            u1.name as participant1_name, u1.avatar_color as participant1_avatar,
+            u2.name as participant2_name, u2.avatar_color as participant2_avatar,
+            (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
+            (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_at
+           FROM conversations c
+           LEFT JOIN users u1 ON c.participant1_id = u1.id
+           LEFT JOIN users u2 ON c.participant2_id = u2.id
+           WHERE c.participant1_id = $1 OR c.participant2_id = $1
+           ORDER BY COALESCE(
+             (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1),
+             c.created_at
+           ) DESC`,
+          [userId]
+        );
+        return res.json(rows);
+      } catch (err) {
+        console.error("GET /api/conversations/:userId", err);
+        return res.status(500).json({ error: "Failed to fetch conversations" });
       }
+    });
 
-      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-      await query(
-        `INSERT INTO messages (id, conversation_id, sender_id, content)
-         VALUES ($1, $2, $3, $4)`,
-        [id, conversationId, senderId, content]
-      );
+    app.post("/api/messages", async (req: Request, res: Response) => {
+      try {
+        const { conversationId, senderId, content } = req.body;
+        if (!conversationId || !senderId || !content) {
+          return res.status(400).json({ error: "conversationId, senderId, and content are required" });
+        }
 
-      const [msg] = await query("SELECT * FROM messages WHERE id = $1", [id]);
-      return res.json(msg);
-    } catch (err) {
-      console.error("POST /api/messages", err);
-      return res.status(500).json({ error: "Failed to send message" });
-    }
-  });
+        const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        await query(
+          `INSERT INTO messages (id, conversation_id, sender_id, content)
+           VALUES ($1, $2, $3, $4)`,
+          [id, conversationId, senderId, content]
+        );
 
-  app.get("/api/messages/:conversationId", async (req: Request, res: Response) => {
-    try {
-      const { conversationId } = req.params;
-      const rows = await query(
-        `SELECT m.*, u.name as sender_name, u.avatar_color as sender_avatar
-         FROM messages m
-         LEFT JOIN users u ON m.sender_id = u.id
-         WHERE m.conversation_id = $1
-         ORDER BY m.created_at ASC`,
-        [conversationId]
-      );
-      return res.json(rows);
-    } catch (err) {
-      console.error("GET /api/messages/:conversationId", err);
-      return res.status(500).json({ error: "Failed to fetch messages" });
-    }
-  });
+        const [msg] = await query("SELECT * FROM messages WHERE id = $1", [id]);
+        return res.json(msg);
+      } catch (err) {
+        console.error("POST /api/messages", err);
+        return res.status(500).json({ error: "Failed to send message" });
+      }
+    });
+
+    app.get("/api/messages/:conversationId", async (req: Request, res: Response) => {
+      try {
+        const { conversationId } = req.params;
+        const rows = await query(
+          `SELECT m.*, u.name as sender_name, u.avatar_color as sender_avatar
+           FROM messages m
+           LEFT JOIN users u ON m.sender_id = u.id
+           WHERE m.conversation_id = $1
+           ORDER BY m.created_at ASC`,
+          [conversationId]
+        );
+        return res.json(rows);
+      } catch (err) {
+        console.error("GET /api/messages/:conversationId", err);
+        return res.status(500).json({ error: "Failed to fetch messages" });
+      }
+    });
+  }
 
   const httpServer = createServer(app);
   return httpServer;

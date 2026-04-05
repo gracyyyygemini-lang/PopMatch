@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { View, Text, StyleSheet, Platform, FlatList, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApp, Conversation, ConversationSource } from "@/context/AppContext";
+import { isBackendMvpEnabled } from "@/lib/api/env";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
 
@@ -82,7 +83,15 @@ export default function InboxScreen() {
   const insets = useSafeAreaInsets();
   const { isDesktop, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
-  const { conversations } = useApp();
+  const { conversations, syncConversationsFromBackend } = useApp();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isBackendMvpEnabled()) return undefined;
+      syncConversationsFromBackend().catch(() => {});
+      return undefined;
+    }, [syncConversationsFromBackend]),
+  );
 
   const sorted = [...conversations].sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
 

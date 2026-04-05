@@ -498,9 +498,9 @@ export default function CrashCashScreen() {
   const containerWidth = isDesktop ? Math.min(640, screenWidth) : Math.min(screenWidth, contentMaxWidth);
   const cardWidth = (containerWidth - GRID_PAD * 2 - GRID_GAP) / 2;
 
-  const handleDm = (post: CrashPost) => {
+  const handleDm = async (post: CrashPost) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const convoId = startConversation(
+    const convoId = await startConversation(
       post.userId, post.userName, post.avatarColor, post.userEmail,
       post.id, `Crash: ${post.dates}`, 0, undefined, undefined, "crash_cash"
     );

@@ -31,6 +31,9 @@ import {
   Intent,
 } from "@/context/AppContext";
 import { auth } from "@/lib/firebase";
+import { isBackendMvpEnabled } from "@/lib/api/env";
+import { bootstrapProfile, saveMyProfile, signProfileImageUpload, commitProfileImage } from "@/lib/api/me";
+import { uploadLocalImageToSignedUrl } from "@/lib/api/listings";
 
 const MAJORS = [
   "Accountancy", "Aerospace Engineering", "Agricultural & Biological Engineering",
@@ -334,26 +337,109 @@ export default function OnboardingScreen() {
     ];
     const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
 
-    const user: UserProfile = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      major: major || "Undeclared",
-      bio: bio.trim(),
-      budget: isSupplySide ? 0 : budget,
-      gender,
-      genderPref: isSupplySide ? "mixed" : genderPref,
-      cleanliness: isSupplySide ? 3 : cleanliness,
-      noise: isSupplySide ? 3 : noise,
-      leaseType: isSupplySide ? "full_year" : leaseType,
-      zone: isSupplySide ? "campustown" : zone,
-      landlords: isSupplySide ? [] : landlords,
-      staysThanksgiving: isSupplySide ? false : staysThanksgiving,
-      staysSpringBreak: isSupplySide ? false : staysSpringBreak,
-      avatarColor,
-      intent,
-      ...(profileImage ? { profileImage } : {}),
-    };
+    let user: UserProfile;
+
+    if (isBackendMvpEnabled()) {
+      try {
+        await bootstrapProfile({
+          email: email.toLowerCase().trim(),
+          name: name.trim(),
+        });
+        let serverProfile = await saveMyProfile({
+          name: name.trim(),
+          email: email.toLowerCase().trim(),
+          major: major || "Undeclared",
+          bio: bio.trim(),
+          budget: isSupplySide ? 0 : budget,
+          gender,
+          genderPref: isSupplySide ? "mixed" : genderPref,
+          cleanliness: isSupplySide ? 3 : cleanliness,
+          noise: isSupplySide ? 3 : noise,
+          leaseType: isSupplySide ? "full_year" : leaseType,
+          zone: isSupplySide ? "campustown" : zone,
+          landlords: isSupplySide ? [] : landlords,
+          staysThanksgiving: isSupplySide ? false : staysThanksgiving,
+          staysSpringBreak: isSupplySide ? false : staysSpringBreak,
+          avatarColor,
+          intent,
+        });
+
+        if (
+          profileImage &&
+          (profileImage.startsWith("file:") ||
+            profileImage.startsWith("blob:") ||
+            profileImage.startsWith("content:"))
+        ) {
+          const sign = await signProfileImageUpload("jpg");
+          await uploadLocalImageToSignedUrl(profileImage, sign.signedUrl, "image/jpeg");
+          serverProfile = await commitProfileImage(sign.path);
+        }
+
+        user = {
+          id: serverProfile.id,
+          name: serverProfile.name,
+          email: serverProfile.email,
+          major: serverProfile.major,
+          bio: serverProfile.bio,
+          budget: serverProfile.budget,
+          gender: serverProfile.gender,
+          genderPref: serverProfile.genderPref,
+          cleanliness: serverProfile.cleanliness,
+          noise: serverProfile.noise,
+          leaseType: serverProfile.leaseType,
+          zone: serverProfile.zone,
+          landlords: serverProfile.landlords,
+          staysThanksgiving: serverProfile.staysThanksgiving,
+          staysSpringBreak: serverProfile.staysSpringBreak,
+          avatarColor: serverProfile.avatarColor,
+          intent,
+          ...(serverProfile.profileImage ? { profileImage: serverProfile.profileImage } : {}),
+        };
+      } catch (e) {
+        console.warn("Onboarding backend save failed, using local profile", e);
+        user = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+          name: name.trim(),
+          email: email.toLowerCase().trim(),
+          major: major || "Undeclared",
+          bio: bio.trim(),
+          budget: isSupplySide ? 0 : budget,
+          gender,
+          genderPref: isSupplySide ? "mixed" : genderPref,
+          cleanliness: isSupplySide ? 3 : cleanliness,
+          noise: isSupplySide ? 3 : noise,
+          leaseType: isSupplySide ? "full_year" : leaseType,
+          zone: isSupplySide ? "campustown" : zone,
+          landlords: isSupplySide ? [] : landlords,
+          staysThanksgiving: isSupplySide ? false : staysThanksgiving,
+          staysSpringBreak: isSupplySide ? false : staysSpringBreak,
+          avatarColor,
+          intent,
+          ...(profileImage ? { profileImage } : {}),
+        };
+      }
+    } else {
+      user = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        major: major || "Undeclared",
+        bio: bio.trim(),
+        budget: isSupplySide ? 0 : budget,
+        gender,
+        genderPref: isSupplySide ? "mixed" : genderPref,
+        cleanliness: isSupplySide ? 3 : cleanliness,
+        noise: isSupplySide ? 3 : noise,
+        leaseType: isSupplySide ? "full_year" : leaseType,
+        zone: isSupplySide ? "campustown" : zone,
+        landlords: isSupplySide ? [] : landlords,
+        staysThanksgiving: isSupplySide ? false : staysThanksgiving,
+        staysSpringBreak: isSupplySide ? false : staysSpringBreak,
+        avatarColor,
+        intent,
+        ...(profileImage ? { profileImage } : {}),
+      };
+    }
 
     await setCurrentUser(user);
     await setIsOnboarded(true);

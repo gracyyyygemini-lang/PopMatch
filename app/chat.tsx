@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
   Platform, KeyboardAvoidingView, ScrollView, Animated
@@ -9,6 +9,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, ChatMessage } from "@/context/AppContext";
+import { isBackendMvpEnabled } from "@/lib/api/env";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
 
@@ -102,7 +103,7 @@ function MessageBubble({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) {
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ conversationId: string; source?: string }>();
-  const { conversations, currentUser, getMessages, sendMessage } = useApp();
+  const { conversations, currentUser, getMessages, sendMessage, syncChatMessagesForConversation } = useApp();
   const [text, setText] = useState("");
   const source = params.source || "sublease";
   const activeChips = source === "crash_cash" ? CRASH_CASH_CHIPS
@@ -114,12 +115,17 @@ export default function ChatScreen() {
   const messages = getMessages(params.conversationId || "");
   const invertedMessages = [...messages].reverse();
 
+  useEffect(() => {
+    if (!isBackendMvpEnabled() || !params.conversationId) return;
+    syncChatMessagesForConversation(params.conversationId).catch(() => {});
+  }, [params.conversationId, syncChatMessagesForConversation]);
+
   const { isDesktop, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (!text.trim() || !params.conversationId) return;
-    sendMessage(params.conversationId, text.trim());
+    await sendMessage(params.conversationId, text.trim());
     setText("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [text, params.conversationId, sendMessage]);
@@ -209,7 +215,7 @@ export default function ChatScreen() {
             item={ic}
             onPress={() => {
               if (params.conversationId) {
-                sendMessage(params.conversationId, ic.label);
+                void sendMessage(params.conversationId, ic.label);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }
             }}

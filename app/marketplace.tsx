@@ -1,18 +1,19 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Platform, Modal, Animated, Image, Dimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, SubleasePost, Landlord, Zone } from "@/context/AppContext";
-import { useCallback } from "react";
 import FacePile from "@/components/FacePile";
 import MicroFeedback from "@/components/MicroFeedback";
 import ZonePicker from "@/components/ZonePicker";
 import { getApiUrl } from "@/lib/query-client";
+import { isBackendMvpEnabled } from "@/lib/api/env";
+import { fetchListings, markListingLeased } from "@/lib/api/listings";
 import { useResponsive } from "@/hooks/useResponsive";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -417,7 +418,7 @@ function SubleaseCard({ post, onMarkLeased }: {
   const rawCat = post.listingType === "roommate" ? "roommate_openings" : (post.category || "semester_takeover");
   const cat = rawCat === "summer" ? "summer_only" : ["spring", "fall", "full_year"].includes(rawCat) ? "semester_takeover" : rawCat;
   const catColor = CATEGORY_COLORS[cat] || Colors.ocean;
-  const isOwner = currentUser?.email === post.userEmail;
+  const isOwner = currentUser?.email === post.userEmail || currentUser?.id === post.userId;
   const [galleryVisible, setGalleryVisible] = useState(false);
 
   const allImages: string[] = [];
@@ -562,9 +563,9 @@ function SubleaseCard({ post, onMarkLeased }: {
         {!isOwner && (
           <TouchableOpacity
             style={styles.messageBtn}
-            onPress={() => {
+            onPress={async () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              const convoId = startConversation(
+              const convoId = await startConversation(
                 post.userId, post.userName, post.avatarColor, post.userEmail,
                 post.id, post.buildingName, post.pricePerMonth, post.unitType, undefined, "sublease"
               );
@@ -595,7 +596,7 @@ function SubleaseCard({ post, onMarkLeased }: {
 export default function MarketplaceScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category?: string; zone?: string; subFilter?: string }>();
-  const { subleases, removeSublease, currentUser } = useApp();
+  const { subleases, removeSublease, currentUser, setSubleases } = useApp();
   const { isDesktop, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
 
@@ -651,6 +652,24 @@ export default function MarketplaceScreen() {
       setZoneFilter(params.zone as Zone);
     }
   }, [params.category, params.zone, params.subFilter]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isBackendMvpEnabled()) return undefined;
+      let cancelled = false;
+      (async () => {
+        try {
+          const rows = await fetchListings();
+          if (!cancelled) await setSubleases(rows);
+        } catch (e) {
+          console.warn("fetchListings", e);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [setSubleases]),
+  );
 
   const catToFilter: Record<string, string> = {
     summer: "summer_only",
@@ -708,8 +727,12 @@ export default function MarketplaceScreen() {
     setLeasedPost(post);
     await removeSublease(post.id);
     try {
-      const delUrl = new URL(`/api/listings/${post.id}`, getApiUrl()).toString();
-      await fetch(delUrl, { method: "DELETE" });
+      if (isBackendMvpEnabled()) {
+        await markListingLeased(post.id);
+      } else {
+        const delUrl = new URL(`/api/listings/${post.id}`, getApiUrl()).toString();
+        await fetch(delUrl, { method: "DELETE" });
+      }
       const incUrl = new URL("/api/stats/increment", getApiUrl()).toString();
       await fetch(incUrl, {
         method: "POST",

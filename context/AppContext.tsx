@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { isBackendMvpEnabled } from "@/lib/api/env";
+import * as chatApi from "@/lib/api/chat";
 
 export type LeaseType = "full_year" | "fall_sublease" | "spring_sublease" | "summer_sublease";
 export type GenderPref = "girls_only" | "boys_only" | "mixed";
@@ -377,6 +379,7 @@ interface AppContextValue {
   addPassed: (id: string) => void;
   computeScore: (a: UserProfile, b: UserProfile) => number;
   subleases: SubleasePost[];
+  setSubleases: (posts: SubleasePost[]) => Promise<void>;
   addSublease: (post: SubleasePost) => void;
   removeSublease: (id: string) => void;
   crashPosts: CrashPost[];
@@ -388,9 +391,11 @@ interface AppContextValue {
   toggleVouch: (email: string) => Promise<void>;
   getTrustInfo: (userEmail: string) => TrustInfo;
   conversations: Conversation[];
-  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource) => string;
+  syncConversationsFromBackend: () => Promise<void>;
+  syncChatMessagesForConversation: (conversationId: string) => Promise<void>;
+  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource) => Promise<string>;
   startMatchConversation: (targetUser: UserProfile) => string;
-  sendMessage: (conversationId: string, content: string) => void;
+  sendMessage: (conversationId: string, content: string) => Promise<void>;
   getMessages: (conversationId: string) => ChatMessage[];
   mockLikedByIds: string[];
 }
@@ -496,7 +501,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [scamBannerDismissed, setScamBannerDismissed] = useState(false);
   const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
   const [passedUserIds, setPassedUserIds] = useState<string[]>([]);
-  const [subleases, setSubleases] = useState<SubleasePost[]>(DEMO_POSTS);
+  const [subleases, setSubleasesState] = useState<SubleasePost[]>(DEMO_POSTS);
   const [crashPosts, setCrashPosts] = useState<CrashPost[]>(DEMO_CRASH);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -570,16 +575,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_passed", JSON.stringify(updated));
   };
 
+  const setSubleases = async (posts: SubleasePost[]) => {
+    setSubleasesState(posts);
+    await AsyncStorage.setItem("@popmatch_subleases", JSON.stringify(posts));
+  };
+
   const addSublease = async (post: SubleasePost) => {
     const updated = [post, ...subleases];
-    setSubleases(updated);
-    await AsyncStorage.setItem("@popmatch_subleases", JSON.stringify(updated));
+    await setSubleases(updated);
   };
 
   const removeSublease = async (id: string) => {
     const updated = subleases.filter(s => s.id !== id);
-    setSubleases(updated);
-    await AsyncStorage.setItem("@popmatch_subleases", JSON.stringify(updated));
+    await setSubleases(updated);
   };
 
   const addCrashPost = async (post: CrashPost) => {
@@ -617,8 +625,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_friends", JSON.stringify(updated));
   };
 
-  const startConversation = (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource): string => {
+  const startConversation = async (
+    targetUserId: string,
+    targetName: string,
+    targetAvatar: string,
+    targetEmail: string,
+    listingId: string,
+    listingBuilding: string,
+    listingPrice: number,
+    listingUnitType?: string,
+    targetProfileImage?: string,
+    source?: ConversationSource,
+  ): Promise<string> => {
     if (!currentUser) return "";
+
+    if (isBackendMvpEnabled() && source === "sublease") {
+      try {
+        const c = await chatApi.createConversation({
+          participant2Id: targetUserId,
+          listingId,
+          listingBuilding,
+          listingPrice,
+          listingUnitType,
+          source,
+        });
+        const newConvo: Conversation = {
+          id: c.id,
+          participant1Id: c.participant1Id,
+          participant2Id: c.participant2Id,
+          listingId: c.listingId,
+          listingBuilding: c.listingBuilding,
+          listingPrice: c.listingPrice,
+          listingUnitType: listingUnitType ?? c.listingUnitType,
+          otherUserName: targetName,
+          otherUserAvatar: targetAvatar,
+          otherUserEmail: targetEmail,
+          otherUserProfileImage: targetProfileImage,
+          source,
+        };
+        setConversations((prev) => {
+          const updated = [newConvo, ...prev.filter((x) => x.id !== c.id)];
+          AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+        return c.id;
+      } catch (e) {
+        console.warn("startConversation API", e);
+      }
+    }
+
     const existing = conversations.find(c =>
       c.listingId === listingId &&
       ((c.participant1Id === currentUser.id && c.participant2Id === targetUserId) ||
@@ -642,7 +697,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     const updated = [newConvo, ...conversations];
     setConversations(updated);
-    AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updated));
+    await AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updated));
     return newConvo.id;
   };
 
@@ -676,24 +731,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return newConvo.id;
   };
 
-  const sendMessage = (conversationId: string, content: string) => {
+  const syncConversationsFromBackend = useCallback(async () => {
+    if (!isBackendMvpEnabled()) return;
+    try {
+      const rows = await chatApi.fetchConversations();
+      setConversations(rows);
+      await AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(rows));
+    } catch (e) {
+      console.warn("syncConversationsFromBackend", e);
+    }
+  }, []);
+
+  const syncChatMessagesForConversation = useCallback(async (conversationId: string) => {
+    if (!isBackendMvpEnabled()) return;
+    try {
+      const msgs = await chatApi.fetchMessages(conversationId);
+      setChatMessages((prev) => {
+        const rest = prev.filter((m) => m.conversationId !== conversationId);
+        const next = [...rest, ...msgs];
+        AsyncStorage.setItem("@popmatch_chatmessages", JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    } catch (e) {
+      console.warn("syncChatMessagesForConversation", e);
+    }
+  }, []);
+
+  const sendMessage = async (conversationId: string, content: string) => {
     if (!currentUser) return;
+    const trimmed = content.trim();
+    if (!trimmed) return;
+
+    if (isBackendMvpEnabled()) {
+      try {
+        const msg = await chatApi.sendMessage(conversationId, trimmed);
+        setChatMessages((prev) => {
+          const next = [...prev.filter((m) => m.id !== msg.id), msg];
+          AsyncStorage.setItem("@popmatch_chatmessages", JSON.stringify(next)).catch(() => {});
+          return next;
+        });
+        setConversations((prev) => {
+          const next = prev.map((c) =>
+            c.id === conversationId ? { ...c, lastMessage: trimmed, lastMessageAt: msg.createdAt } : c,
+          );
+          AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(next)).catch(() => {});
+          return next;
+        });
+        return;
+      } catch (e) {
+        console.warn("sendMessage API", e);
+      }
+    }
+
     const msg: ChatMessage = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
       conversationId,
       senderId: currentUser.id,
-      content,
+      content: trimmed,
       createdAt: Date.now(),
     };
-    const updatedMsgs = [...chatMessages, msg];
-    setChatMessages(updatedMsgs);
-    AsyncStorage.setItem("@popmatch_chatmessages", JSON.stringify(updatedMsgs));
-
-    const updatedConvos = conversations.map(c =>
-      c.id === conversationId ? { ...c, lastMessage: content, lastMessageAt: Date.now() } : c
-    );
-    setConversations(updatedConvos);
-    AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updatedConvos));
+    setChatMessages((prev) => {
+      const next = [...prev, msg];
+      AsyncStorage.setItem("@popmatch_chatmessages", JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    setConversations((prev) => {
+      const next = prev.map((c) =>
+        c.id === conversationId ? { ...c, lastMessage: trimmed, lastMessageAt: Date.now() } : c,
+      );
+      AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(next)).catch(() => {});
+      return next;
+    });
   };
 
   const getMessages = (conversationId: string): ChatMessage[] => {
@@ -766,15 +874,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     otpVerifiedEmail, setOtpVerifiedEmail,
     mockUsers: MOCK_USERS, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
-    subleases, addSublease, removeSublease,
+    subleases, setSubleases, addSublease, removeSublease,
     crashPosts, addCrashPost, updateCrashPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
-    conversations, startConversation, startMatchConversation, sendMessage, getMessages,
+    conversations, syncConversationsFromBackend, syncChatMessagesForConversation,
+    startConversation, startMatchConversation, sendMessage, getMessages,
     mockLikedByIds: MOCK_LIKED_BY_IDS,
   }), [
     currentUser, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, crashPosts, friends,
-    conversations, chatMessages
+    conversations, chatMessages,
+    syncConversationsFromBackend, syncChatMessagesForConversation,
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -13,6 +13,15 @@ import {
   useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType,
   KitchenType, BathroomType, CleaningFrequency, ShoePolicy, Amenities, DEFAULT_AMENITIES
 } from "@/context/AppContext";
+import { isBackendMvpEnabled } from "@/lib/api/env";
+import {
+  createListing,
+  fetchListings,
+  signListingImageUpload,
+  commitListingImage,
+  uploadLocalImageToSignedUrl,
+  patchListingExtras,
+} from "@/lib/api/listings";
 
 const LEASE_OPTIONS: { key: LeaseType; label: string; desc: string }[] = [
   { key: "full_year", label: "Full Year", desc: "Aug – Jul (12 months)" },
@@ -455,7 +464,61 @@ export default function PostSubleaseScreen() {
       hasParking: isSummer ? hasParking : undefined,
     };
 
-    await addSublease(post);
+    if (isBackendMvpEnabled() && currentUser) {
+      try {
+        const body = {
+          buildingName: buildingName.trim(),
+          address: address.trim(),
+          category: finalCategory,
+          leaseType,
+          pricePerMonth: Number(price),
+          landlords,
+          zone,
+          availableDuringBreaks,
+          breakTypes: selectedBreaks,
+          description: description.trim(),
+          kitchenType,
+          bathroomType,
+          unitType: unitType.trim() || undefined,
+          isPrivateBedroom,
+          isPrivateBathroom,
+          roomsAvailable: isHostMode && roomsAvailable ? Number(roomsAvailable) : undefined,
+          currentResidentBio: isHostMode && currentResidentBio.trim() ? currentResidentBio.trim() : undefined,
+          listingType: isHostMode ? "roommate" : "sublease",
+          moveInDate: moveInDate!.toISOString(),
+          moveOutDate: moveOutDate!.toISOString(),
+          amenities,
+          cleaningFrequency,
+          shoePolicy,
+          eventTag: isShortTerm ? eventTag : undefined,
+          subCategory: isSummer ? subCategory : undefined,
+          hasParking: isSummer ? hasParking : undefined,
+          roommatePreference: roommatePreference || undefined,
+        };
+        const created = await createListing(body);
+        let sortOrder = 0;
+        for (const uri of images) {
+          if (!uri) continue;
+          const sign = await signListingImageUpload(created.id, "jpg");
+          await uploadLocalImageToSignedUrl(uri, sign.signedUrl, "image/jpeg");
+          await commitListingImage(created.id, sign.path, sortOrder++);
+        }
+        if (floorPlanImage) {
+          const sign = await signListingImageUpload(created.id, "jpg");
+          await uploadLocalImageToSignedUrl(floorPlanImage, sign.signedUrl, "image/jpeg");
+          await commitListingImage(created.id, sign.path, 100);
+          await patchListingExtras(created.id, { floorPlanPath: sign.path });
+        }
+        const all = await fetchListings();
+        const full = all.find((p) => p.id === created.id);
+        await addSublease(full ?? created);
+      } catch (e) {
+        console.warn("post-sublease API failed, saving locally", e);
+        await addSublease(post);
+      }
+    } else {
+      await addSublease(post);
+    }
 
     if (currentUser) {
       await setCurrentUser({
