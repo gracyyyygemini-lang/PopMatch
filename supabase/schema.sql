@@ -131,6 +131,10 @@ CREATE INDEX IF NOT EXISTS idx_listings_user ON listings (user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages (conversation_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_p1 ON conversations (participant1_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_p2 ON conversations (participant2_id);
+-- One conversation per pair per listing, whichever participant opens it first.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_conversations_pair_listing ON conversations (
+  LEAST(participant1_id, participant2_id), GREATEST(participant1_id, participant2_id), listing_id
+);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 -- The UNIQUE constraint already indexes (liker_email, liked_email); this one
 -- covers the reverse lookup "who liked me".

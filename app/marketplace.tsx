@@ -14,6 +14,7 @@ import MicroFeedback from "@/components/MicroFeedback";
 import ZonePicker from "@/components/ZonePicker";
 import { getApiUrl } from "@/lib/query-client";
 import { useResponsive } from "@/hooks/useResponsive";
+import { showError } from "@/lib/alert";
 
 const CATEGORY_LABELS: Record<string, string> = {
   all: "All",
@@ -562,13 +563,17 @@ function SubleaseCard({ post, onMarkLeased }: {
         {!isOwner && (
           <TouchableOpacity
             style={styles.messageBtn}
-            onPress={() => {
+            onPress={async () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              const convoId = startConversation(
-                post.userId, post.userName, post.avatarColor, post.userEmail,
-                post.id, post.buildingName, post.pricePerMonth, post.unitType, undefined, "sublease"
-              );
-              router.push(`/chat?conversationId=${convoId}&source=sublease`);
+              try {
+                const convoId = await startConversation(
+                  post.userId, post.userName, post.avatarColor, post.userEmail,
+                  post.id, post.buildingName, post.pricePerMonth, post.unitType, undefined, "sublease"
+                );
+                router.push(`/chat?conversationId=${convoId}&source=sublease`);
+              } catch (error) {
+                showError("Couldn't start the chat", error instanceof Error ? error.message : String(error));
+              }
             }}
           >
             <Ionicons name="chatbubble-outline" size={15} color={Colors.ocean} />

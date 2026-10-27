@@ -143,6 +143,17 @@ async function initDb() {
     )
   `);
 
+  // One conversation per pair per listing, whichever side opens it first —
+  // otherwise two people tapping "message" at once each get their own thread.
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uniq_conversations_pair_listing ON conversations (
+      LEAST(participant1_id, participant2_id), GREATEST(participant1_id, participant2_id), listing_id
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages (conversation_id)`);
+  await query(`ALTER TABLE conversations ENABLE ROW LEVEL SECURITY`);
+  await query(`ALTER TABLE messages ENABLE ROW LEVEL SECURITY`);
+
   await query(`
     INSERT INTO stats (key, value) VALUES ('successful_subleases', 0)
     ON CONFLICT (key) DO NOTHING
@@ -209,6 +220,81 @@ function toUserProfile(row: UserRow) {
     college: row.college ?? "",
     organizations: row.organizations ?? [],
     ...(row.profile_image ? { profileImage: row.profile_image } : {}),
+  };
+}
+
+type ConversationRow = {
+  id: string; participant1_id: string; participant2_id: string;
+  listing_id: string | null; listing_building: string | null; listing_price: number | null;
+  created_at: Date | string;
+  participant1_name: string | null; participant1_avatar: string | null;
+  participant1_email: string | null; participant1_image: string | null;
+  participant2_name: string | null; participant2_avatar: string | null;
+  participant2_email: string | null; participant2_image: string | null;
+  last_message: string | null; last_message_at: Date | string | null;
+};
+
+/** Every conversations endpoint selects this, so each can describe the other person. */
+const CONVERSATION_SELECT = `
+  SELECT c.*,
+    u1.name AS participant1_name, u1.avatar_color AS participant1_avatar,
+    u1.email AS participant1_email, u1.profile_image AS participant1_image,
+    u2.name AS participant2_name, u2.avatar_color AS participant2_avatar,
+    u2.email AS participant2_email, u2.profile_image AS participant2_image,
+    last.content AS last_message, last.created_at AS last_message_at
+  FROM conversations c
+  LEFT JOIN users u1 ON c.participant1_id = u1.id
+  LEFT JOIN users u2 ON c.participant2_id = u2.id
+  LEFT JOIN LATERAL (
+    SELECT content, created_at FROM messages
+    WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
+  ) last ON TRUE`;
+
+/**
+ * Same idea as toUserProfile. `otherUser*` is whoever isn't `viewerId`, which
+ * is what the inbox and chat header show.
+ */
+function toConversation(row: ConversationRow, viewerId: string) {
+  const viewerIsP1 = row.participant1_id === viewerId;
+  const other = viewerIsP1
+    ? { name: row.participant2_name, avatar: row.participant2_avatar, email: row.participant2_email, image: row.participant2_image }
+    : { name: row.participant1_name, avatar: row.participant1_avatar, email: row.participant1_email, image: row.participant1_image };
+  return {
+    id: row.id,
+    participant1Id: row.participant1_id,
+    participant2Id: row.participant2_id,
+    listingId: row.listing_id ?? "",
+    listingBuilding: row.listing_building ?? "",
+    listingPrice: row.listing_price ?? 0,
+    createdAt: new Date(row.created_at).getTime(),
+    ...(row.last_message != null ? { lastMessage: row.last_message } : {}),
+    ...(row.last_message_at ? { lastMessageAt: new Date(row.last_message_at).getTime() } : {}),
+    otherUserName: other.name ?? "",
+    otherUserAvatar: other.avatar ?? "",
+    otherUserEmail: other.email ?? "",
+    ...(other.image ? { otherUserProfileImage: other.image } : {}),
+  };
+}
+
+type MessageRow = {
+  id: string; conversation_id: string; sender_id: string; content: string;
+  created_at: Date | string; sender_name: string | null; sender_avatar: string | null;
+};
+
+const MESSAGE_SELECT = `
+  SELECT m.*, u.name AS sender_name, u.avatar_color AS sender_avatar
+  FROM messages m
+  LEFT JOIN users u ON m.sender_id = u.id`;
+
+function toChatMessage(row: MessageRow) {
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    senderId: row.sender_id,
+    content: row.content,
+    createdAt: new Date(row.created_at).getTime(),
+    senderName: row.sender_name ?? "",
+    senderAvatar: row.sender_avatar ?? "",
   };
 }
 
@@ -690,6 +776,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ─── CONVERSATIONS & MESSAGES ────────────────────────────────────────────────
+  // Participants are users.id values. That id never changes once a row exists
+  // (POST /api/users upserts by email and keeps it), and the client adopts it,
+  // so it is stable per person across devices.
 
   app.post("/api/conversations", async (req: Request, res: Response) => {
     try {
@@ -697,29 +786,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!participant1Id || !participant2Id) {
         return res.status(400).json({ error: "participant1Id and participant2Id are required" });
       }
+      if (participant1Id === participant2Id) {
+        return res.status(400).json({ error: "You can't message yourself" });
+      }
 
-      const existing = await query<{ id: string }>(
-        `SELECT id FROM conversations
-         WHERE ((participant1_id = $1 AND participant2_id = $2)
-            OR (participant1_id = $2 AND participant2_id = $1))
-           AND listing_id = $3`,
-        [participant1Id, participant2Id, listingId]
+      // A conversation with an id that isn't a saved profile could never be
+      // read by anyone, so refuse it instead of storing messages into the void.
+      const known = await query<{ id: string }>(
+        "SELECT id FROM users WHERE id = ANY($1::varchar[])",
+        [[participant1Id, participant2Id]]
       );
-
-      if (existing.length > 0) {
-        const [conv] = await query("SELECT * FROM conversations WHERE id = $1", [existing[0].id]);
-        return res.json(conv);
+      if (!known.some(u => u.id === participant1Id)) {
+        return res.status(404).json({ error: "Your profile isn't saved on the server yet" });
+      }
+      if (!known.some(u => u.id === participant2Id)) {
+        return res.status(404).json({ error: "That person isn't on PopMatch yet" });
       }
 
       const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      // uniq_conversations_pair_listing makes this a no-op when either side
+      // already opened a conversation about this listing.
       await query(
         `INSERT INTO conversations (id, participant1_id, participant2_id, listing_id, listing_building, listing_price)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT DO NOTHING`,
         [id, participant1Id, participant2Id, listingId, listingBuilding, listingPrice]
       );
 
-      const [conv] = await query("SELECT * FROM conversations WHERE id = $1", [id]);
-      return res.json(conv);
+      const [conv] = await query<ConversationRow>(
+        `${CONVERSATION_SELECT}
+         WHERE ((c.participant1_id = $1 AND c.participant2_id = $2)
+             OR (c.participant1_id = $2 AND c.participant2_id = $1))
+           AND c.listing_id = $3`,
+        [participant1Id, participant2Id, listingId]
+      );
+      return res.json(toConversation(conv, participant1Id));
     } catch (err) {
       console.error("POST /api/conversations", err);
       return res.status(500).json({ error: "Failed to create conversation" });
@@ -729,23 +830,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversations/:userId", async (req: Request, res: Response) => {
     try {
       const { userId } = req.params;
-      const rows = await query(
-        `SELECT c.*,
-          u1.name as participant1_name, u1.avatar_color as participant1_avatar,
-          u2.name as participant2_name, u2.avatar_color as participant2_avatar,
-          (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
-          (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_at
-         FROM conversations c
-         LEFT JOIN users u1 ON c.participant1_id = u1.id
-         LEFT JOIN users u2 ON c.participant2_id = u2.id
+      const rows = await query<ConversationRow>(
+        `${CONVERSATION_SELECT}
          WHERE c.participant1_id = $1 OR c.participant2_id = $1
-         ORDER BY COALESCE(
-           (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1),
-           c.created_at
-         ) DESC`,
+         ORDER BY COALESCE(last.created_at, c.created_at) DESC`,
         [userId]
       );
-      return res.json(rows);
+      return res.json(rows.map(row => toConversation(row, String(userId))));
     } catch (err) {
       console.error("GET /api/conversations/:userId", err);
       return res.status(500).json({ error: "Failed to fetch conversations" });
@@ -754,20 +845,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/messages", async (req: Request, res: Response) => {
     try {
-      const { conversationId, senderId, content } = req.body;
+      const { conversationId, senderId } = req.body;
+      const content = typeof req.body?.content === "string" ? req.body.content.trim() : "";
       if (!conversationId || !senderId || !content) {
         return res.status(400).json({ error: "conversationId, senderId, and content are required" });
       }
 
-      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      const [conv] = await query<{ participant1_id: string; participant2_id: string }>(
+        "SELECT participant1_id, participant2_id FROM conversations WHERE id = $1",
+        [conversationId]
+      );
+      if (!conv) return res.status(404).json({ error: "Conversation not found" });
+      if (senderId !== conv.participant1_id && senderId !== conv.participant2_id) {
+        return res.status(403).json({ error: "Sender is not in this conversation" });
+      }
+
+      // The client sends its own id so a retry after a lost response can't
+      // post the same message twice.
+      const clientId = typeof req.body?.id === "string" && req.body.id ? req.body.id : null;
+      const id = clientId ?? Date.now().toString() + Math.random().toString(36).substr(2, 9);
       await query(
         `INSERT INTO messages (id, conversation_id, sender_id, content)
-         VALUES ($1, $2, $3, $4)`,
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (id) DO NOTHING`,
         [id, conversationId, senderId, content]
       );
 
-      const [msg] = await query("SELECT * FROM messages WHERE id = $1", [id]);
-      return res.json(msg);
+      const [msg] = await query<MessageRow>(`${MESSAGE_SELECT} WHERE m.id = $1`, [id]);
+      if (msg.conversation_id !== conversationId || msg.sender_id !== senderId) {
+        return res.status(409).json({ error: "Message id already in use" });
+      }
+      return res.json(toChatMessage(msg));
     } catch (err) {
       console.error("POST /api/messages", err);
       return res.status(500).json({ error: "Failed to send message" });
@@ -777,15 +885,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/messages/:conversationId", async (req: Request, res: Response) => {
     try {
       const { conversationId } = req.params;
-      const rows = await query(
-        `SELECT m.*, u.name as sender_name, u.avatar_color as sender_avatar
-         FROM messages m
-         LEFT JOIN users u ON m.sender_id = u.id
+      const rows = await query<MessageRow>(
+        `${MESSAGE_SELECT}
          WHERE m.conversation_id = $1
          ORDER BY m.created_at ASC`,
         [conversationId]
       );
-      return res.json(rows);
+      return res.json(rows.map(toChatMessage));
     } catch (err) {
       console.error("GET /api/messages/:conversationId", err);
       return res.status(500).json({ error: "Failed to fetch messages" });

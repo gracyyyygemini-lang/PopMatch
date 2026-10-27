@@ -7,9 +7,11 @@ import Colors from "@/constants/colors";
 import { useApp, Conversation, ConversationSource } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
+import { usePolling } from "@/hooks/usePolling";
 
 const DARK_TEAL = "#2C555C";
 const WARM_CREAM = "#FBFBF9";
+const INBOX_POLL_MS = 5000;
 
 const BADGE_CONFIG: Record<string, { bg: string; label: string; color: string }> = {
   crash_cash: { bg: "#FDECE8", label: "🚨 Urgent", color: "#C0392B" },
@@ -82,7 +84,8 @@ export default function InboxScreen() {
   const insets = useSafeAreaInsets();
   const { isDesktop, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
-  const { conversations } = useApp();
+  const { conversations, refreshConversations, messagingError } = useApp();
+  usePolling(refreshConversations, INBOX_POLL_MS);
 
   const sorted = [...conversations].sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
 
@@ -90,6 +93,15 @@ export default function InboxScreen() {
     <View style={[styles.container, { paddingTop: topPadding + 12 }]}>
       <View style={{ maxWidth: contentMaxWidth, alignSelf: "center" as const, width: "100%", flex: 1 }}>
         <Text style={styles.headerTitle}>Inbox</Text>
+        {messagingError && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="cloud-offline-outline" size={16} color={Colors.alertRed} />
+            <Text style={styles.errorText}>
+              {"Conversations aren't syncing — showing what's saved on this device. Retrying."}
+              {__DEV__ ? `\n${messagingError}` : ""}
+            </Text>
+          </View>
+        )}
         {sorted.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="chatbubbles-outline" size={52} color={Colors.textLight} />
@@ -117,6 +129,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: WARM_CREAM,
     paddingHorizontal: 20,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FDECEA",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+  },
+  errorText: {
+    flex: 1,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 12,
+    color: Colors.alertRed,
+    lineHeight: 17,
   },
   headerTitle: {
     fontFamily: "Nunito_800ExtraBold",

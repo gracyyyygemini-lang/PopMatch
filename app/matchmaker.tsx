@@ -12,6 +12,7 @@ import Animated, { FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useApp, UserProfile, VibeProfile } from "@/context/AppContext";
 import CustomAvatar from "@/components/CustomAvatar";
+import { showError } from "@/lib/alert";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CORAL = "#FF8C69";
@@ -309,9 +310,12 @@ export default function MatchmakerScreen() {
 
     const isMutual = await likeUser(user);
     if (isMutual) {
-      const convoId = startMatchConversation(user);
-      setMatchConvoId(convoId);
+      // The match is real either way; "Say hi" tries again if this fails.
+      setMatchConvoId("");
       setMatchModalUser(user);
+      try {
+        setMatchConvoId(await startMatchConversation(user));
+      } catch {}
     }
   }, [currentUser, computeScore, likeUser, startMatchConversation, addLiked, addMatch]);
 
@@ -320,10 +324,14 @@ export default function MatchmakerScreen() {
     await addPassed(user.id);
   }, [addPassed]);
 
-  const handleSayHi = () => {
+  const handleSayHi = async () => {
+    const user = matchModalUser;
     setMatchModalUser(null);
-    if (matchConvoId) {
-      router.push(`/chat?conversationId=${matchConvoId}&source=coseeker`);
+    try {
+      const convoId = matchConvoId || (user ? await startMatchConversation(user) : "");
+      if (convoId) router.push(`/chat?conversationId=${convoId}&source=coseeker`);
+    } catch (error) {
+      showError("Couldn't open the chat", error instanceof Error ? error.message : String(error));
     }
   };
 

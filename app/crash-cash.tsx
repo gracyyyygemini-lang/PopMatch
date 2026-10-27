@@ -13,6 +13,7 @@ import Colors from "@/constants/colors";
 import { useApp, CrashPost, CrashVibe, CrashCurrency, Zone } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
+import { showError } from "@/lib/alert";
 
 const DARK_TEAL = "#2C555C";
 const SUBTITLE_GREY = "#6B8A8F";
@@ -498,13 +499,17 @@ export default function CrashCashScreen() {
   const containerWidth = isDesktop ? Math.min(640, screenWidth) : Math.min(screenWidth, contentMaxWidth);
   const cardWidth = (containerWidth - GRID_PAD * 2 - GRID_GAP) / 2;
 
-  const handleDm = (post: CrashPost) => {
+  const handleDm = async (post: CrashPost) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const convoId = startConversation(
-      post.userId, post.userName, post.avatarColor, post.userEmail,
-      post.id, `Crash: ${post.dates}`, 0, undefined, undefined, "crash_cash"
-    );
-    router.push(`/chat?conversationId=${convoId}&source=crash_cash`);
+    try {
+      const convoId = await startConversation(
+        post.userId, post.userName, post.avatarColor, post.userEmail,
+        post.id, `Crash: ${post.dates}`, 0, undefined, undefined, "crash_cash"
+      );
+      router.push(`/chat?conversationId=${convoId}&source=crash_cash`);
+    } catch (error) {
+      showError("Couldn't start the chat", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const handleMarkFilled = (postId: string) => {

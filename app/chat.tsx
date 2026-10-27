@@ -11,8 +11,10 @@ import Colors from "@/constants/colors";
 import { useApp, ChatMessage } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
+import { usePolling } from "@/hooks/usePolling";
 
 const DARK_TEAL = "#2C555C";
+const CHAT_POLL_MS = 3000;
 const WARM_CREAM = "#FBFBF9";
 const SENT_CORAL = "#FF8C69";
 const RECEIVED_SEAFOAM = "#E8F6F3";
@@ -88,13 +90,25 @@ function formatTimestamp(ts: number) {
   return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-function MessageBubble({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) {
+function MessageBubble({ msg, isOwn, onRetry }: { msg: ChatMessage; isOwn: boolean; onRetry: () => void }) {
+  const failed = msg.status === "failed";
   return (
     <View style={[styles.bubbleRow, isOwn && styles.bubbleRowOwn]}>
-      <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
+      <TouchableOpacity
+        activeOpacity={failed ? 0.7 : 1}
+        disabled={!failed}
+        onPress={onRetry}
+        style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther, msg.status && styles.bubbleUnsent]}
+      >
         <Text style={[styles.bubbleText, isOwn && styles.bubbleTextOwn]}>{msg.content}</Text>
-        <Text style={[styles.bubbleTime, isOwn && styles.bubbleTimeOwn]}>{formatTimestamp(msg.createdAt)}</Text>
-      </View>
+        {failed ? (
+          <Text style={styles.failedText}>Not sent · tap to retry</Text>
+        ) : (
+          <Text style={[styles.bubbleTime, isOwn && styles.bubbleTimeOwn]}>
+            {msg.status === "sending" ? "Sending…" : formatTimestamp(msg.createdAt)}
+          </Text>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
@@ -102,7 +116,10 @@ function MessageBubble({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) {
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ conversationId: string; source?: string }>();
-  const { conversations, currentUser, getMessages, sendMessage } = useApp();
+  const {
+    conversations, currentUser, getMessages, sendMessage, retryMessage,
+    refreshMessages, refreshConversations, messagingError,
+  } = useApp();
   const [text, setText] = useState("");
   const source = params.source || "sublease";
   const activeChips = source === "crash_cash" ? CRASH_CASH_CHIPS
@@ -112,6 +129,16 @@ export default function ChatScreen() {
 
   const convo = conversations.find(c => c.id === params.conversationId);
   const messages = getMessages(params.conversationId || "");
+
+  // The other person's replies only arrive by polling.
+  usePolling(() => refreshMessages(params.conversationId || ""), CHAT_POLL_MS, !!params.conversationId);
+  // Opened from a link before the inbox has loaded: fetch the list before giving up on it.
+  const [convoListLoaded, setConvoListLoaded] = useState(false);
+  usePolling(
+    () => refreshConversations().finally(() => setConvoListLoaded(true)),
+    CHAT_POLL_MS,
+    !convo,
+  );
   const invertedMessages = [...messages].reverse();
 
   const { isDesktop, contentMaxWidth } = useResponsive();
@@ -131,7 +158,7 @@ export default function ChatScreen() {
           <Ionicons name="arrow-back" size={20} color={DARK_TEAL} />
         </TouchableOpacity>
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>Conversation not found</Text>
+          <Text style={styles.emptyText}>{convoListLoaded ? "Conversation not found" : "Loading…"}</Text>
         </View>
       </View>
     );
@@ -163,6 +190,16 @@ export default function ChatScreen() {
         </View>
       </View>
 
+      {messagingError && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="cloud-offline-outline" size={16} color={Colors.alertRed} />
+          <Text style={styles.errorText}>
+            {"Messages aren't syncing right now. Unsent ones stay here and keep retrying."}
+            {__DEV__ ? `\n${messagingError}` : ""}
+          </Text>
+        </View>
+      )}
+
       {source === "sublease" && convo.listingPrice > 0 && (
         <View style={styles.listingPreview}>
           <Ionicons name="home-outline" size={16} color={DARK_TEAL} />
@@ -183,7 +220,11 @@ export default function ChatScreen() {
         inverted={messages.length > 0}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <MessageBubble msg={item} isOwn={item.senderId === currentUser?.id} />
+          <MessageBubble
+            msg={item}
+            isOwn={!!item.status || item.senderId === currentUser?.id}
+            onRetry={() => retryMessage(item.id)}
+          />
         )}
         contentContainerStyle={[styles.messageList, messages.length === 0 && styles.messageListEmpty]}
         showsVerticalScrollIndicator={false}
@@ -360,6 +401,30 @@ const styles = StyleSheet.create({
   },
   bubbleTimeOwn: {
     color: "rgba(255,255,255,0.7)",
+  },
+  bubbleUnsent: {
+    opacity: 0.75,
+  },
+  failedText: {
+    fontFamily: "Nunito_700Bold",
+    fontSize: 11,
+    color: Colors.white,
+    alignSelf: "flex-end",
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FDECEA",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  errorText: {
+    flex: 1,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 12,
+    color: Colors.alertRed,
+    lineHeight: 17,
   },
   inputBar: {
     flexDirection: "row",

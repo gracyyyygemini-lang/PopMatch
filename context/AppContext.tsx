@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchUserProfile, fetchUsers, mergeProfile, saveUserProfile } from "@/lib/users";
 import { fetchMutualMatches, saveLike } from "@/lib/likes";
+import { apiErrorMessage, fetchConversations, fetchMessages, openConversation, postMessage } from "@/lib/messages";
 
 export type LeaseType = "full_year" | "fall_sublease" | "spring_sublease" | "summer_sublease";
 export type GenderPref = "girls_only" | "boys_only" | "mixed";
@@ -160,6 +161,7 @@ export interface Conversation {
   otherUserEmail?: string;
   otherUserProfileImage?: string;
   source?: ConversationSource;
+  createdAt?: number;
 }
 
 export interface ChatMessage {
@@ -168,6 +170,10 @@ export interface ChatMessage {
   senderId: string;
   content: string;
   createdAt: number;
+  senderName?: string;
+  senderAvatar?: string;
+  /** Set only on this device until the server has the message. */
+  status?: "sending" | "failed";
 }
 
 
@@ -396,11 +402,19 @@ interface AppContextValue {
   removeFriend: (email: string) => Promise<void>;
   toggleVouch: (email: string) => Promise<void>;
   getTrustInfo: (userEmail: string) => TrustInfo;
+  /** From the conversations table; the device copy is only a cache for first paint. */
   conversations: Conversation[];
-  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource) => string;
-  startMatchConversation: (targetUser: UserProfile) => string;
+  /** Opens (or finds) the conversation on the server and resolves its id. Throws with a user-facing message. */
+  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource) => Promise<string>;
+  startMatchConversation: (targetUser: UserProfile) => Promise<string>;
+  /** Shows the message at once; it stays marked "sending"/"failed" and is retried until the server has it. */
   sendMessage: (conversationId: string, content: string) => void;
+  retryMessage: (messageId: string) => void;
   getMessages: (conversationId: string) => ChatMessage[];
+  refreshConversations: () => Promise<void>;
+  refreshMessages: (conversationId: string) => Promise<void>;
+  /** Why the last load or send failed; null once one succeeds. */
+  messagingError: string | null;
   /** Records the like and resolves true if they had already liked us back. */
   likeUser: (user: UserProfile) => Promise<boolean>;
 }
@@ -415,6 +429,21 @@ const USER_KEY = "@popmatch_user";
 /** Set while the cached profile has changes the server hasn't accepted yet. */
 const UNSYNCED_KEY = "@popmatch_user_unsynced";
 const SYNC_RETRY_MS = 30000;
+const CONVERSATIONS_KEY = "@popmatch_conversations";
+const CHAT_MESSAGES_KEY = "@popmatch_chatmessages";
+const MESSAGE_RETRY_MS = 5000;
+
+/** Server rows win; unsent local ones (status set) are kept until the server has them. */
+function mergeMessages(local: ChatMessage[], server: ChatMessage[], conversationId: string): ChatMessage[] {
+  const serverIds = new Set(server.map(m => m.id));
+  const others = local.filter(m => m.conversationId !== conversationId);
+  const unsent = local.filter(m => m.conversationId === conversationId && m.status && !serverIds.has(m.id));
+  return [...others, ...server, ...unsent];
+}
+
+function newId(): string {
+  return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
 
 const AppContext = createContext<AppContextValue | null>(null);
 
@@ -523,6 +552,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [messagingError, setMessagingError] = useState<string | null>(null);
+  /** The users.id the server confirmed for this email. Messaging uses only this, never a locally generated id. */
+  const serverIdRef = useRef<{ email: string; id: string } | null>(null);
+  /** No cache writes until the cache has been read, or an empty first render would wipe it. */
+  const messagingHydrated = useRef(false);
+  const sendingIds = useRef(new Set<string>());
 
   useEffect(() => {
     (async () => {
@@ -536,8 +571,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const storedSubleases = await AsyncStorage.getItem("@popmatch_subleases");
         const storedCrash = await AsyncStorage.getItem("@popmatch_crash");
         const storedFriends = await AsyncStorage.getItem("@popmatch_friends");
-        const storedConvos = await AsyncStorage.getItem("@popmatch_conversations");
-        const storedChatMsgs = await AsyncStorage.getItem("@popmatch_chatmessages");
+        const storedConvos = await AsyncStorage.getItem(CONVERSATIONS_KEY);
+        const storedChatMsgs = await AsyncStorage.getItem(CHAT_MESSAGES_KEY);
 
         if (stored) {
           const cached: UserProfile = JSON.parse(stored);
@@ -552,11 +587,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (storedSubleases) setSubleases(JSON.parse(storedSubleases));
         if (storedCrash) setCrashPosts(JSON.parse(storedCrash));
         if (storedFriends) setFriends(JSON.parse(storedFriends));
-        if (storedConvos) setConversations(JSON.parse(storedConvos));
-        if (storedChatMsgs) setChatMessages(JSON.parse(storedChatMsgs));
-      } catch {}
+        // Cache only: anything already fetched from the server wins. A send
+        // the app was closed in the middle of is unconfirmed, so it's retried.
+        if (storedConvos) {
+          const cached: Conversation[] = JSON.parse(storedConvos);
+          setConversations(prev => (prev.length ? prev : cached));
+        }
+        if (storedChatMsgs) {
+          const cached: ChatMessage[] = JSON.parse(storedChatMsgs);
+          setChatMessages(prev => {
+            const fetched = new Set(prev.map(m => m.id));
+            const restored = cached
+              .filter(m => !fetched.has(m.id))
+              .map(m => (m.status ? { ...m, status: "failed" as const } : m));
+            return [...restored, ...prev];
+          });
+        }
+      } catch (error) {
+        console.error("Couldn't read the device cache:", error);
+      } finally {
+        messagingHydrated.current = true;
+      }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!messagingHydrated.current) return;
+    AsyncStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations)).catch(error =>
+      console.error("Couldn't cache conversations:", error));
+  }, [conversations]);
+
+  useEffect(() => {
+    if (!messagingHydrated.current) return;
+    AsyncStorage.setItem(CHAT_MESSAGES_KEY, JSON.stringify(chatMessages)).catch(error =>
+      console.error("Couldn't cache messages:", error));
+  }, [chatMessages]);
 
   const cacheUser = async (user: UserProfile | null) => {
     if (user) await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -565,6 +630,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /** The server may hand back a different id (upsert by email keeps the original). */
   const adoptServerId = async (saved: UserProfile) => {
+    serverIdRef.current = { email: saved.email.toLowerCase(), id: saved.id };
     setCurrentUserState(prev => {
       if (!prev || prev.email !== saved.email || prev.id === saved.id) return prev;
       const next = { ...prev, id: saved.id };
@@ -611,6 +677,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
       const merged = mergeProfile(cached, server);
+      serverIdRef.current = { email: server.email.toLowerCase(), id: server.id };
       setCurrentUserState(prev => (prev?.email === merged.email ? merged : prev));
       await cacheUser(merged);
       setProfileSyncError(null);
@@ -639,6 +706,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await cacheUser(user);
     if (!user) {
       setProfileSyncError(null);
+      // The next person to sign in on this device mustn't see these, and
+      // unsent ones couldn't be sent as them anyway.
+      serverIdRef.current = null;
+      setConversations([]);
+      setChatMessages([]);
+      setMessagingError(null);
       return true;
     }
     return pushProfile(user);
@@ -737,84 +810,172 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_friends", JSON.stringify(updated));
   };
 
-  const startConversation = (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource): string => {
-    if (!currentUser) return "";
-    const existing = conversations.find(c =>
-      c.listingId === listingId &&
-      ((c.participant1Id === currentUser.id && c.participant2Id === targetUserId) ||
-       (c.participant1Id === targetUserId && c.participant2Id === currentUser.id))
-    );
-    if (existing) return existing.id;
-
-    const newConvo: Conversation = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
-      participant1Id: currentUser.id,
-      participant2Id: targetUserId,
-      listingId,
-      listingBuilding,
-      listingPrice,
-      listingUnitType,
-      otherUserName: targetName,
-      otherUserAvatar: targetAvatar,
-      otherUserEmail: targetEmail,
-      otherUserProfileImage: targetProfileImage,
-      source,
-    };
-    const updated = [newConvo, ...conversations];
-    setConversations(updated);
-    AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updated));
-    return newConvo.id;
+  /** console.error plus messagingError, so the chat and inbox can say so. */
+  const reportMessagingFailure = (what: string, error: unknown) => {
+    console.error(`[messaging] ${what}:`, error);
+    setMessagingError(apiErrorMessage(error));
   };
 
-  const startMatchConversation = (targetUser: UserProfile): string => {
-    if (!currentUser) return "";
-    const matchListingId = `match_${currentUser.id}_${targetUser.id}`;
-    const existing = conversations.find(c =>
-      c.listingId === matchListingId &&
-      ((c.participant1Id === currentUser.id && c.participant2Id === targetUser.id) ||
-       (c.participant1Id === targetUser.id && c.participant2Id === currentUser.id))
-    );
-    if (existing) return existing.id;
+  /**
+   * The id conversations and messages are keyed on. Only an id the server
+   * returned counts: until the profile has saved, currentUser.id may be one
+   * this device generated, and messages sent under it would reach no one.
+   */
+  const resolveMyId = async (): Promise<string> => {
+    if (!currentUser) throw new Error("Sign in to send messages.");
+    const email = currentUser.email.toLowerCase();
+    if (serverIdRef.current?.email === email) return serverIdRef.current.id;
+    const server = await fetchUserProfile(email);
+    if (!server) {
+      throw new Error("Your profile hasn't reached the server yet, so messages can't be sent. It's retrying.");
+    }
+    await adoptServerId(server);
+    return server.id;
+  };
 
-    const newConvo: Conversation = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
-      participant1Id: currentUser.id,
-      participant2Id: targetUser.id,
-      listingId: matchListingId,
-      listingBuilding: "Matchmaker",
-      listingPrice: 0,
-      listingUnitType: "Roommate Match",
-      otherUserName: targetUser.name,
-      otherUserAvatar: targetUser.avatarColor,
-      otherUserEmail: targetUser.email,
-      otherUserProfileImage: targetUser.profileImage,
-      source: "coseeker",
-    };
-    const updated = [newConvo, ...conversations];
-    setConversations(updated);
-    AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updated));
-    return newConvo.id;
+  /** listingUnitType and source have no columns; keep whatever this device knew. */
+  const storeConversation = (conv: Conversation, local: Partial<Conversation>) => {
+    setConversations(prev => [{ ...conv, ...local }, ...prev.filter(c => c.id !== conv.id)]);
+  };
+
+  const startConversation = async (_targetUserId: string, targetName: string, _targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, _targetProfileImage?: string, source?: ConversationSource): Promise<string> => {
+    try {
+      const myId = await resolveMyId();
+      // A post carries whatever id its author's device had at the time; the
+      // users table is the authority, looked up by email the way likes are.
+      const target = await fetchUserProfile(targetEmail);
+      if (!target) throw new Error(`${targetName} isn't on PopMatch yet, so messages can't reach them.`);
+      const conv = await openConversation({
+        participant1Id: myId, participant2Id: target.id, listingId, listingBuilding, listingPrice,
+      });
+      storeConversation(conv, { listingUnitType, source });
+      return conv.id;
+    } catch (error) {
+      console.error("[messaging] Couldn't open the conversation:", error);
+      throw new Error(apiErrorMessage(error));
+    }
+  };
+
+  const startMatchConversation = async (targetUser: UserProfile): Promise<string> => {
+    try {
+      const myId = await resolveMyId();
+      // Sorted so both people get the same listing id, whichever of them opens it.
+      const [a, b] = [myId, targetUser.id].sort();
+      const conv = await openConversation({
+        participant1Id: myId, participant2Id: targetUser.id,
+        listingId: `match_${a}_${b}`, listingBuilding: "Matchmaker", listingPrice: 0,
+      });
+      storeConversation(conv, { listingUnitType: "Roommate Match", source: "coseeker" });
+      return conv.id;
+    } catch (error) {
+      console.error("[messaging] Couldn't open the match conversation:", error);
+      throw new Error(apiErrorMessage(error));
+    }
+  };
+
+  const refreshConversations = async () => {
+    if (!currentUser) return;
+    try {
+      const myId = await resolveMyId();
+      const list = await fetchConversations(myId);
+      if (serverIdRef.current?.id !== myId) return; // signed out meanwhile
+      setConversations(prev => {
+        const known = new Map(prev.map(c => [c.id, c]));
+        return list.map(c => ({
+          ...c,
+          listingUnitType: known.get(c.id)?.listingUnitType
+            ?? (c.listingId.startsWith("match_") ? "Roommate Match" : undefined),
+          source: known.get(c.id)?.source,
+        }));
+      });
+      setMessagingError(null);
+    } catch (error) {
+      reportMessagingFailure("Couldn't load conversations; showing the cached copy", error);
+    }
+  };
+
+  useEffect(() => {
+    refreshConversations();
+  }, [currentUser?.email]);
+
+  /** When each send was confirmed, so a fetch that started earlier can't hide it. */
+  const confirmedAt = useRef(new Map<string, number>());
+
+  const refreshMessages = async (conversationId: string) => {
+    if (!currentUser) return;
+    const startedAt = Date.now();
+    try {
+      const list = await fetchMessages(conversationId);
+      const serverIds = new Set(list.map(m => m.id));
+      setChatMessages(prev => {
+        const landedSince = prev.filter(m =>
+          m.conversationId === conversationId && !m.status && !serverIds.has(m.id) &&
+          (confirmedAt.current.get(m.id) ?? 0) > startedAt);
+        return [...mergeMessages(prev, list, conversationId), ...landedSince];
+      });
+      setMessagingError(null);
+    } catch (error) {
+      reportMessagingFailure("Couldn't load messages; showing the cached copy", error);
+    }
+  };
+
+  const deliver = async (msg: ChatMessage) => {
+    if (sendingIds.current.has(msg.id)) return;
+    sendingIds.current.add(msg.id);
+    setChatMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, status: "sending" } : m)));
+    try {
+      const senderId = await resolveMyId();
+      const saved = await postMessage({
+        id: msg.id, conversationId: msg.conversationId, senderId, content: msg.content,
+      });
+      confirmedAt.current.set(saved.id, Date.now());
+      setChatMessages(prev => prev.map(m => (m.id === msg.id ? saved : m)));
+      setMessagingError(null);
+    } catch (error) {
+      setChatMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, status: "failed" } : m)));
+      reportMessagingFailure("Message not sent; kept on this device and retrying", error);
+    } finally {
+      sendingIds.current.delete(msg.id);
+    }
   };
 
   const sendMessage = (conversationId: string, content: string) => {
     if (!currentUser) return;
     const msg: ChatMessage = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+      id: newId(),
       conversationId,
-      senderId: currentUser.id,
+      senderId: serverIdRef.current?.id ?? currentUser.id,
       content,
       createdAt: Date.now(),
+      status: "sending",
     };
-    const updatedMsgs = [...chatMessages, msg];
-    setChatMessages(updatedMsgs);
-    AsyncStorage.setItem("@popmatch_chatmessages", JSON.stringify(updatedMsgs));
-
-    const updatedConvos = conversations.map(c =>
-      c.id === conversationId ? { ...c, lastMessage: content, lastMessageAt: Date.now() } : c
-    );
-    setConversations(updatedConvos);
-    AsyncStorage.setItem("@popmatch_conversations", JSON.stringify(updatedConvos));
+    setChatMessages(prev => [...prev, msg]);
+    setConversations(prev => prev.map(c =>
+      c.id === conversationId ? { ...c, lastMessage: content, lastMessageAt: msg.createdAt } : c
+    ));
+    deliver(msg);
   };
+
+  // The retry timer outlives renders, so it reads these instead of a closure.
+  const chatMessagesRef = useRef(chatMessages);
+  chatMessagesRef.current = chatMessages;
+  const deliverRef = useRef(deliver);
+  deliverRef.current = deliver;
+
+  const retryMessage = (messageId: string) => {
+    const msg = chatMessagesRef.current.find(m => m.id === messageId && m.status);
+    if (msg) deliverRef.current(msg);
+  };
+
+  // A failed send is never dropped: keep retrying until the server has it.
+  const hasFailedMessages = chatMessages.some(m => m.status === "failed");
+  useEffect(() => {
+    if (!hasFailedMessages) return;
+    const timer = setInterval(() => {
+      chatMessagesRef.current.filter(m => m.status === "failed").forEach(m => deliverRef.current(m));
+    }, MESSAGE_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [hasFailedMessages]);
 
   const getMessages = (conversationId: string): ChatMessage[] => {
     return chatMessages.filter(m => m.conversationId === conversationId).sort((a, b) => a.createdAt - b.createdAt);
@@ -902,12 +1063,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     subleases, addSublease, removeSublease,
     crashPosts, addCrashPost, updateCrashPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
-    conversations, startConversation, startMatchConversation, sendMessage, getMessages,
+    conversations, startConversation, startMatchConversation, sendMessage, retryMessage, getMessages,
+    refreshConversations, refreshMessages, messagingError,
     likeUser,
   }), [
     currentUser, profileSyncError, users, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, crashPosts, friends,
-    conversations, chatMessages
+    conversations, chatMessages, messagingError
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
