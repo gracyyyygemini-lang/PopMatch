@@ -2,16 +2,21 @@ import { Platform } from "react-native";
 import { fetch } from "expo/fetch";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-/** Local Express port when nothing else is configured (see server/index.ts). */
-const DEV_API_PORT = 5000;
+/**
+ * Local Express port in development. The server reads PORT from .env, but only
+ * EXPO_PUBLIC_* variables reach the app bundle, so a non-default server port
+ * has to be repeated as EXPO_PUBLIC_API_PORT.
+ */
+const DEV_API_PORT = Number(process.env.EXPO_PUBLIC_API_PORT) || 5000;
 
 /**
  * Base URL for the Express API, resolved in order of specificity:
  *
  *   1. EXPO_PUBLIC_API_URL  — explicit, use when the API lives on its own host
  *   2. EXPO_PUBLIC_DOMAIN   — the host serving both app and API
- *   3. same origin (web)    — the server serves dist/ and /api together
- *   4. localhost (native)   — development default
+ *   3. localhost (dev)      — Expo serves web on :8081 and native bundles from
+ *                             there too; the API is a separate process
+ *   4. same origin (web)    — production: the server serves dist/ and /api together
  */
 export function getApiUrl(): string {
   const explicit = process.env.EXPO_PUBLIC_API_URL;
@@ -24,7 +29,10 @@ export function getApiUrl(): string {
     return new URL(withProtocol(domain)).href;
   }
 
-  if (Platform.OS === "web" && typeof window !== "undefined") {
+  // Never same-origin in dev: the Expo dev server answers every unknown path,
+  // /api/* included, with 200 and the app's HTML, so a misrouted call
+  // "succeeds" with a body that isn't JSON.
+  if (!__DEV__ && Platform.OS === "web" && typeof window !== "undefined") {
     return new URL(window.location.origin).href;
   }
 
@@ -44,6 +52,16 @@ async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
+  }
+  // Every /api route responds with JSON. Anything else means the request
+  // reached something other than the Express API — usually the Expo dev
+  // server's HTML fallback — and must not count as success.
+  const type = res.headers.get("content-type") ?? "";
+  if (!type.includes("application/json")) {
+    throw new Error(
+      `Expected JSON from ${res.url || "the API"} but got "${type || "no content type"}". ` +
+        `Is the API running, and is getApiUrl() (${getApiUrl()}) pointing at it?`
+    );
   }
 }
 

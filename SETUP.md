@@ -147,9 +147,11 @@ npm run server:dev     # API on http://localhost:5000
 npm run expo:dev       # app — press w for web
 ```
 
-With no domain variables set, the web build talks to its own origin and the
-native app falls back to `http://localhost:5000`. Nothing Replit-specific
-remains.
+With no domain variables set, the app calls the API at `http://localhost:5000`
+in development — on web too, since Expo serves the web app from `:8081`. A
+production web build talks to its own origin. Run both servers: if the API is
+down, a red "Your profile isn't saved yet" banner appears and the app keeps
+retrying. Nothing Replit-specific remains.
 
 ---
 

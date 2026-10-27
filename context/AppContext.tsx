@@ -365,6 +365,10 @@ interface AppContextValue {
   currentUser: UserProfile | null;
   /** Caches on the device and saves to the users table; resolves true once saved. */
   setCurrentUser: (user: UserProfile | null) => Promise<boolean>;
+  /** Why the profile isn't in the users table yet; null once it is. */
+  profileSyncError: string | null;
+  /** Re-runs the save immediately (it also retries on its own while failing). */
+  retryProfileSync: () => Promise<void>;
   isOnboarded: boolean;
   setIsOnboarded: (v: boolean) => void;
   otpVerifiedEmail: string;
@@ -410,6 +414,7 @@ const USE_MOCK_USERS = process.env.EXPO_PUBLIC_USE_MOCK_USERS === "true";
 const USER_KEY = "@popmatch_user";
 /** Set while the cached profile has changes the server hasn't accepted yet. */
 const UNSYNCED_KEY = "@popmatch_user_unsynced";
+const SYNC_RETRY_MS = 30000;
 
 const AppContext = createContext<AppContextValue | null>(null);
 
@@ -505,6 +510,7 @@ function computeScore(a: UserProfile, b: UserProfile): number {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
+  const [profileSyncError, setProfileSyncError] = useState<string | null>(null);
   const [users, setUsers] = useState<UserProfile[]>(USE_MOCK_USERS ? MOCK_USERS : []);
   const [isOnboarded, setIsOnboardedState] = useState(false);
   const [otpVerifiedEmail, setOtpVerifiedEmailState] = useState("");
@@ -536,7 +542,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (stored) {
           const cached: UserProfile = JSON.parse(stored);
           setCurrentUserState(cached);
-          reconcileWithServer(cached);
+          syncProfile(cached);
         }
         if (onboarded === "true") setIsOnboardedState(true);
         if (storedMatches) setMatches(JSON.parse(storedMatches));
@@ -567,25 +573,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  /** console.error, not warn: a profile stuck on the device is a real bug. */
+  const reportSyncFailure = (what: string, error: unknown) => {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error(`[profile sync] ${what}:`, error);
+    setProfileSyncError(detail);
+  };
+
   const pushProfile = async (user: UserProfile): Promise<boolean> => {
     try {
       const saved = await saveUserProfile(user);
       await AsyncStorage.removeItem(UNSYNCED_KEY);
       await adoptServerId(saved);
+      setProfileSyncError(null);
       return true;
     } catch (error) {
-      console.warn("Saving profile to the server failed; kept on device and will retry:", error);
+      reportSyncFailure("Saving profile to the server failed; kept on device and will retry", error);
       await AsyncStorage.setItem(UNSYNCED_KEY, "true").catch(() => {});
       return false;
     }
   };
 
   /**
-   * On launch: retry a save that never landed, otherwise refresh the cache
-   * from the users table. Profiles made before onboarding saved to the
-   * server have no row yet, so those get pushed up too.
+   * Runs on launch and on every retry: push a save that never landed,
+   * otherwise refresh the cache from the users table. Profiles made before
+   * onboarding saved to the server have no row yet, so those get pushed too.
    */
-  const reconcileWithServer = async (cached: UserProfile) => {
+  const syncProfile = async (cached: UserProfile) => {
     try {
       if ((await AsyncStorage.getItem(UNSYNCED_KEY)) === "true") {
         await pushProfile(cached);
@@ -599,15 +613,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const merged = mergeProfile(cached, server);
       setCurrentUserState(prev => (prev?.email === merged.email ? merged : prev));
       await cacheUser(merged);
+      setProfileSyncError(null);
     } catch (error) {
-      console.warn("Couldn't reach the server for the profile; using the cached copy:", error);
+      reportSyncFailure("Couldn't reach the server for the profile; using the cached copy", error);
     }
   };
+
+  /** Reads the cache rather than state so a retry always sends the latest edits. */
+  const retryProfileSync = async () => {
+    const stored = await AsyncStorage.getItem(USER_KEY);
+    if (stored) await syncProfile(JSON.parse(stored));
+    else setProfileSyncError(null);
+  };
+
+  // Until the profile lands, keep trying in the background — reloading the
+  // app shouldn't be the only way a failed save ever gets retried.
+  useEffect(() => {
+    if (!profileSyncError) return;
+    const timer = setInterval(retryProfileSync, SYNC_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [profileSyncError]);
 
   const setCurrentUser = async (user: UserProfile | null): Promise<boolean> => {
     setCurrentUserState(user);
     await cacheUser(user);
-    if (!user) return true;
+    if (!user) {
+      setProfileSyncError(null);
+      return true;
+    }
     return pushProfile(user);
   };
 
@@ -862,7 +895,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(() => ({
-    currentUser, setCurrentUser, isOnboarded, setIsOnboarded,
+    currentUser, setCurrentUser, profileSyncError, retryProfileSync, isOnboarded, setIsOnboarded,
     otpVerifiedEmail, setOtpVerifiedEmail,
     users, refreshUsers, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
@@ -872,7 +905,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     conversations, startConversation, startMatchConversation, sendMessage, getMessages,
     likeUser,
   }), [
-    currentUser, users, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
+    currentUser, profileSyncError, users, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, crashPosts, friends,
     conversations, chatMessages
   ]);
