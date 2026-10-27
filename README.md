@@ -1,0 +1,78 @@
+# PopMatch
+
+Housing for UIUC students — find roommates, sublets, and short-term space,
+restricted to verified `@illinois.edu` accounts.
+
+Students sign in with their university Microsoft account, so everyone on the
+platform is a real UIUC student. No open signups.
+
+## Stack
+
+| Layer | What it uses |
+| --- | --- |
+| App | React Native + Expo Router (iOS, Android, web from one codebase) |
+| Auth | Supabase Auth with Microsoft/Azure SSO through UIUC |
+| Database | Supabase Postgres |
+| Storage | Supabase Storage (profile pictures) |
+| API | Express, talking to Postgres directly |
+
+Supabase is the only backend. There is no Firebase and nothing Replit-specific.
+
+## Getting started
+
+Full walkthrough — creating the Supabase project, running the schema, and
+wiring up Microsoft sign-in — lives in [`SETUP.md`](SETUP.md).
+
+The short version:
+
+```bash
+npm install
+cp .env.example .env     # then fill it in
+npm run server:dev       # API on http://localhost:5000
+npm run expo:dev         # app — press w for web
+```
+
+Both scripts run the same on PowerShell, macOS, and Linux.
+
+## How sign-in works
+
+"Continue with UIUC" sends students to the university's own Microsoft login.
+The Azure app registration lives inside UIUC's tenant and is single-tenant, so
+Microsoft itself turns away non-UIUC accounts before a password is ever typed.
+`lib/auth.ts` checks the domain again after the fact as a second line of
+defense.
+
+An emailed 6-digit code is available as a fallback, but it is secondary and
+needs custom SMTP configured to be usable beyond a couple of test messages.
+
+## Layout
+
+```
+app/              screens and routing (expo-router)
+  onboarding.tsx  sign-in and the 3-step profile setup
+  (tabs)/         main app once signed in
+lib/
+  auth.ts         sessions, Microsoft sign-in, UIUC enforcement
+  uploads.ts      avatar uploads to Supabase Storage
+  supabase.ts     client
+server/           Express API
+  routes.ts       endpoints
+  db.ts           Postgres pool
+supabase/
+  schema.sql      every table, index, RLS setting, and the avatars bucket
+```
+
+## Known gaps
+
+Honest list of what is not finished:
+
+1. **Matching runs on demo data.** `MOCK_USERS` and `DEMO_POSTS` in
+   `context/AppContext.tsx` are hardcoded, and onboarding saves the profile to
+   the device rather than the `users` table. The marketplace, admin, and
+   feedback screens are the ones talking to the real API.
+2. **Uploaded avatars aren't shared.** The picture reaches Supabase Storage and
+   gets a public URL, but `POST /api/users` doesn't persist that URL yet, so
+   other students can't see it. The `users.profile_image` column is waiting.
+3. **RLS is on with no policies**, which denies everything by design. The
+   Express layer works around this with a direct connection. Real policies are
+   needed before the app could talk to Supabase directly and drop the server.
