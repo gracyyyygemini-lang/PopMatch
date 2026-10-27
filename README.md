@@ -66,13 +66,13 @@ supabase/
 
 Honest list of what is not finished:
 
-1. **Matching runs on demo data.** `MOCK_USERS` and `DEMO_POSTS` in
-   `context/AppContext.tsx` are hardcoded, and onboarding saves the profile to
-   the device rather than the `users` table. The marketplace, admin, and
-   feedback screens are the ones talking to the real API.
-2. **Uploaded avatars aren't shared.** The picture reaches Supabase Storage and
-   gets a public URL, but `POST /api/users` doesn't persist that URL yet, so
-   other students can't see it. The `users.profile_image` column is waiting.
-3. **RLS is on with no policies**, which denies everything by design. The
+1. **Some screens still run on demo data.** Profiles are real: onboarding and
+   profile edits save to the `users` table (AsyncStorage is only a cache), and
+   the swipe deck and map read other students from `GET /api/users`.
+   `DEMO_POSTS` and the crash posts are still hardcoded, likes and mutual
+   matches are device-only, and `intent` / `vibeProfile` have no columns yet.
+   `EXPO_PUBLIC_USE_MOCK_USERS=true` swaps the deck back to `MOCK_USERS` for
+   development.
+2. **RLS is on with no policies**, which denies everything by design. The
    Express layer works around this with a direct connection. Real policies are
    needed before the app could talk to Supabase directly and drop the server.

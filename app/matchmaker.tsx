@@ -266,7 +266,7 @@ export default function MatchmakerScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const {
-    currentUser, mockUsers, addMatch, addLiked, addPassed,
+    currentUser, users, addMatch, addLiked, addPassed,
     likedUserIds, passedUserIds, computeScore, subleases,
     mockLikedByIds, startMatchConversation,
   } = useApp();
@@ -291,7 +291,7 @@ export default function MatchmakerScreen() {
     }
   }, [currentUser?.intent]);
 
-  const filtered = mockUsers.filter(u => {
+  const filtered = users.filter(u => {
     if (!currentUser) return true;
     if (u.id === currentUser.id) return false;
     if (!matchesGenderFilter(currentUser, u)) return false;

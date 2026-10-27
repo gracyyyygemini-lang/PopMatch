@@ -22,9 +22,14 @@ async function initDb() {
       stays_spring_break BOOLEAN DEFAULT FALSE,
       avatar_color VARCHAR DEFAULT '#005F73',
       college VARCHAR DEFAULT '',
-      organizations TEXT[] DEFAULT '{}'
+      organizations TEXT[] DEFAULT '{}',
+      profile_image VARCHAR DEFAULT ''
     )
   `);
+
+  await query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image VARCHAR DEFAULT ''
+  `).catch(() => {});
 
   await query(`
     CREATE TABLE IF NOT EXISTS friendships (
@@ -136,6 +141,53 @@ async function initDb() {
   console.log("Database initialized");
 }
 
+type UserRow = {
+  id: string; name: string; email: string; major: string | null; bio: string | null;
+  budget: number | null; gender: string | null; gender_pref: string | null;
+  cleanliness: number | null; noise: number | null; lease_type: string | null;
+  zone: string | null; landlord: string | null; stays_thanksgiving: boolean | null;
+  stays_spring_break: boolean | null; avatar_color: string | null;
+  college: string | null; organizations: string[] | null; profile_image: string | null;
+};
+
+/** `landlord` holds a JSON array written by POST /api/users, or a bare legacy value. */
+function parseLandlords(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {}
+  return [value];
+}
+
+/**
+ * Postgres rows are snake_case; the app's UserProfile is camelCase. Every
+ * users endpoint responds through this so column names never reach the UI.
+ */
+function toUserProfile(row: UserRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    major: row.major ?? "",
+    bio: row.bio ?? "",
+    budget: row.budget ?? 800,
+    gender: row.gender ?? "nonbinary",
+    genderPref: row.gender_pref ?? "mixed",
+    cleanliness: row.cleanliness ?? 3,
+    noise: row.noise ?? 3,
+    leaseType: row.lease_type ?? "full_year",
+    zone: row.zone ?? "campustown",
+    landlords: parseLandlords(row.landlord),
+    staysThanksgiving: row.stays_thanksgiving ?? false,
+    staysSpringBreak: row.stays_spring_break ?? false,
+    avatarColor: row.avatar_color ?? "#005F73",
+    college: row.college ?? "",
+    organizations: row.organizations ?? [],
+    ...(row.profile_image ? { profileImage: row.profile_image } : {}),
+  };
+}
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await initDb();
@@ -149,7 +201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         gender = "nonbinary", genderPref = "mixed", cleanliness = 3,
         noise = 3, leaseType = "full_year", zone = "campustown",
         landlords = ["other"], staysThanksgiving = false, staysSpringBreak = false,
-        avatarColor = "#005F73", college = "", organizations = [],
+        avatarColor = "#005F73", college = "", organizations = [], profileImage = "",
       } = req.body;
 
       if (!id || !name || !email) {
@@ -163,8 +215,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await query(
         `INSERT INTO users (id, name, email, major, bio, budget, gender, gender_pref,
           cleanliness, noise, lease_type, zone, landlord, stays_thanksgiving,
-          stays_spring_break, avatar_color, college, organizations)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+          stays_spring_break, avatar_color, college, organizations, profile_image)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
          ON CONFLICT (email) DO UPDATE SET
            name = EXCLUDED.name, major = EXCLUDED.major, bio = EXCLUDED.bio,
            budget = EXCLUDED.budget, gender = EXCLUDED.gender,
@@ -174,14 +226,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
            stays_thanksgiving = EXCLUDED.stays_thanksgiving,
            stays_spring_break = EXCLUDED.stays_spring_break,
            avatar_color = EXCLUDED.avatar_color, college = EXCLUDED.college,
-           organizations = EXCLUDED.organizations`,
+           organizations = EXCLUDED.organizations,
+           profile_image = EXCLUDED.profile_image`,
         [id, name, email, major, bio, budget, gender, genderPref, cleanliness,
           noise, leaseType, zone, landlordJson, staysThanksgiving, staysSpringBreak,
-          avatarColor, college, organizations]
+          avatarColor, college, organizations, profileImage]
       );
 
-      const [user] = await query("SELECT * FROM users WHERE email = $1", [email]);
-      return res.json(user);
+      // On conflict the row keeps its original id, so the client must adopt
+      // the id returned here rather than the one it generated.
+      const [user] = await query<UserRow>("SELECT * FROM users WHERE email = $1", [email]);
+      return res.json(toUserProfile(user));
     } catch (err) {
       console.error("POST /api/users", err);
       return res.status(500).json({ error: "Failed to save user" });
@@ -190,12 +245,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/users/by-email/:email", async (req: Request, res: Response) => {
     try {
-      const [user] = await query("SELECT * FROM users WHERE email = $1", [req.params.email]);
+      const [user] = await query<UserRow>("SELECT * FROM users WHERE email = $1", [req.params.email]);
       if (!user) return res.status(404).json({ error: "User not found" });
-      return res.json(user);
+      return res.json(toUserProfile(user));
     } catch (err) {
       console.error("GET /api/users/by-email", err);
       return res.status(500).json({ error: "Failed to fetch user" });
+    }
+  });
+
+  // ?exclude=<email> leaves out the viewer's own profile.
+  app.get("/api/users", async (req: Request, res: Response) => {
+    try {
+      const exclude = typeof req.query.exclude === "string" ? req.query.exclude.toLowerCase() : "";
+      const rows = await query<UserRow>(
+        "SELECT * FROM users WHERE lower(email) <> $1 ORDER BY name",
+        [exclude]
+      );
+      return res.json(rows.map(toUserProfile));
+    } catch (err) {
+      console.error("GET /api/users", err);
+      return res.status(500).json({ error: "Failed to fetch users" });
     }
   });
 

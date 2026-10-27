@@ -182,17 +182,13 @@ Configuration** → *Site URL* and *Redirect URLs*, or sign-in links will bounce
 Worth knowing before launch — these predate this migration and are not
 blocking it:
 
-1. **Matching still runs on demo data.** `MOCK_USERS` and `DEMO_POSTS` in
-   `context/AppContext.tsx` are hardcoded. Onboarding saves the profile to the
-   device, not to the `users` table, and the swipe deck shows invented people.
-   Only the marketplace, admin, and feedback screens talk to the real API.
-   Wiring the rest to Postgres is the next real piece of work.
-2. **Uploaded avatars aren't shared yet.** `lib/uploads.ts` puts the picture in
-   Supabase Storage and gets a durable public URL, which fixes the old
-   device-only `file://` path. But `POST /api/users` doesn't store that URL
-   yet, so other people can't see it. The `users.profile_image` column exists
-   and is waiting for it.
-3. **The Express layer may be unnecessary.** It queries Postgres directly with
+1. **Some data is still demo or device-only.** Profiles now save to the
+   `users` table (with the avatar URL in `profile_image`) and the swipe deck
+   reads real students from `GET /api/users`. `DEMO_POSTS`, crash posts, likes,
+   and mutual matches are not in Postgres yet. Set
+   `EXPO_PUBLIC_USE_MOCK_USERS=true` to use the hardcoded `MOCK_USERS` deck
+   while developing.
+2. **The Express layer may be unnecessary.** It queries Postgres directly with
    the connection string. The app could call Supabase from the client instead
    and drop the server entirely — simpler to host, one less thing to deploy —
    but every table would need real RLS policies first, since the schema

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fetchUserProfile, fetchUsers, mergeProfile, saveUserProfile } from "@/lib/users";
 
 export type LeaseType = "full_year" | "fall_sublease" | "spring_sublease" | "summer_sublease";
 export type GenderPref = "girls_only" | "boys_only" | "mixed";
@@ -361,12 +362,15 @@ const DEMO_CRASH: CrashPost[] = [
 
 interface AppContextValue {
   currentUser: UserProfile | null;
-  setCurrentUser: (user: UserProfile | null) => void;
+  /** Caches on the device and saves to the users table; resolves true once saved. */
+  setCurrentUser: (user: UserProfile | null) => Promise<boolean>;
   isOnboarded: boolean;
   setIsOnboarded: (v: boolean) => void;
   otpVerifiedEmail: string;
   setOtpVerifiedEmail: (email: string) => void;
-  mockUsers: UserProfile[];
+  /** Other students' profiles from the users table (MOCK_USERS only when opted in). */
+  users: UserProfile[];
+  refreshUsers: () => Promise<void>;
   matches: MatchRecord[];
   addMatch: (record: MatchRecord) => void;
   scamBannerDismissed: boolean;
@@ -397,8 +401,16 @@ interface AppContextValue {
 
 const MOCK_LIKED_BY_IDS = ["u1", "u3", "u5", "u7"];
 
+/** Set EXPO_PUBLIC_USE_MOCK_USERS=true to swipe through MOCK_USERS in development. */
+const USE_MOCK_USERS = process.env.EXPO_PUBLIC_USE_MOCK_USERS === "true";
+
+const USER_KEY = "@popmatch_user";
+/** Set while the cached profile has changes the server hasn't accepted yet. */
+const UNSYNCED_KEY = "@popmatch_user_unsynced";
+
 const AppContext = createContext<AppContextValue | null>(null);
 
+/** Demo profiles for development only — see USE_MOCK_USERS. */
 export const MOCK_USERS: UserProfile[] = [
   {
     id: "u1", name: "Mei Lin", email: "meilin2@illinois.edu", major: "Computer Science",
@@ -490,6 +502,7 @@ function computeScore(a: UserProfile, b: UserProfile): number {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
+  const [users, setUsers] = useState<UserProfile[]>(USE_MOCK_USERS ? MOCK_USERS : []);
   const [isOnboarded, setIsOnboardedState] = useState(false);
   const [otpVerifiedEmail, setOtpVerifiedEmailState] = useState("");
   const [matches, setMatches] = useState<MatchRecord[]>([]);
@@ -505,7 +518,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem("@popmatch_user");
+        const stored = await AsyncStorage.getItem(USER_KEY);
         const onboarded = await AsyncStorage.getItem("@popmatch_onboarded");
         const storedMatches = await AsyncStorage.getItem("@popmatch_matches");
         const storedLiked = await AsyncStorage.getItem("@popmatch_liked");
@@ -517,7 +530,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const storedConvos = await AsyncStorage.getItem("@popmatch_conversations");
         const storedChatMsgs = await AsyncStorage.getItem("@popmatch_chatmessages");
 
-        if (stored) setCurrentUserState(JSON.parse(stored));
+        if (stored) {
+          const cached: UserProfile = JSON.parse(stored);
+          setCurrentUserState(cached);
+          reconcileWithServer(cached);
+        }
         if (onboarded === "true") setIsOnboardedState(true);
         if (storedMatches) setMatches(JSON.parse(storedMatches));
         if (storedLiked) setLikedUserIds(JSON.parse(storedLiked));
@@ -532,11 +549,78 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  const setCurrentUser = async (user: UserProfile | null) => {
-    setCurrentUserState(user);
-    if (user) await AsyncStorage.setItem("@popmatch_user", JSON.stringify(user));
-    else await AsyncStorage.removeItem("@popmatch_user");
+  const cacheUser = async (user: UserProfile | null) => {
+    if (user) await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+    else await AsyncStorage.multiRemove([USER_KEY, UNSYNCED_KEY]);
   };
+
+  /** The server may hand back a different id (upsert by email keeps the original). */
+  const adoptServerId = async (saved: UserProfile) => {
+    setCurrentUserState(prev => {
+      if (!prev || prev.email !== saved.email || prev.id === saved.id) return prev;
+      const next = { ...prev, id: saved.id };
+      cacheUser(next).catch(() => {});
+      return next;
+    });
+  };
+
+  const pushProfile = async (user: UserProfile): Promise<boolean> => {
+    try {
+      const saved = await saveUserProfile(user);
+      await AsyncStorage.removeItem(UNSYNCED_KEY);
+      await adoptServerId(saved);
+      return true;
+    } catch (error) {
+      console.warn("Saving profile to the server failed; kept on device and will retry:", error);
+      await AsyncStorage.setItem(UNSYNCED_KEY, "true").catch(() => {});
+      return false;
+    }
+  };
+
+  /**
+   * On launch: retry a save that never landed, otherwise refresh the cache
+   * from the users table. Profiles made before onboarding saved to the
+   * server have no row yet, so those get pushed up too.
+   */
+  const reconcileWithServer = async (cached: UserProfile) => {
+    try {
+      if ((await AsyncStorage.getItem(UNSYNCED_KEY)) === "true") {
+        await pushProfile(cached);
+        return;
+      }
+      const server = await fetchUserProfile(cached.email);
+      if (!server) {
+        await pushProfile(cached);
+        return;
+      }
+      const merged = mergeProfile(cached, server);
+      setCurrentUserState(prev => (prev?.email === merged.email ? merged : prev));
+      await cacheUser(merged);
+    } catch (error) {
+      console.warn("Couldn't reach the server for the profile; using the cached copy:", error);
+    }
+  };
+
+  const setCurrentUser = async (user: UserProfile | null): Promise<boolean> => {
+    setCurrentUserState(user);
+    await cacheUser(user);
+    if (!user) return true;
+    return pushProfile(user);
+  };
+
+  const refreshUsers = async () => {
+    if (USE_MOCK_USERS) return;
+    try {
+      const list = await fetchUsers(currentUser?.email);
+      setUsers(list.filter(u => u.id !== currentUser?.id && u.email !== currentUser?.email));
+    } catch (error) {
+      console.warn("Couldn't load profiles:", error);
+    }
+  };
+
+  useEffect(() => {
+    refreshUsers();
+  }, [currentUser?.email]);
 
   const setIsOnboarded = async (v: boolean) => {
     setIsOnboardedState(v);
@@ -712,7 +796,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    const targetMockUser = MOCK_USERS.find(u => u.email === userEmail);
+    const targetMockUser = users.find(u => u.email === userEmail);
     if (!targetMockUser) {
       return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg: null, mutualFriends: [] };
     }
@@ -720,7 +804,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const mutuals: MutualFriend[] = [];
 
     for (const friend of friends) {
-      const friendMockUser = MOCK_USERS.find(u => u.email === friend.email);
+      const friendMockUser = users.find(u => u.email === friend.email);
       if (!friendMockUser) continue;
 
       const friendKnowsTarget = (friendMockUser.organizations || []).some(
@@ -764,7 +848,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({
     currentUser, setCurrentUser, isOnboarded, setIsOnboarded,
     otpVerifiedEmail, setOtpVerifiedEmail,
-    mockUsers: MOCK_USERS, matches, addMatch, scamBannerDismissed, dismissScamBanner,
+    users, refreshUsers, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
     subleases, addSublease, removeSublease,
     crashPosts, addCrashPost, updateCrashPost,
@@ -772,7 +856,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     conversations, startConversation, startMatchConversation, sendMessage, getMessages,
     mockLikedByIds: MOCK_LIKED_BY_IDS,
   }), [
-    currentUser, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
+    currentUser, users, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, crashPosts, friends,
     conversations, chatMessages
   ]);

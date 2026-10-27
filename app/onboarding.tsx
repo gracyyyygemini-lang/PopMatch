@@ -348,7 +348,13 @@ export default function OnboardingScreen() {
       ...(avatarUrl ? { profileImage: avatarUrl } : {}),
     };
 
-    await setCurrentUser(user);
+    // Saves to the users table (and caches on the device). If the API is
+    // unreachable the profile stays cached, flagged unsynced, and is retried
+    // on next launch — onboarding carries on either way.
+    const saved = await setCurrentUser(user);
+    if (!saved) {
+      console.warn("Profile not saved to the server yet; continuing with the cached copy.");
+    }
     await setIsOnboarded(true);
     setSavingProfile(false);
 
