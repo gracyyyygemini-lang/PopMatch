@@ -19,7 +19,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import { OAuthProvider, onAuthStateChanged, signInWithPopup } from "firebase/auth";
 import Colors from "@/constants/colors";
 import {
   useApp,
@@ -30,7 +29,15 @@ import {
   Landlord,
   Intent,
 } from "@/context/AppContext";
-import { auth } from "@/lib/firebase";
+import {
+  displayNameOf,
+  isUiucEmail,
+  onAuthStateChange,
+  sendUiucOtp,
+  signInWithAzure,
+  verifyUiucOtp,
+} from "@/lib/auth";
+import { uploadProfileImage } from "@/lib/uploads";
 
 const MAJORS = [
   "Accountancy", "Aerospace Engineering", "Agricultural & Biological Engineering",
@@ -50,54 +57,6 @@ const MAJORS = [
   "Sociology", "Statistics", "Supply Chain Management",
   "Theatre", "Urban Planning", "Other",
 ];
-
-const ZONES: { key: Zone; label: string; icon: keyof typeof Ionicons.glyphMap; desc: string }[] = [
-  { key: "campustown", label: "Campustown (Central Campus)", icon: "storefront-outline", desc: "Green St buzz & Main Quad" },
-  { key: "north", label: "North Campus (Engineering / Midtown)", icon: "hardware-chip-outline", desc: "Engineering & STEM hub" },
-  { key: "south", label: "South Campus (Ikenberry / Seniorland)", icon: "football-outline", desc: "Ikenberry, ARC, Stadium" },
-  { key: "urbana", label: "Urbana (Gradland)", icon: "leaf-outline", desc: "Quiet, trees, budget-friendly" },
-  { key: "downtown", label: "Downtown Champaign", icon: "business-outline", desc: "Professional & dining scene" },
-];
-
-const LANDLORDS: { key: Landlord; label: string; color: string }[] = [
-  { key: "jsm", label: "JSM", color: Colors.landlords.jsm },
-  { key: "ugroup", label: "UGroup", color: Colors.landlords.ugroup },
-  { key: "bailey", label: "Bailey", color: Colors.landlords.bailey },
-  { key: "american", label: "American Campus", color: Colors.landlords.american },
-  { key: "smile", label: "Smile", color: Colors.landlords.smile },
-  { key: "cpm", label: "CPM", color: Colors.landlords.cpm },
-  { key: "green_st_realty", label: "Green St Realty", color: Colors.landlords.green_st_realty },
-  { key: "other", label: "Private / Other", color: Colors.landlords.other },
-];
-
-function RatingSelector({
-  value,
-  onChange,
-  color,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  color: string;
-}) {
-  return (
-    <View style={styles.ratingRow}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <TouchableOpacity
-          key={n}
-          onPress={() => {
-            Haptics.selectionAsync();
-            onChange(n);
-          }}
-          style={[styles.ratingDot, { backgroundColor: n <= value ? color : Colors.foamDark }]}
-        >
-          <Text style={[styles.ratingNum, { color: n <= value ? Colors.white : Colors.textMuted }]}>
-            {n}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
 
 const WAVE_COUNT = 22;
 
@@ -188,26 +147,35 @@ export default function OnboardingScreen() {
 
   const [email, setEmail] = useState("");
   const [popupLoading, setPopupLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [showEmailFallback, setShowEmailFallback] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const [name, setName] = useState("");
   const [major, setMajor] = useState("");
-  const [bio, setBio] = useState("");
-  const [budget, setBudget] = useState(800);
-  const [gender, setGender] = useState<"female" | "male" | "nonbinary">("female");
-  const [genderPref, setGenderPref] = useState<GenderPref>("mixed");
-  const [cleanliness, setCleanliness] = useState(3);
-  const [noise, setNoise] = useState(3);
-  const [leaseType, setLeaseType] = useState<LeaseType>("full_year");
-  const [zone, setZone] = useState<Zone>("campustown");
-  const [landlords, setLandlords] = useState<Landlord[]>([]);
-  const [staysThanksgiving, setStaysThanksgiving] = useState(false);
-  const [staysSpringBreak, setStaysSpringBreak] = useState(false);
   const [showMajorPicker, setShowMajorPicker] = useState(false);
   const [intent, setIntent] = useState<Intent>("joiner");
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
+  // Everything onboarding no longer asks for. These seed the profile and are
+  // all editable from the Profile tab, so nothing is lost by defaulting them.
+  const bio = "";
+  const budget = 800;
+  const gender: "female" | "male" | "nonbinary" = "nonbinary";
+  const genderPref: GenderPref = "mixed";
+  const cleanliness = 3;
+  const noise = 3;
+  const leaseType: LeaseType = "full_year";
+  const zone: Zone = "campustown";
+  const landlords: Landlord[] = [];
+  const staysThanksgiving = false;
+  const staysSpringBreak = false;
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (sessionUser) => {
+    const unsubscribe = onAuthStateChange((sessionUser) => {
       if (!sessionUser) return;
 
       if (sessionUser.email) {
@@ -215,55 +183,80 @@ export default function OnboardingScreen() {
         setOtpVerifiedEmail(sessionUser.email);
       }
 
-      if (sessionUser.displayName) {
-        setName((prev) => prev || sessionUser.displayName || "");
+      const providerName = displayNameOf(sessionUser);
+      if (providerName) {
+        setName((prev) => prev || providerName);
       }
+
       setStep((prev) => (prev === 0 ? 1 : prev));
     });
 
     return unsubscribe;
   }, [setOtpVerifiedEmail]);
 
-  async function signInWithUIUC() {
-    const provider = new OAuthProvider("microsoft.com");
-    provider.setCustomParameters({ prompt: "select_account" });
+  async function handleSendCode() {
+    setAuthError(null);
 
+    if (!isUiucEmail(email)) {
+      setAuthError("Please use your @illinois.edu email address.");
+      return;
+    }
+
+    setOtpLoading(true);
+
+    try {
+      await sendUiucOtp(email);
+      setOtpSent(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error: any) {
+      setAuthError(error?.message || "Could not send the code. Please try again.");
+    } finally {
+      setOtpLoading(false);
+    }
+  }
+
+  async function handleVerifyCode() {
+    setAuthError(null);
+
+    if (otpCode.trim().length < 6) {
+      setAuthError("Enter the 6-digit code from your email.");
+      return;
+    }
+
+    setOtpLoading(true);
+
+    try {
+      // onAuthStateChange advances the step once the session lands.
+      await verifyUiucOtp(email, otpCode);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      setAuthError("That code didn't work. Check it or request a new one.");
+    } finally {
+      setOtpLoading(false);
+    }
+  }
+
+  async function signInWithUIUC() {
+    setAuthError(null);
     setPopupLoading(true);
 
     try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      console.log("Popup sign-in success:", user?.email);
-
-      if (user?.email) {
-        setEmail(user.email);
-        setOtpVerifiedEmail(user.email);
-      }
-
-      if (user?.displayName) {
-        setName((prev) => prev || user.displayName || "");
-      }
-
-      setStep(1);
-
+      await signInWithAzure();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
-      console.error("UIUC sign-in failed:", error);
-
-      if (error?.code === "auth/popup-closed-by-user") return;
-      if (error?.code === "auth/cancelled-popup-request") return;
-
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        window.alert(error?.message || "UIUC sign-in failed. Please try again.");
-      }
+      setAuthError(error?.message || "UIUC sign-in failed. Please try again.");
     } finally {
       setPopupLoading(false);
     }
   }
 
   const isSupplySide = intent === "host" || intent === "sublessor";
-  const STEPS = isSupplySide ? 3 : 6;
+
+  // Sign in -> pick a role -> name and photo. Budget, neighborhood, lease
+  // type, cleanliness and landlord all default below and are editable from
+  // the Profile tab; asking for them up front lost people before they ever
+  // saw the app.
+  const STEPS = 3;
 
   const pickProfileImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -285,15 +278,10 @@ export default function OnboardingScreen() {
   const isStepComplete = (s: number): boolean => {
     switch (s) {
       case 1:
-        return name.trim().length > 0 && !!profileImage && !!major && bio.trim().length > 0;
-      case 2:
         return !!intent;
-      case 3:
-        return true;
-      case 4:
-        return true;
-      case 5:
-        return landlords.length > 0;
+      case 2:
+        // Name only. A photo helps but shouldn't block anyone at the door.
+        return name.trim().length > 0;
       default:
         return true;
     }
@@ -306,23 +294,14 @@ export default function OnboardingScreen() {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    if (isSupplySide && step === 2) {
-      handleFinish();
-      return;
-    }
-
     setStep((s) => Math.min(s + 1, STEPS - 1));
   };
 
-  const toggleLandlord = (key: Landlord) => {
-    setLandlords((prev) =>
-      prev.includes(key) ? prev.filter((l) => l !== key) : [...prev, key]
-    );
-    Haptics.selectionAsync();
-  };
-
   const handleFinish = async () => {
+    if (savingProfile) return;
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSavingProfile(true);
 
     const avatarColors = [
       Colors.tealLight,
@@ -334,8 +313,22 @@ export default function OnboardingScreen() {
     ];
     const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
 
+    const userId = Date.now().toString() + Math.random().toString(36).substr(2, 6);
+
+    // Push the picked avatar to Supabase Storage so it resolves on every
+    // device, not just the one that picked it. A failed upload shouldn't
+    // block onboarding — fall back to the local URI.
+    let avatarUrl = profileImage;
+    if (profileImage) {
+      try {
+        avatarUrl = await uploadProfileImage(userId, profileImage);
+      } catch (error) {
+        console.error("Avatar upload failed, keeping local copy:", error);
+      }
+    }
+
     const user: UserProfile = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+      id: userId,
       name: name.trim(),
       email: email.toLowerCase().trim(),
       major: major || "Undeclared",
@@ -352,11 +345,12 @@ export default function OnboardingScreen() {
       staysSpringBreak: isSupplySide ? false : staysSpringBreak,
       avatarColor,
       intent,
-      ...(profileImage ? { profileImage } : {}),
+      ...(avatarUrl ? { profileImage: avatarUrl } : {}),
     };
 
     await setCurrentUser(user);
     await setIsOnboarded(true);
+    setSavingProfile(false);
 
     switch (intent) {
       case "host":
@@ -387,11 +381,6 @@ export default function OnboardingScreen() {
     }
   };
 
-  const budgetStep = (dir: number) => {
-    Haptics.selectionAsync();
-    setBudget((b) => Math.min(2000, Math.max(400, b + dir * 50)));
-  };
-
   const onbWidth = Dimensions.get("window").width;
   const isDesktopOnb = Platform.OS === "web" && onbWidth >= 1024;
   const topPadding = Platform.OS === "web" ? (isDesktopOnb ? 24 : 67) : insets.top;
@@ -418,127 +407,147 @@ export default function OnboardingScreen() {
             </View>
 
             <Text style={styles.stepTitle}>Welcome to PopMatch</Text>
-            <Text style={styles.stepSubtitle}>Sign in with your UIUC account to start PopMatch</Text>
+            <Text style={styles.stepSubtitle}>
+              {otpSent
+                ? `We sent a 6-digit code to ${email}`
+                : "Sign in with your UIUC account to start PopMatch"}
+            </Text>
 
-            <TouchableOpacity
-              style={[styles.otpSendBtn, popupLoading && { opacity: 0.7 }]}
-              onPress={signInWithUIUC}
-              disabled={popupLoading}
-            >
-              {popupLoading ? (
-                <ActivityIndicator color={Colors.white} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="school-outline" size={16} color={Colors.white} />
-                  <Text style={styles.otpSendBtnText}>Continue with UIUC</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            {!otpSent && (
+              <>
+                {/* Primary path: UIUC Microsoft sign-in. No codes, no email
+                    limits, and it proves the account is a real UIUC one. */}
+                <TouchableOpacity
+                  style={[styles.otpSendBtn, popupLoading && { opacity: 0.7 }]}
+                  onPress={signInWithUIUC}
+                  disabled={popupLoading || otpLoading}
+                >
+                  {popupLoading ? (
+                    <ActivityIndicator color={Colors.white} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="school-outline" size={16} color={Colors.white} />
+                      <Text style={styles.otpSendBtnText}>Continue with UIUC</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <Text style={[styles.fieldHint, { textAlign: "center" }]}>
+                  Uses your university Microsoft login
+                </Text>
+              </>
+            )}
+
+            {!otpSent && !showEmailFallback && (
+              <TouchableOpacity
+                onPress={() => {
+                  setShowEmailFallback(true);
+                  setAuthError(null);
+                }}
+                disabled={popupLoading}
+              >
+                <Text style={styles.linkText}>Sign in with an email code instead</Text>
+              </TouchableOpacity>
+            )}
+
+            {!otpSent && showEmailFallback && (
+              <>
+                <Text style={styles.dividerText}>or use an email code</Text>
+
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={(next) => {
+                    setEmail(next);
+                    setAuthError(null);
+                  }}
+                  placeholder="netid@illinois.edu"
+                  placeholderTextColor={Colors.textLight}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  returnKeyType="send"
+                  onSubmitEditing={handleSendCode}
+                  editable={!otpLoading}
+                />
+
+                <TouchableOpacity
+                  style={[styles.ssoBtn, otpLoading && { opacity: 0.7 }]}
+                  onPress={handleSendCode}
+                  disabled={otpLoading}
+                >
+                  {otpLoading ? (
+                    <ActivityIndicator color={Colors.teal} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="mail-outline" size={16} color={Colors.teal} />
+                      <Text style={styles.ssoBtnText}>Email me a code</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+
+            {otpSent && (
+              <>
+                <TextInput
+                  style={[styles.input, styles.codeInput]}
+                  value={otpCode}
+                  onChangeText={(next) => {
+                    setOtpCode(next.replace(/[^0-9]/g, "").slice(0, 6));
+                    setAuthError(null);
+                  }}
+                  placeholder="000000"
+                  placeholderTextColor={Colors.textLight}
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  returnKeyType="done"
+                  onSubmitEditing={handleVerifyCode}
+                  editable={!otpLoading}
+                />
+
+                <TouchableOpacity
+                  style={[styles.otpSendBtn, otpLoading && { opacity: 0.7 }]}
+                  onPress={handleVerifyCode}
+                  disabled={otpLoading}
+                >
+                  {otpLoading ? (
+                    <ActivityIndicator color={Colors.white} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle-outline" size={16} color={Colors.white} />
+                      <Text style={styles.otpSendBtnText}>Verify & Continue</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setOtpSent(false);
+                    setOtpCode("");
+                    setAuthError(null);
+                  }}
+                  disabled={otpLoading}
+                >
+                  <Text style={styles.linkText}>Back to sign-in options</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {authError && <Text style={styles.errorText}>{authError}</Text>}
           </View>
         )}
 
         {step === 1 && (
           <View style={styles.stepContainer}>
             <View style={styles.iconCircle}>
-              <Ionicons name="person" size={38} color={Colors.teal} />
-            </View>
-
-            <Text style={styles.stepTitle}>Complete Your Profile</Text>
-            <Text style={styles.stepSubtitle}>Help future roommates get to know you</Text>
-
-            <Text style={styles.label}>Profile Picture</Text>
-            <TouchableOpacity style={styles.avatarPicker} onPress={pickProfileImage} activeOpacity={0.7}>
-              {profileImage ? (
-                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="camera" size={32} color={Colors.teal} />
-                  <Text style={styles.avatarHint}>Tap to add photo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <Text style={styles.label}>Your Name</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="Full name"
-              placeholderTextColor={Colors.textLight}
-              autoCapitalize="words"
-              returnKeyType="next"
-            />
-            {!name.trim() && <Text style={styles.fieldHint}>Required to continue</Text>}
-
-            <Text style={styles.label}>Major</Text>
-            <TouchableOpacity style={styles.input} onPress={() => setShowMajorPicker(!showMajorPicker)}>
-              <Text style={[styles.selectText, { color: major ? Colors.charcoal : Colors.textLight }]}>
-                {major || "Select your major"}
-              </Text>
-              <Ionicons
-                name={showMajorPicker ? "chevron-up" : "chevron-down"}
-                size={15}
-                color={Colors.textMuted}
-              />
-            </TouchableOpacity>
-
-            {showMajorPicker && (
-              <View style={styles.majorList}>
-                {MAJORS.map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[styles.majorItem, major === m && styles.majorSelected]}
-                    onPress={() => {
-                      setMajor(m);
-                      setShowMajorPicker(false);
-                      Haptics.selectionAsync();
-                    }}
-                  >
-                    <Text style={[styles.majorText, major === m && styles.majorTextSelected]}>{m}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            <Text style={styles.label}>Short Bio</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={bio}
-              onChangeText={setBio}
-              placeholder="Tell future roommates about yourself..."
-              placeholderTextColor={Colors.textLight}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-
-            <Text style={styles.label}>I identify as</Text>
-            <View style={styles.chipRow}>
-              {(["female", "male", "nonbinary"] as const).map((g) => (
-                <TouchableOpacity
-                  key={g}
-                  style={[styles.chip, gender === g && styles.chipActive]}
-                  onPress={() => {
-                    setGender(g);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[styles.chipText, gender === g && styles.chipTextActive]}>
-                    {g === "female" ? "Woman" : g === "male" ? "Man" : "Non-binary"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {step === 2 && (
-          <View style={styles.stepContainer}>
-            <View style={styles.iconCircle}>
               <Ionicons name="compass" size={38} color={Colors.teal} />
             </View>
 
-            <Text style={styles.stepTitle}>What's Your Role?</Text>
+            <Text style={styles.stepTitle}>What brings you here?</Text>
             <Text style={styles.stepSubtitle}>Tell us how you want to use PopMatch</Text>
 
             {([
@@ -569,186 +578,82 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {step === 3 && (
+        {step === 2 && (
           <View style={styles.stepContainer}>
             <View style={styles.iconCircle}>
-              <Ionicons name="home" size={38} color={Colors.teal} />
+              <Ionicons name="person" size={38} color={Colors.teal} />
             </View>
 
-            <Text style={styles.stepTitle}>Housing Preferences</Text>
-            <Text style={styles.stepSubtitle}>What kind of living situation do you want?</Text>
+            <Text style={styles.stepTitle}>Almost there</Text>
+            <Text style={styles.stepSubtitle}>
+              Just your name to get started — everything else is editable later
+            </Text>
 
-            <Text style={styles.label}>Monthly Budget</Text>
-            <View style={styles.budgetRow}>
-              <TouchableOpacity style={styles.budgetBtn} onPress={() => budgetStep(-1)}>
-                <Ionicons name="remove" size={22} color={Colors.charcoal} />
-              </TouchableOpacity>
-              <View style={styles.budgetDisplay}>
-                <Text style={styles.budgetValue}>${budget}</Text>
-                <Text style={styles.budgetSub}>per month</Text>
-              </View>
-              <TouchableOpacity style={styles.budgetBtn} onPress={() => budgetStep(1)}>
-                <Ionicons name="add" size={22} color={Colors.charcoal} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.label}>Roommate Gender Preference</Text>
-            <View style={styles.chipRow}>
-              {([
-                { k: "girls_only" as GenderPref, l: "Girls Only" },
-                { k: "boys_only" as GenderPref, l: "Boys Only" },
-                { k: "mixed" as GenderPref, l: "No Preference" },
-              ]).map(({ k, l }) => (
-                <TouchableOpacity
-                  key={k}
-                  style={[styles.chip, genderPref === k && styles.chipActive]}
-                  onPress={() => {
-                    setGenderPref(k);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[styles.chipText, genderPref === k && styles.chipTextActive]}>{l}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.label}>Lease Type</Text>
-            {([
-              { k: "full_year" as LeaseType, l: "Full Year", d: "Aug – Jul (12 months)" },
-              { k: "fall_sublease" as LeaseType, l: "Fall Sublease", d: "Aug – Dec" },
-              { k: "spring_sublease" as LeaseType, l: "Spring Sublease", d: "Jan – May" },
-              { k: "summer_sublease" as LeaseType, l: "Summer Sublease", d: "May – Aug" },
-            ]).map(({ k, l, d }) => (
-              <TouchableOpacity
-                key={k}
-                style={[styles.optionCard, leaseType === k && styles.optionCardActive]}
-                onPress={() => {
-                  setLeaseType(k);
-                  Haptics.selectionAsync();
-                }}
-              >
-                <View style={styles.optionLeft}>
-                  <Text style={[styles.optionLabel, leaseType === k && styles.optionLabelActive]}>{l}</Text>
-                  <Text style={styles.optionDesc}>{d}</Text>
+            <TouchableOpacity style={styles.avatarPicker} onPress={pickProfileImage} activeOpacity={0.7}>
+              {profileImage ? (
+                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="camera" size={32} color={Colors.teal} />
+                  <Text style={styles.avatarHint}>Add photo</Text>
                 </View>
-                {leaseType === k && <Ionicons name="checkmark-circle" size={18} color={Colors.teal} />}
-              </TouchableOpacity>
-            ))}
+              )}
+            </TouchableOpacity>
+            <Text style={[styles.fieldHint, { textAlign: "center" }]}>
+              Optional, but profiles with photos get far more matches
+            </Text>
+
+            <Text style={styles.label}>Your Name</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="Full name"
+              placeholderTextColor={Colors.textLight}
+              autoCapitalize="words"
+              returnKeyType="done"
+            />
+            {!name.trim() && <Text style={styles.fieldHint}>Required to continue</Text>}
+
+            <Text style={styles.label}>
+              Major <Text style={styles.optionalTag}>optional</Text>
+            </Text>
+            <TouchableOpacity style={styles.input} onPress={() => setShowMajorPicker(!showMajorPicker)}>
+              <Text style={[styles.selectText, { color: major ? Colors.charcoal : Colors.textLight }]}>
+                {major || "Select your major"}
+              </Text>
+              <Ionicons
+                name={showMajorPicker ? "chevron-up" : "chevron-down"}
+                size={15}
+                color={Colors.textMuted}
+              />
+            </TouchableOpacity>
+
+            {showMajorPicker && (
+              <View style={styles.majorList}>
+                {MAJORS.map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.majorItem, major === m && styles.majorSelected]}
+                    onPress={() => {
+                      setMajor(m);
+                      setShowMajorPicker(false);
+                      Haptics.selectionAsync();
+                    }}
+                  >
+                    <Text style={[styles.majorText, major === m && styles.majorTextSelected]}>{m}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.deferNote}>
+              Budget, neighborhood, lease type and roommate preferences all live in
+              your profile — set them whenever you like.
+            </Text>
           </View>
         )}
 
-        {step === 4 && (
-          <View style={styles.stepContainer}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="map" size={38} color={Colors.teal} />
-            </View>
-
-            <Text style={styles.stepTitle}>Location & Lifestyle</Text>
-            <Text style={styles.stepSubtitle}>Where in Champaign-Urbana do you want to live?</Text>
-
-            {ZONES.map((z) => (
-              <TouchableOpacity
-                key={z.key}
-                style={[styles.optionCard, zone === z.key && styles.optionCardActive]}
-                onPress={() => {
-                  setZone(z.key);
-                  Haptics.selectionAsync();
-                }}
-              >
-                <View style={[styles.zoneIcon, { backgroundColor: Colors.zones[z.key] + "22" }]}>
-                  <Ionicons name={z.icon} size={18} color={Colors.charcoal} />
-                </View>
-                <View style={styles.optionLeft}>
-                  <Text style={[styles.optionLabel, zone === z.key && styles.optionLabelActive]}>{z.label}</Text>
-                  <Text style={styles.optionDesc}>{z.desc}</Text>
-                </View>
-                {zone === z.key && <Ionicons name="checkmark-circle" size={18} color={Colors.teal} />}
-              </TouchableOpacity>
-            ))}
-
-            <Text style={styles.label}>Cleanliness Level</Text>
-            <View style={styles.scaleLabels}>
-              <Text style={styles.scaleLabel}>Relaxed</Text>
-              <Text style={styles.scaleLabel}>Spotless</Text>
-            </View>
-            <RatingSelector value={cleanliness} onChange={setCleanliness} color={Colors.grassGreen} />
-
-            <Text style={styles.label}>Noise & Social Level</Text>
-            <View style={styles.scaleLabels}>
-              <Text style={styles.scaleLabel}>Very Quiet</Text>
-              <Text style={styles.scaleLabel}>Party Mode</Text>
-            </View>
-            <RatingSelector value={noise} onChange={setNoise} color={Colors.teal} />
-          </View>
-        )}
-
-        {step === 5 && (
-          <View style={styles.stepContainer}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="calendar" size={38} color={Colors.teal} />
-            </View>
-
-            <Text style={styles.stepTitle}>Breaks & Landlord</Text>
-            <Text style={styles.stepSubtitle}>Helps split utilities & coordinate with roommates</Text>
-
-            <Text style={styles.label}>Break Plans</Text>
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleInfo}>
-                <Text style={styles.toggleTitle}>Staying Thanksgiving Break?</Text>
-                <Text style={styles.toggleDesc}>Nov 27 – Dec 1</Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.toggle, staysThanksgiving && styles.toggleOn]}
-                onPress={() => {
-                  setStaysThanksgiving(!staysThanksgiving);
-                  Haptics.selectionAsync();
-                }}
-              >
-                <Text style={[styles.toggleText, staysThanksgiving && styles.toggleTextOn]}>
-                  {staysThanksgiving ? "Yes" : "No"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleInfo}>
-                <Text style={styles.toggleTitle}>Staying Spring Break?</Text>
-                <Text style={styles.toggleDesc}>Mar 15 – 23</Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.toggle, staysSpringBreak && styles.toggleOn]}
-                onPress={() => {
-                  setStaysSpringBreak(!staysSpringBreak);
-                  Haptics.selectionAsync();
-                }}
-              >
-                <Text style={[styles.toggleText, staysSpringBreak && styles.toggleTextOn]}>
-                  {staysSpringBreak ? "Yes" : "No"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.label}>Your Landlord(s)</Text>
-            <Text style={styles.fieldHint}>Select all that apply</Text>
-
-            {LANDLORDS.map((l) => {
-              const isSelected = landlords.includes(l.key);
-
-              return (
-                <TouchableOpacity
-                  key={l.key}
-                  style={[styles.optionCard, isSelected && styles.optionCardActive]}
-                  onPress={() => toggleLandlord(l.key)}
-                >
-                  <View style={[styles.landlordDot, { backgroundColor: l.color }]} />
-                  <Text style={[styles.optionLabel, isSelected && styles.optionLabelActive]}>{l.label}</Text>
-                  {isSelected && <Ionicons name="checkmark-circle" size={18} color={Colors.teal} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
       </ScrollView>
 
       <View
@@ -776,10 +681,12 @@ export default function OnboardingScreen() {
               !isFormComplete && { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 },
             ]}
             onPress={step === STEPS - 1 || (isSupplySide && step === 2) ? handleFinish : handleNext}
-            disabled={!isFormComplete}
+            disabled={!isFormComplete || savingProfile}
           >
             <Text style={[styles.nextBtnText, !isFormComplete && { color: DISABLED_TEXT }]}>
-              {isSupplySide && step === 2
+              {savingProfile
+                ? "Saving..."
+                : isSupplySide && step === 2
                 ? intent === "host"
                   ? "Post My Apartment"
                   : "Post My Sublease"
@@ -896,6 +803,20 @@ const styles = StyleSheet.create({
   textArea: { height: 90, paddingTop: 13 },
   selectText: { fontFamily: "Nunito_400Regular", fontSize: 15 },
   fieldHint: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight },
+  optionalTag: {
+    fontFamily: "Nunito_400Regular",
+    fontSize: 12,
+    color: Colors.textLight,
+  },
+  deferNote: {
+    fontFamily: "Nunito_400Regular",
+    fontSize: 12,
+    color: Colors.textMuted,
+    lineHeight: 18,
+    textAlign: "center",
+    marginTop: 12,
+    paddingHorizontal: 8,
+  },
   otpSendBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -910,6 +831,49 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_800ExtraBold",
     fontSize: 16,
     color: Colors.white,
+  },
+  codeInput: {
+    textAlign: "center",
+    fontFamily: "Nunito_800ExtraBold",
+    fontSize: 28,
+    letterSpacing: 10,
+  },
+  linkText: {
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 13,
+    color: Colors.teal,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  dividerText: {
+    fontFamily: "Nunito_400Regular",
+    fontSize: 12,
+    color: Colors.textLight,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  ssoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.teal + "40",
+    paddingVertical: 15,
+  },
+  ssoBtnText: {
+    fontFamily: "Nunito_700Bold",
+    fontSize: 15,
+    color: Colors.teal,
+  },
+  errorText: {
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 13,
+    color: Colors.errorRed,
+    textAlign: "center",
+    marginTop: 4,
   },
   avatarPicker: { alignSelf: "center", marginVertical: 8 },
   avatarImage: {

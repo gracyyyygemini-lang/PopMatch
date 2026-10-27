@@ -1,20 +1,43 @@
+import { Platform } from "react-native";
 import { fetch } from "expo/fetch";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+/** Local Express port when nothing else is configured (see server/index.ts). */
+const DEV_API_PORT = 5000;
+
 /**
- * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
- * @returns {string} The API base URL
+ * Base URL for the Express API, resolved in order of specificity:
+ *
+ *   1. EXPO_PUBLIC_API_URL  — explicit, use when the API lives on its own host
+ *   2. EXPO_PUBLIC_DOMAIN   — the host serving both app and API
+ *   3. same origin (web)    — the server serves dist/ and /api together
+ *   4. localhost (native)   — development default
  */
 export function getApiUrl(): string {
-  let host = process.env.EXPO_PUBLIC_DOMAIN;
-
-  if (!host) {
-    throw new Error("EXPO_PUBLIC_DOMAIN is not set");
+  const explicit = process.env.EXPO_PUBLIC_API_URL;
+  if (explicit) {
+    return new URL(withProtocol(explicit)).href;
   }
 
-  let url = new URL(`https://${host}`);
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (domain) {
+    return new URL(withProtocol(domain)).href;
+  }
 
-  return url.href;
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return new URL(window.location.origin).href;
+  }
+
+  return new URL(`http://localhost:${DEV_API_PORT}`).href;
+}
+
+function withProtocol(host: string): string {
+  const trimmed = host.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  // Bare localhost (or 127.0.0.1) has no certificate — don't force https.
+  const isLocal = /^(localhost|127\.0\.0\.1)(:|$)/i.test(trimmed);
+  return `${isLocal ? "http" : "https"}://${trimmed}`;
 }
 
 async function throwIfResNotOk(res: Response) {

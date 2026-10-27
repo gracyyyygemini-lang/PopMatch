@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import { query } from "./db";
-import { sendOtp } from "./email";
 
 async function initDb() {
   await query(`
@@ -86,15 +85,6 @@ async function initDb() {
   `).catch(() => {});
 
   await query(`
-    CREATE TABLE IF NOT EXISTS otp_codes (
-      email VARCHAR PRIMARY KEY,
-      code VARCHAR(6) NOT NULL,
-      expires_at TIMESTAMPTZ NOT NULL,
-      attempts INT DEFAULT 0
-    )
-  `);
-
-  await query(`
     CREATE TABLE IF NOT EXISTS feedback (
       id SERIAL PRIMARY KEY,
       user_email VARCHAR NOT NULL,
@@ -146,81 +136,9 @@ async function initDb() {
   console.log("Database initialized");
 }
 
-function randomCode(): string {
-  return "123456";
-}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await initDb();
-
-  // ─── AUTH / OTP ───────────────────────────────────────────────────────────────
-
-  app.post("/api/auth/send-otp", async (req: Request, res: Response) => {
-    try {
-      const { email } = req.body;
-      if (!email || !email.endsWith("@illinois.edu")) {
-        return res.status(400).json({ error: "Must be a valid UIUC email." });
-      }
-
-      const code = randomCode();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-
-      await query(
-        `INSERT INTO otp_codes (email, code, expires_at, attempts)
-         VALUES ($1, $2, $3, 0)
-         ON CONFLICT (email) DO UPDATE SET
-           code = EXCLUDED.code,
-           expires_at = EXCLUDED.expires_at,
-           attempts = 0`,
-        [email, code, expiresAt]
-      );
-
-      await sendOtp(email, code);
-      return res.json({ success: true });
-    } catch (err) {
-      console.error("POST /api/auth/send-otp", err);
-      return res.status(500).json({ error: "Failed to send verification code" });
-    }
-  });
-
-  app.post("/api/auth/verify-otp", async (req: Request, res: Response) => {
-    try {
-      const { email, code } = req.body;
-      if (!email || !code) {
-        return res.status(400).json({ error: "email and code are required" });
-      }
-
-      const [row] = await query<{
-        code: string; expires_at: string; attempts: number
-      }>("SELECT * FROM otp_codes WHERE email = $1", [email]);
-
-      if (!row) {
-        return res.status(404).json({ error: "No verification code found. Please request a new one." });
-      }
-
-      if (row.attempts >= 5) {
-        await query("DELETE FROM otp_codes WHERE email = $1", [email]);
-        return res.status(429).json({ error: "Too many attempts. Please request a new code." });
-      }
-
-      if (new Date(row.expires_at) < new Date()) {
-        await query("DELETE FROM otp_codes WHERE email = $1", [email]);
-        return res.status(410).json({ error: "Code expired. Please request a new one." });
-      }
-
-      if (row.code !== code.trim()) {
-        await query("UPDATE otp_codes SET attempts = attempts + 1 WHERE email = $1", [email]);
-        const remaining = 5 - (row.attempts + 1);
-        return res.status(401).json({ error: `Incorrect code. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.` });
-      }
-
-      await query("DELETE FROM otp_codes WHERE email = $1", [email]);
-      return res.json({ success: true });
-    } catch (err) {
-      console.error("POST /api/auth/verify-otp", err);
-      return res.status(500).json({ error: "Failed to verify code" });
-    }
-  });
 
   // ─── USERS ───────────────────────────────────────────────────────────────────
 

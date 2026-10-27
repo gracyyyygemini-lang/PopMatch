@@ -1,7 +1,6 @@
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { User, onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { onAuthStateChange, type User } from "@/lib/auth";
 import { useApp } from "@/context/AppContext";
 
 export default function Index() {
@@ -10,7 +9,9 @@ export default function Index() {
   const { isOnboarded } = useApp();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+    // Fires immediately with the restored session (or null), which is what
+    // clears the loading state.
+    const unsubscribe = onAuthStateChange((nextUser) => {
       setUser(nextUser);
       setLoading(false);
     });

@@ -1,8 +1,15 @@
+import * as dotenv from "dotenv";
+import * as fs from "fs";
+import * as path from "path";
+
+// Load .env before anything else touches process.env (DATABASE_URL, PORT,
+// etc.). This makes `npm run server:dev` work the same on PowerShell, the
+// Mac/Linux shell, or any other shell — nothing shell-specific needed.
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import * as fs from "fs";
-import * as path from "path";
 
 const app = express();
 const log = console.log;
@@ -17,14 +24,22 @@ function setupCors(app: express.Application) {
   app.use((req, res, next) => {
     const origins = new Set<string>();
 
-    if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+    // Comma-separated list of sites allowed to call this API, e.g.
+    // ALLOWED_ORIGINS="https://popmatch.app,https://www.popmatch.app"
+    if (process.env.ALLOWED_ORIGINS) {
+      process.env.ALLOWED_ORIGINS.split(",").forEach((entry: string) => {
+        const trimmed = entry.trim();
+        if (!trimmed) return;
+        origins.add(
+          /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+        );
+      });
     }
 
-    if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
-        origins.add(`https://${d.trim()}`);
-      });
+    // The web build is normally served by this same server, so same-origin
+    // requests carry no Origin header and never reach the check below.
+    if (process.env.PUBLIC_DOMAIN) {
+      origins.add(`https://${process.env.PUBLIC_DOMAIN.replace(/^https?:\/\//i, "")}`);
     }
 
     const origin = req.header("origin");
@@ -266,7 +281,10 @@ function setupErrorHandler(app: express.Application) {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
+      // reusePort lets multiple processes share one port (SO_REUSEPORT) —
+      // only useful behind a process manager running several workers, which
+      // this single-process dev/prod server isn't. It also isn't supported
+      // the same way on Windows, where it throws, so it's left off.
     },
     () => {
       log(`express server serving on port ${port}`);
