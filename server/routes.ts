@@ -101,6 +101,20 @@ async function initDb() {
   `);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS likes (
+      id SERIAL PRIMARY KEY,
+      liker_email VARCHAR NOT NULL,
+      liked_email VARCHAR NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (liker_email, liked_email),
+      CHECK (liker_email <> liked_email)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_likes_liked ON likes (liked_email)`);
+  // Match schema.sql: a table created here must not be readable via the anon key.
+  await query(`ALTER TABLE likes ENABLE ROW LEVEL SECURITY`);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS stats (
       key VARCHAR PRIMARY KEY,
       value INT DEFAULT 0
@@ -139,6 +153,16 @@ async function initDb() {
   `);
 
   console.log("Database initialized");
+}
+
+type MutualLikeRow = { email: string; matched_at: Date | string };
+
+/** The match became mutual when the later of the two likes landed. */
+function toMutualMatch(row: MutualLikeRow) {
+  return {
+    email: row.email,
+    matchedAt: new Date(row.matched_at).getTime(),
+  };
 }
 
 type UserRow = {
@@ -266,6 +290,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("GET /api/users", err);
       return res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  // ─── LIKES ───────────────────────────────────────────────────────────────────
+
+  app.post("/api/likes", async (req: Request, res: Response) => {
+    try {
+      const likerEmail = typeof req.body?.likerEmail === "string" ? req.body.likerEmail.trim().toLowerCase() : "";
+      const likedEmail = typeof req.body?.likedEmail === "string" ? req.body.likedEmail.trim().toLowerCase() : "";
+
+      if (!likerEmail || !likedEmail) {
+        return res.status(400).json({ error: "likerEmail and likedEmail are required" });
+      }
+      if (likerEmail === likedEmail) {
+        return res.status(400).json({ error: "You can't like yourself" });
+      }
+
+      await query(
+        `INSERT INTO likes (liker_email, liked_email) VALUES ($1, $2)
+         ON CONFLICT (liker_email, liked_email) DO NOTHING`,
+        [likerEmail, likedEmail]
+      );
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("POST /api/likes", err);
+      return res.status(500).json({ error: "Failed to save like" });
+    }
+  });
+
+  // Everyone :email liked who also liked :email back.
+  app.get("/api/likes/mutual/:email", async (req: Request, res: Response) => {
+    try {
+      const email = String(req.params.email).trim().toLowerCase();
+      const rows = await query<MutualLikeRow>(
+        `SELECT mine.liked_email AS email,
+                GREATEST(mine.created_at, theirs.created_at) AS matched_at
+         FROM likes mine
+         JOIN likes theirs
+           ON theirs.liker_email = mine.liked_email
+          AND theirs.liked_email = mine.liker_email
+         WHERE mine.liker_email = $1
+         ORDER BY matched_at DESC`,
+        [email]
+      );
+      return res.json(rows.map(toMutualMatch));
+    } catch (err) {
+      console.error("GET /api/likes/mutual", err);
+      return res.status(500).json({ error: "Failed to fetch mutual likes" });
     }
   });
 

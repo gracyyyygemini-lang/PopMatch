@@ -268,7 +268,7 @@ export default function MatchmakerScreen() {
   const {
     currentUser, users, addMatch, addLiked, addPassed,
     likedUserIds, passedUserIds, computeScore, subleases,
-    mockLikedByIds, startMatchConversation,
+    likeUser, startMatchConversation,
   } = useApp();
 
   const [matchModalUser, setMatchModalUser] = useState<UserProfile | null>(null);
@@ -307,13 +307,13 @@ export default function MatchmakerScreen() {
     await addLiked(user.id);
     await addMatch({ userId: user.id, score, liked: true, timestamp: Date.now() });
 
-    const isMutual = mockLikedByIds.includes(user.id);
+    const isMutual = await likeUser(user);
     if (isMutual) {
       const convoId = startMatchConversation(user);
       setMatchConvoId(convoId);
       setMatchModalUser(user);
     }
-  }, [currentUser, computeScore, mockLikedByIds, startMatchConversation, addLiked, addMatch]);
+  }, [currentUser, computeScore, likeUser, startMatchConversation, addLiked, addMatch]);
 
   const handlePass = useCallback(async (user: UserProfile) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

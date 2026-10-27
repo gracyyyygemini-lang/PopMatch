@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchUserProfile, fetchUsers, mergeProfile, saveUserProfile } from "@/lib/users";
+import { fetchMutualMatches, saveLike } from "@/lib/likes";
 
 export type LeaseType = "full_year" | "fall_sublease" | "spring_sublease" | "summer_sublease";
 export type GenderPref = "girls_only" | "boys_only" | "mixed";
@@ -396,9 +397,11 @@ interface AppContextValue {
   startMatchConversation: (targetUser: UserProfile) => string;
   sendMessage: (conversationId: string, content: string) => void;
   getMessages: (conversationId: string) => ChatMessage[];
-  mockLikedByIds: string[];
+  /** Records the like and resolves true if they had already liked us back. */
+  likeUser: (user: UserProfile) => Promise<boolean>;
 }
 
+/** MOCK_USERS who "already liked you" — only consulted when USE_MOCK_USERS is on. */
 const MOCK_LIKED_BY_IDS = ["u1", "u3", "u5", "u7"];
 
 /** Set EXPO_PUBLIC_USE_MOCK_USERS=true to swipe through MOCK_USERS in development. */
@@ -784,6 +787,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return chatMessages.filter(m => m.conversationId === conversationId).sort((a, b) => a.createdAt - b.createdAt);
   };
 
+  const likeUser = async (user: UserProfile): Promise<boolean> => {
+    if (USE_MOCK_USERS) return MOCK_LIKED_BY_IDS.includes(user.id);
+    if (!currentUser) return false;
+    try {
+      await saveLike(currentUser.email, user.email);
+      const mutual = await fetchMutualMatches(currentUser.email);
+      return mutual.some(m => m.email === user.email.toLowerCase());
+    } catch (error) {
+      console.warn("Couldn't save the like to the server:", error);
+      return false;
+    }
+  };
+
   const getTrustInfo = (userEmail: string): TrustInfo => {
     const directFriend = friends.find(f => f.email === userEmail);
     if (directFriend) {
@@ -854,7 +870,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     crashPosts, addCrashPost, updateCrashPost,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
     conversations, startConversation, startMatchConversation, sendMessage, getMessages,
-    mockLikedByIds: MOCK_LIKED_BY_IDS,
+    likeUser,
   }), [
     currentUser, users, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, crashPosts, friends,

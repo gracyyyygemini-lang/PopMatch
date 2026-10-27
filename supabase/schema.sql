@@ -108,6 +108,18 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- One row per swipe-right. A match is two rows pointing at each other.
+-- Keyed by email (lowercased by the API) rather than users.id, because the
+-- upsert in POST /api/users keeps the first id it saw for an email.
+CREATE TABLE IF NOT EXISTS likes (
+  id SERIAL PRIMARY KEY,
+  liker_email VARCHAR NOT NULL,
+  liked_email VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (liker_email, liked_email),
+  CHECK (liker_email <> liked_email)
+);
+
 -- ─── Indexes ────────────────────────────────────────────────────────────────
 -- The app filters listings constantly; these keep the marketplace fast as the
 -- table grows past a few hundred rows.
@@ -120,6 +132,9 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages (conversation_i
 CREATE INDEX IF NOT EXISTS idx_conversations_p1 ON conversations (participant1_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_p2 ON conversations (participant2_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+-- The UNIQUE constraint already indexes (liker_email, liked_email); this one
+-- covers the reverse lookup "who liked me".
+CREATE INDEX IF NOT EXISTS idx_likes_liked ON likes (liked_email);
 
 -- ─── Seed rows ──────────────────────────────────────────────────────────────
 
@@ -147,6 +162,7 @@ ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
 
 -- ─── Avatar storage ─────────────────────────────────────────────────────────
 -- Creates the public "avatars" bucket that lib/uploads.ts writes to, so you

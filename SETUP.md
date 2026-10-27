@@ -184,8 +184,9 @@ blocking it:
 
 1. **Some data is still demo or device-only.** Profiles now save to the
    `users` table (with the avatar URL in `profile_image`) and the swipe deck
-   reads real students from `GET /api/users`. `DEMO_POSTS`, crash posts, likes,
-   and mutual matches are not in Postgres yet. Set
+   reads real students from `GET /api/users`. Likes go to the `likes` table and
+   mutual matches come from `GET /api/likes/mutual/:email`. `DEMO_POSTS`, crash
+   posts, and passes are not in Postgres yet. Set
    `EXPO_PUBLIC_USE_MOCK_USERS=true` to use the hardcoded `MOCK_USERS` deck
    while developing.
 2. **The Express layer may be unnecessary.** It queries Postgres directly with

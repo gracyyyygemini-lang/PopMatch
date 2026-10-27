@@ -68,11 +68,14 @@ Honest list of what is not finished:
 
 1. **Some screens still run on demo data.** Profiles are real: onboarding and
    profile edits save to the `users` table (AsyncStorage is only a cache), and
-   the swipe deck and map read other students from `GET /api/users`.
-   `DEMO_POSTS` and the crash posts are still hardcoded, likes and mutual
-   matches are device-only, and `intent` / `vibeProfile` have no columns yet.
-   `EXPO_PUBLIC_USE_MOCK_USERS=true` swaps the deck back to `MOCK_USERS` for
-   development.
+   the swipe deck and map read other students from `GET /api/users`. Likes
+   are real too: swiping right writes to the `likes` table, and a match fires
+   only when the other student has liked you back (`GET /api/likes/mutual`).
+   `DEMO_POSTS` and the crash posts are still hardcoded, passes and the
+   match list are device-only, a like that fails to reach the server isn't
+   retried, and `intent` / `vibeProfile` have no columns yet.
+   `EXPO_PUBLIC_USE_MOCK_USERS=true` swaps the deck back to `MOCK_USERS`, with
+   their canned "already liked you" matches, for development.
 2. **RLS is on with no policies**, which denies everything by design. The
    Express layer works around this with a direct connection. Real policies are
    needed before the app could talk to Supabase directly and drop the server.
