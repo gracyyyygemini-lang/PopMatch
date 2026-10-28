@@ -1,7 +1,8 @@
 # PopMatch — setup
 
 Firebase is gone and Replit is gone. Supabase is the only backend: it handles
-sign-in, the Postgres database, and profile-picture storage.
+sign-in, the Postgres database, and photo storage (profile pictures, listing
+and Crash & Cash photos).
 
 This guide starts a **brand-new Supabase project** under the account you
 actually want to keep (`gracyyyygemini@gmail.com`, the one matching GitHub).
@@ -34,9 +35,13 @@ actually want to keep (`gracyyyygemini@gmail.com`, the one matching GitHub).
 Dashboard → **SQL Editor** → **New query** → paste the entire contents of
 [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
 
-That one file creates every table, adds indexes, turns on row level security,
-and creates the public `avatars` storage bucket with its policies. It is safe
-to run more than once.
+That one file creates every table, adds indexes (including the `pg_trgm`
+extension, in the `extensions` schema, for search), turns on row level
+security, and creates the two public storage buckets — `avatars` and
+`listing-photos` (2 MB, JPEG only) — with policies that let anyone read and
+let a signed-in student write only inside their own folder. It is safe to run
+more than once. The API server also creates any missing tables, columns and
+indexes when it starts.
 
 Check it worked: **Table Editor** should now list `users`, `listings`,
 `messages`, `conversations`, and the rest.
@@ -56,10 +61,16 @@ cp .env.example .env
 | `EXPO_PUBLIC_SUPABASE_URL` | Project Settings → API → **Project URL** |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Project Settings → API → **anon / public** key |
 | `DATABASE_URL` | Project Settings → Database → **Connection string → URI** (swap in your password) |
+| `ADMIN_EMAILS` | Comma-separated sign-in emails allowed into the admin dashboard. Unset means nobody. |
 
-The anon key is designed to ship inside client apps — it is safe to expose.
-The `service_role` key is not: it bypasses every security policy, so it must
-never go into a variable starting with `EXPO_PUBLIC_`.
+The anon key is designed to ship inside client apps — it is safe to expose,
+and with no RLS table policies it can't read or write any table. The
+`service_role` key is not safe: it bypasses every security policy, so it must
+never go into a variable starting with `EXPO_PUBLIC_`. The app doesn't need it.
+
+The API verifies sign-in tokens against the project's public signing keys
+(`<project URL>/auth/v1/.well-known/jwks.json`), so no JWT secret goes in
+`.env` either. It uses `EXPO_PUBLIC_SUPABASE_URL` unless `SUPABASE_URL` is set.
 
 ---
 
@@ -96,9 +107,10 @@ account — university ones included — sign in through it.
 6. **Authentication** → **Providers** → **Azure** → enable it.
 7. Paste in the client ID and the secret value.
 8. Leave **Azure Tenant URL** blank or set it to `common` so any Microsoft
-   account can attempt sign-in. `lib/auth.ts` then rejects anyone whose address
-   isn't `@illinois.edu` and signs them straight back out, so UIUC-only is
-   enforced on your side either way.
+   account can attempt sign-in. After a **native** sign-in, `lib/auth.ts`
+   rejects any address that isn't `@illinois.edu` and signs it straight back
+   out. Web sign-in currently has no such check, and the API doesn't check the
+   domain either — see Known gaps.
 9. **Authentication** → **URL Configuration** → add your app's URL (for local
    development, `http://localhost:8081`) to *Site URL* and *Redirect URLs*.
 
@@ -153,6 +165,9 @@ production web build talks to its own origin. Run both servers: if the API is
 down, a red "Your profile isn't saved yet" banner appears and the app keeps
 retrying. Nothing Replit-specific remains.
 
+`npm run server:dev` doesn't watch for changes — restart it after editing
+anything in `server/`, or the app will be talking to the old code.
+
 ---
 
 ## 6. Deploying
@@ -167,12 +182,16 @@ npm run server:prod              # serves both on $PORT
 
 `server/index.ts` serves `dist/` *and* `/api` from one process, so any host
 that runs Node works — Render, Railway, Fly.io, a VPS. Set `DATABASE_URL`,
-`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, and
-`EXPO_PUBLIC_DOMAIN` (your public hostname) in the host's environment.
+`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`,
+`EXPO_PUBLIC_DOMAIN` (your public hostname) and `ADMIN_EMAILS` in the host's
+environment.
 
 Vercel and Netlify are static-only by default and will serve the app but not
-the Express API, so they need the API deployed separately — or the Express
-layer replaced by direct Supabase calls (see below).
+the Express API, so the API needs a Node host of its own. It can't be swapped
+for direct Supabase calls without first rebuilding its auth, ownership and
+email-privacy rules as RLS policies.
+
+None of this has been done yet: PopMatch currently runs locally only.
 
 Whatever host you pick, add its URL to Supabase → **Authentication** → **URL
 Configuration** → *Site URL* and *Redirect URLs*, or sign-in links will bounce.
@@ -181,25 +200,24 @@ Configuration** → *Site URL* and *Redirect URLs*, or sign-in links will bounce
 
 ## Known gaps
 
-Worth knowing before launch — these predate this migration and are not
-blocking it:
+The full, current list is in the README under **Status**. The ones that
+affect setup and deployment:
 
-1. **Some data is still demo or device-only.** Profiles now save to the
-   `users` table (with the avatar URL in `profile_image`) and the swipe deck
-   reads real students from `GET /api/users`. Likes go to the `likes` table and
-   mutual matches come from `GET /api/likes/mutual/:email`. `DEMO_POSTS`, crash
-   posts, and passes are not in Postgres yet. Set
-   `EXPO_PUBLIC_USE_MOCK_USERS=true` to use the hardcoded `MOCK_USERS` deck
-   while developing.
-2. **The Express layer may be unnecessary.** It queries Postgres directly with
-   the connection string. The app could call Supabase from the client instead
-   and drop the server entirely — simpler to host, one less thing to deploy —
-   but every table would need real RLS policies first, since the schema
-   currently enables RLS with no policies (which denies everything by design).
+1. **UIUC-only isn't enforced on the server.** The domain check runs in the
+   app (before an email code is sent, and after native Microsoft sign-in).
+   Web sign-in has no check, and the API accepts any valid Supabase session.
+2. **RLS table policies are deliberately absent**, so every table is closed to
+   the anon key and the Express API is required — not optional.
+3. **Not deployed, and verified on web only** — never on an iOS or Android
+   device or simulator.
+4. **No automated tests** in the repo.
 
 ---
 
-## What changed
+## What changed in the Firebase → Supabase migration
+
+History, kept for reference — this describes that one migration, not the app
+as it is now (for that, see the README).
 
 | File | Change |
 | --- | --- |
