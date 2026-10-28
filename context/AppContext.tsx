@@ -835,10 +835,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const userId = await resolveMyId();
       const images = await Promise.all(
-        (post.images ?? []).map((uri, i) => uploadPostPhoto(userId, post.id, `photo-${i}`, uri))
+        (post.images ?? []).map((uri, i) => uploadPostPhoto(post.id, `photo-${i}`, uri))
       );
       const floorPlanUrl = post.floorPlanUrl
-        ? await uploadPostPhoto(userId, post.id, "floor-plan", post.floorPlanUrl)
+        ? await uploadPostPhoto(post.id, "floor-plan", post.floorPlanUrl)
         : undefined;
       const saved = await createListing({ ...post, userId, images, floorPlanUrl });
       setSubleases(prev => [saved, ...prev.filter(s => s.id !== saved.id)]);
@@ -864,7 +864,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const userId = await resolveMyId();
       const imageUrl = post.imageUrl
-        ? await uploadPostPhoto(userId, post.id, "photo-0", post.imageUrl)
+        ? await uploadPostPhoto(post.id, "photo-0", post.imageUrl)
         : "";
       const saved = await createCrashPost({ ...post, userId, imageUrl });
       setCrashPosts(prev => [saved, ...prev.filter(p => p.id !== saved.id)]);

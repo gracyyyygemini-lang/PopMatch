@@ -331,7 +331,7 @@ export default function OnboardingScreen() {
     let avatarUrl = profileImage;
     if (profileImage) {
       try {
-        avatarUrl = await uploadProfileImage(userId, profileImage);
+        avatarUrl = await uploadProfileImage(profileImage);
       } catch (error) {
         console.error("Avatar upload failed, keeping local copy:", error);
       }

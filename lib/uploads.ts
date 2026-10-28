@@ -57,20 +57,33 @@ function extensionFor(contentType: string): string {
 }
 
 /**
- * Reads a local image and stores it in `bucket` at the path `pathFor` builds
- * from its content type; returns the public URL.
+ * The signed-in user's auth id. Storage policies only let someone write under
+ * a top-level folder named for their own auth id (supabase/schema.sql), so
+ * every upload path starts with it — never with users.id, which anyone can see.
+ */
+async function storageFolder(): Promise<string> {
+  const { data, error } = await supabase.auth.getSession();
+  const uid = data.session?.user.id;
+  if (error || !uid) throw new Error("Sign in again to upload photos.");
+  return uid;
+}
+
+/**
+ * Reads a local image and stores it in `bucket` at <auth uid>/<the path
+ * `pathFor` builds from its content type>; returns the public URL.
  */
 async function uploadToBucket(
   bucket: string,
   localUri: string,
   pathFor: (contentType: string) => string,
 ): Promise<string> {
+  const folder = await storageFolder();
   const response = await fetch(localUri);
   if (!response.ok) throw new Error("Could not read the selected image.");
 
   const blob = await response.blob();
   const type = blob.type || "image/jpeg";
-  const path = pathFor(type);
+  const path = `${folder}/${pathFor(type)}`;
 
   // Web accepts the Blob directly; React Native needs raw bytes.
   let body: Blob | Uint8Array;
@@ -96,14 +109,11 @@ async function uploadToBucket(
  * that works on any device. Without this, ImagePicker's file:// URI only
  * resolves on the phone that picked it.
  */
-export async function uploadProfileImage(
-  userId: string,
-  localUri: string
-): Promise<string> {
+export async function uploadProfileImage(localUri: string): Promise<string> {
   // Already uploaded (re-saving an unchanged profile) — nothing to do.
   if (/^https?:\/\//i.test(localUri)) return localUri;
 
-  return uploadToBucket(AVATAR_BUCKET, localUri, type => `${userId}/avatar-${Date.now()}.${extensionFor(type)}`);
+  return uploadToBucket(AVATAR_BUCKET, localUri, type => `avatar-${Date.now()}.${extensionFor(type)}`);
 }
 
 /** Public bucket for listing and crash post photos (see supabase/schema.sql). */
@@ -127,17 +137,16 @@ async function downscale(localUri: string): Promise<string> {
 }
 
 /**
- * Uploads one photo of a post to `<userId>/<postId>/<slot>.jpg`. The path is
+ * Uploads one photo of a post to `<auth uid>/<postId>/<slot>.jpg`. The path is
  * fixed per slot, so retrying a failed post overwrites rather than piling up
- * copies, and one user's uploads can't land on another's.
+ * copies; the storage policies keep one user's uploads out of another's folder.
  */
 export async function uploadPostPhoto(
-  userId: string,
   postId: string,
   slot: string,
   localUri: string
 ): Promise<string> {
   if (/^https?:\/\//i.test(localUri)) return localUri;
   const small = await downscale(localUri);
-  return uploadToBucket(LISTING_PHOTO_BUCKET, small, () => `${userId}/${postId}/${slot}.jpg`);
+  return uploadToBucket(LISTING_PHOTO_BUCKET, small, () => `${postId}/${slot}.jpg`);
 }
