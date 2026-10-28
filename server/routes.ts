@@ -27,13 +27,19 @@ async function initDb() {
       avatar_color VARCHAR DEFAULT '#005F73',
       college VARCHAR DEFAULT '',
       organizations TEXT[] DEFAULT '{}',
-      profile_image VARCHAR DEFAULT ''
+      profile_image VARCHAR DEFAULT '',
+      intent VARCHAR,
+      vibe_profile JSONB
     )
   `);
 
   await query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image VARCHAR DEFAULT ''
   `).catch(() => {});
+  // What the student came for (Intent) and their compatibility answers
+  // (VibeProfile). vibe_profile only ever holds what toVibeProfile allows.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS intent VARCHAR`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vibe_profile JSONB`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS friendships (
@@ -160,6 +166,20 @@ async function initDb() {
   // Match schema.sql: a table created here must not be readable via the anon key.
   await query(`ALTER TABLE likes ENABLE ROW LEVEL SECURITY`);
 
+  // One row per swipe-left, keyed by email like likes (users.id can differ
+  // per device until the client adopts the server's).
+  await query(`
+    CREATE TABLE IF NOT EXISTS passes (
+      id SERIAL PRIMARY KEY,
+      passer_email VARCHAR NOT NULL,
+      passed_email VARCHAR NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (passer_email, passed_email),
+      CHECK (passer_email <> passed_email)
+    )
+  `);
+  await query(`ALTER TABLE passes ENABLE ROW LEVEL SECURITY`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS stats (
       key VARCHAR PRIMARY KEY,
@@ -229,7 +249,69 @@ type UserRow = {
   zone: string | null; landlord: string | null; stays_thanksgiving: boolean | null;
   stays_spring_break: boolean | null; avatar_color: string | null;
   college: string | null; organizations: string[] | null; profile_image: string | null;
+  intent: string | null; vibe_profile: unknown;
 };
+
+const INTENTS = ["host", "joiner", "co_seeker", "sublessor", "sublessee"];
+
+/** A string from `allowed`, or undefined. */
+const oneOf = (allowed: readonly string[]) => (v: unknown) =>
+  typeof v === "string" && allowed.includes(v) ? v : undefined;
+/** Free text, trimmed and capped so a profile can't carry a novel. */
+const shortText = (max: number) => (v: unknown) =>
+  typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined;
+const shortTexts = (v: unknown) =>
+  Array.isArray(v)
+    ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).map(x => x.trim().slice(0, 40)).slice(0, 20)
+    : undefined;
+
+/**
+ * The only fields stored in users.vibe_profile, each with the check its value
+ * must pass (mirrors VibeProfile in context/AppContext.tsx). Like
+ * LISTING_DETAILS, this list is the schema: anything else is dropped.
+ */
+const VIBE_PROFILE = {
+  identity: oneOf(["girl", "guy", "nonbinary"]),
+  lookingFor: oneOf(["girls", "guys", "coed"]),
+  starSign: oneOf(["aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio",
+    "sagittarius", "capricorn", "aquarius", "pisces"]),
+  mbti: oneOf(["INTJ", "INTP", "ENTJ", "ENTP", "INFJ", "INFP", "ENFJ", "ENFP", "ISTJ", "ISFJ",
+    "ESTJ", "ESFJ", "ISTP", "ISFP", "ESTP", "ESFP", "idk"]),
+  year: oneOf(["freshman", "sophomore", "junior", "senior", "grad_phd"]),
+  greekLife: oneOf(["independent", "sorority", "fraternity", "prof_frat"]),
+  vices: shortTexts,
+  pets: shortTexts,
+  sleep: shortText(40),
+  alarms: shortText(40),
+  cleanlinessVibe: shortText(40),
+  groceries: shortText(40),
+  guests: shortText(40),
+  prompt: shortText(120),
+  promptAnswer: shortText(500),
+};
+
+type VibeProfile = {
+  [K in keyof typeof VIBE_PROFILE]?: NonNullable<ReturnType<(typeof VIBE_PROFILE)[K]>>;
+};
+
+/**
+ * Used both ways: on a request body before saving and on the column when
+ * reading. identity and lookingFor are required by the app's type, so a
+ * profile without valid ones isn't a vibe profile at all (undefined).
+ */
+function toVibeProfile(source: unknown): VibeProfile | undefined {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return undefined;
+  const record = source as Record<string, unknown>;
+  const vibe: Record<string, unknown> = {};
+  for (const [key, check] of Object.entries(VIBE_PROFILE)) {
+    const value = check(record[key]);
+    if (value !== undefined) vibe[key] = value;
+  }
+  if (!vibe.identity || !vibe.lookingFor) return undefined;
+  vibe.vices ??= [];
+  vibe.pets ??= [];
+  return vibe as VibeProfile;
+}
 
 /** `landlord` holds a JSON array written by POST /api/users, or a bare legacy value. */
 function parseLandlords(value: string | null): string[] {
@@ -246,6 +328,7 @@ function parseLandlords(value: string | null): string[] {
  * users endpoint responds through this so column names never reach the UI.
  */
 function toUserProfile(row: UserRow) {
+  const vibeProfile = toVibeProfile(row.vibe_profile);
   return {
     id: row.id,
     name: row.name,
@@ -266,6 +349,8 @@ function toUserProfile(row: UserRow) {
     college: row.college ?? "",
     organizations: row.organizations ?? [],
     ...(row.profile_image ? { profileImage: row.profile_image } : {}),
+    ...(row.intent && INTENTS.includes(row.intent) ? { intent: row.intent } : {}),
+    ...(vibeProfile ? { vibeProfile } : {}),
   };
 }
 
@@ -528,6 +613,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         noise = 3, leaseType = "full_year", zone = "campustown",
         landlords = ["other"], staysThanksgiving = false, staysSpringBreak = false,
         avatarColor = "#005F73", college = "", organizations = [], profileImage = "",
+        intent: rawIntent, vibeProfile: rawVibe,
       } = req.body;
 
       if (namesSomeoneElse(claimedEmail, caller.email, true)) {
@@ -540,14 +626,25 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (!email.endsWith(".edu")) {
         return res.status(400).json({ error: "Must use a .edu email address" });
       }
+      if (rawIntent !== undefined && rawIntent !== null && !INTENTS.includes(rawIntent)) {
+        return res.status(400).json({ error: `intent must be one of ${INTENTS.join(", ")}` });
+      }
+      // null = not sent: the stored values are kept (COALESCE below), so a
+      // device that hasn't filled these in yet can't wipe them.
+      const intent: string | null = rawIntent ?? null;
+      const vibeProfile = rawVibe === undefined || rawVibe === null ? undefined : toVibeProfile(rawVibe);
+      if (rawVibe !== undefined && rawVibe !== null && !vibeProfile) {
+        return res.status(400).json({ error: "vibeProfile needs a valid identity and lookingFor" });
+      }
 
       const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
       try {
         await query(
           `INSERT INTO users (id, name, email, major, bio, budget, gender, gender_pref,
             cleanliness, noise, lease_type, zone, landlord, stays_thanksgiving,
-            stays_spring_break, avatar_color, college, organizations, profile_image)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+            stays_spring_break, avatar_color, college, organizations, profile_image,
+            intent, vibe_profile)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
            ON CONFLICT (email) DO UPDATE SET
              name = EXCLUDED.name, major = EXCLUDED.major, bio = EXCLUDED.bio,
              budget = EXCLUDED.budget, gender = EXCLUDED.gender,
@@ -558,10 +655,13 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
              stays_spring_break = EXCLUDED.stays_spring_break,
              avatar_color = EXCLUDED.avatar_color, college = EXCLUDED.college,
              organizations = EXCLUDED.organizations,
-             profile_image = EXCLUDED.profile_image`,
+             profile_image = EXCLUDED.profile_image,
+             intent = COALESCE(EXCLUDED.intent, users.intent),
+             vibe_profile = COALESCE(EXCLUDED.vibe_profile, users.vibe_profile)`,
           [id, name, email, major, bio, budget, gender, genderPref, cleanliness,
             noise, leaseType, zone, landlordJson, staysThanksgiving, staysSpringBreak,
-            avatarColor, college, organizations, profileImage]
+            avatarColor, college, organizations, profileImage,
+            intent, vibeProfile ? JSON.stringify(vibeProfile) : null]
         );
       } catch (err) {
         // A new profile whose id is already someone else's: never overwrite theirs.
@@ -596,11 +696,17 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     }
   });
 
-  // Everyone but the caller. (?exclude= is ignored; the caller is always left out.)
+  // Everyone but the caller and anyone they've passed on. (?exclude= is
+  // ignored; the caller is always left out.)
   app.get("/api/users", async (req: Request, res: Response) => {
     try {
       const rows = await query<UserRow>(
-        "SELECT * FROM users WHERE lower(email) <> $1 ORDER BY name",
+        `SELECT * FROM users u
+         WHERE lower(u.email) <> $1
+           AND NOT EXISTS (
+             SELECT 1 FROM passes p WHERE p.passer_email = $1 AND p.passed_email = lower(u.email)
+           )
+         ORDER BY u.name`,
         [req.caller!.email]
       );
       return res.json(rows.map(toUserProfile));
@@ -637,6 +743,33 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     } catch (err) {
       console.error("POST /api/likes", err);
       return res.status(500).json({ error: "Failed to save like" });
+    }
+  });
+
+  // The caller passes on passedEmail; GET /api/users stops returning them.
+  app.post("/api/passes", async (req: Request, res: Response) => {
+    try {
+      const passerEmail = req.caller!.email;
+      if (namesSomeoneElse(req.body?.passerEmail, passerEmail, true)) {
+        return res.status(403).json({ error: "You can only pass as yourself" });
+      }
+      const passedEmail = typeof req.body?.passedEmail === "string" ? req.body.passedEmail.trim().toLowerCase() : "";
+      if (!passedEmail) {
+        return res.status(400).json({ error: "passedEmail is required" });
+      }
+      if (passerEmail === passedEmail) {
+        return res.status(400).json({ error: "You can't pass on yourself" });
+      }
+
+      await query(
+        `INSERT INTO passes (passer_email, passed_email) VALUES ($1, $2)
+         ON CONFLICT (passer_email, passed_email) DO NOTHING`,
+        [passerEmail, passedEmail]
+      );
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("POST /api/passes", err);
+      return res.status(500).json({ error: "Failed to save pass" });
     }
   });
 
@@ -712,6 +845,26 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (!friend) return res.status(404).json({ error: "That @illinois.edu email is not registered on PopMatch yet" });
       if (friend.id === userId) {
         return res.status(400).json({ error: "Cannot friend yourself" });
+      }
+
+      // A friendship is written on both sides, so it needs some sign the
+      // other person wants contact: a mutual match or a conversation.
+      const [connection] = await query<{ connected: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM likes mine
+           JOIN likes theirs ON theirs.liker_email = mine.liked_email AND theirs.liked_email = mine.liker_email
+           WHERE mine.liker_email = $1 AND mine.liked_email = $2
+         ) OR EXISTS (
+           SELECT 1 FROM conversations
+           WHERE (participant1_id = $3 AND participant2_id = $4)
+              OR (participant1_id = $4 AND participant2_id = $3)
+         ) AS connected`,
+        [req.caller!.email, String(friendEmail).trim().toLowerCase(), userId, friend.id]
+      );
+      if (!connection.connected) {
+        return res.status(403).json({
+          error: "You can only add friends you've matched with or messaged on PopMatch",
+        });
       }
 
       await query(

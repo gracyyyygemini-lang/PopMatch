@@ -267,7 +267,7 @@ export default function MatchmakerScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const {
-    currentUser, users, addMatch, addLiked, addPassed,
+    currentUser, users, addMatch, addLiked, passUser,
     likedUserIds, passedUserIds, computeScore, subleases,
     likeUser, startMatchConversation,
   } = useApp();
@@ -321,8 +321,8 @@ export default function MatchmakerScreen() {
 
   const handlePass = useCallback(async (user: UserProfile) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await addPassed(user.id);
-  }, [addPassed]);
+    await passUser(user);
+  }, [passUser]);
 
   const handleSayHi = async () => {
     const user = matchModalUser;

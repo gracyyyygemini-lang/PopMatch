@@ -27,8 +27,16 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_color VARCHAR DEFAULT '#005F73',
   college VARCHAR DEFAULT '',
   organizations TEXT[] DEFAULT '{}',
-  profile_image VARCHAR DEFAULT ''
+  profile_image VARCHAR DEFAULT '',
+  intent VARCHAR,          -- host | joiner | co_seeker | sublessor | sublessee
+  -- Compatibility answers. The server's toVibeProfile is the schema for this;
+  -- it drops any key or value it doesn't recognise before saving.
+  vibe_profile JSONB
 );
+
+-- Databases created before intent / vibe_profile existed.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS intent VARCHAR;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS vibe_profile JSONB;
 
 CREATE TABLE IF NOT EXISTS friendships (
   id SERIAL PRIMARY KEY,
@@ -158,6 +166,17 @@ CREATE TABLE IF NOT EXISTS likes (
   CHECK (liker_email <> liked_email)
 );
 
+-- One row per swipe-left; GET /api/users leaves passed students out of the
+-- passer's deck on every device. Keyed by email for the same reason as likes.
+CREATE TABLE IF NOT EXISTS passes (
+  id SERIAL PRIMARY KEY,
+  passer_email VARCHAR NOT NULL,
+  passed_email VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (passer_email, passed_email),
+  CHECK (passer_email <> passed_email)
+);
+
 -- ─── Indexes ────────────────────────────────────────────────────────────────
 -- The app filters listings constantly; these keep the marketplace fast as the
 -- table grows past a few hundred rows.
@@ -206,6 +225,7 @@ ALTER TABLE stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE passes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crash_posts ENABLE ROW LEVEL SECURITY;
 
 -- ─── Avatar storage ─────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchUserProfile, fetchUsers, mergeProfile, saveUserProfile } from "@/lib/users";
-import { fetchMutualMatches, saveLike } from "@/lib/likes";
+import { fetchMutualMatches, saveLike, savePass } from "@/lib/likes";
 import { apiErrorMessage, fetchConversations, fetchMessages, openConversation, postMessage } from "@/lib/messages";
 import {
   completeCrashPost as completeCrashPostOnServer, createCrashPost, createListing,
@@ -431,6 +431,8 @@ interface AppContextValue {
   messagingError: string | null;
   /** Records the like and resolves true if they had already liked us back. */
   likeUser: (user: UserProfile) => Promise<boolean>;
+  /** Hides them here at once and records the pass on the server (retried until it lands). */
+  passUser: (user: UserProfile) => Promise<void>;
 }
 
 /** MOCK_USERS who "already liked you" — only consulted when USE_MOCK_USERS is on. */
@@ -450,6 +452,9 @@ const MESSAGE_RETRY_MS = 5000;
 const LISTINGS_KEY = "@popmatch_listings_cache";
 const CRASH_POSTS_KEY = "@popmatch_crash_posts_cache";
 const POSTS_RETRY_MS = 15000;
+/** Passes the server hasn't confirmed yet (emails), retried until it does. */
+const PENDING_PASSES_KEY = "@popmatch_pending_passes";
+const PASS_RETRY_MS = 30000;
 
 /** Server rows win; unsent local ones (status set) are kept until the server has them. */
 function mergeMessages(local: ChatMessage[], server: ChatMessage[], conversationId: string): ChatMessage[] {
@@ -568,6 +573,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [subleases, setSubleases] = useState<SubleasePost[]>(USE_MOCK_USERS ? DEMO_POSTS : []);
   const [crashPosts, setCrashPosts] = useState<CrashPost[]>(USE_MOCK_USERS ? DEMO_CRASH : []);
   const [postsError, setPostsError] = useState<string | null>(null);
+  const [pendingPasses, setPendingPasses] = useState<string[]>([]);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -592,6 +598,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const storedFriends = await AsyncStorage.getItem("@popmatch_friends");
         const storedConvos = await AsyncStorage.getItem(CONVERSATIONS_KEY);
         const storedChatMsgs = await AsyncStorage.getItem(CHAT_MESSAGES_KEY);
+        const storedPendingPasses = await AsyncStorage.getItem(PENDING_PASSES_KEY);
+        if (storedPendingPasses) {
+          const cached: string[] = JSON.parse(storedPendingPasses);
+          setPendingPasses(prev => [...new Set([...cached, ...prev])]);
+        }
 
         if (stored) {
           const cached: UserProfile = JSON.parse(stored);
@@ -715,6 +726,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
       const merged = mergeProfile(cached, server);
+      // Saved before intent / vibeProfile had columns: send this device's copy up.
+      if ((!server.intent && cached.intent) || (!server.vibeProfile && cached.vibeProfile)) {
+        await pushProfile(merged);
+        return;
+      }
       serverIdRef.current = { email: server.email.toLowerCase(), id: server.id };
       setCurrentUserState(prev => (prev?.email === merged.email ? merged : prev));
       await cacheUser(merged);
@@ -1092,6 +1108,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const savePendingPasses = (next: string[]) => {
+    AsyncStorage.setItem(PENDING_PASSES_KEY, JSON.stringify(next)).catch(error =>
+      console.error("Couldn't cache pending passes:", error));
+  };
+
+  /** Sends one pass; on failure it joins the queue the effect below retries. */
+  const sendPass = async (email: string): Promise<boolean> => {
+    try {
+      await savePass(email);
+      setPendingPasses(prev => {
+        const next = prev.filter(e => e !== email);
+        savePendingPasses(next);
+        return next;
+      });
+      return true;
+    } catch (error) {
+      console.error("[passes] Couldn't save the pass; will retry:", error);
+      setPendingPasses(prev => {
+        if (prev.includes(email)) return prev;
+        const next = [...prev, email];
+        savePendingPasses(next);
+        return next;
+      });
+      return false;
+    }
+  };
+
+  const passUser = async (user: UserProfile) => {
+    await addPassed(user.id);
+    if (USE_MOCK_USERS) return;
+    await sendPass(user.email.trim().toLowerCase());
+  };
+
+  // A pass that didn't reach the server would put that student back in the
+  // deck on another device, so keep retrying until each one lands.
+  const sendPassRef = useRef(sendPass);
+  sendPassRef.current = sendPass;
+  useEffect(() => {
+    if (pendingPasses.length === 0 || !currentUser) return;
+    const timer = setInterval(() => {
+      pendingPasses.forEach(email => sendPassRef.current(email));
+    }, PASS_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [pendingPasses, currentUser?.email]);
+
   const getTrustInfo = (userEmail: string): TrustInfo => {
     const directFriend = friends.find(f => f.email === userEmail);
     if (directFriend) {
@@ -1163,7 +1224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
     conversations, startConversation, startMatchConversation, sendMessage, retryMessage, getMessages,
     refreshConversations, refreshMessages, messagingError,
-    likeUser,
+    likeUser, passUser,
   }), [
     currentUser, profileSyncError, users, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, crashPosts, postsError, friends,

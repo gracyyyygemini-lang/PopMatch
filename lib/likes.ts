@@ -16,6 +16,14 @@ export async function saveLike(likerEmail: string, likedEmail: string): Promise<
   await apiRequest("POST", "/api/likes", { likerEmail, likedEmail });
 }
 
+/**
+ * Idempotent, like saveLike. Passes live in the `passes` table so a student
+ * you passed on stays out of your deck on every device (GET /api/users).
+ */
+export async function savePass(passedEmail: string): Promise<void> {
+  await apiRequest("POST", "/api/passes", { passedEmail });
+}
+
 /** Everyone `email` liked who liked them back. */
 export async function fetchMutualMatches(email: string): Promise<MutualMatch[]> {
   const res = await apiRequest("GET", `/api/likes/mutual/${encodeURIComponent(email)}`);

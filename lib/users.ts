@@ -21,24 +21,27 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * The columns the server stores. `intent` and `vibeProfile` have no columns
- * yet and stay device-only. A local `file://` avatar (left behind when the
+ * What the server stores. A local `file://` avatar (left behind when the
  * Storage upload fails) means nothing to other devices, so it isn't sent.
  */
 function toPayload(user: UserProfile) {
-  const { intent: _intent, vibeProfile: _vibe, profileImage, ...stored } = user;
+  const { profileImage, ...stored } = user;
   return {
     ...stored,
     profileImage: profileImage && /^https?:\/\//i.test(profileImage) ? profileImage : "",
   };
 }
 
-/** Server fields win; device-only fields are carried over from `local`. */
+/**
+ * Server fields win. Anything the server doesn't have yet (a profile saved
+ * before intent / vibeProfile had columns, an avatar that never uploaded) is
+ * carried over from `local` so the next save sends it up.
+ */
 export function mergeProfile(local: UserProfile, server: UserProfile): UserProfile {
   return {
     ...server,
-    intent: local.intent,
-    vibeProfile: local.vibeProfile,
+    intent: server.intent ?? local.intent,
+    vibeProfile: server.vibeProfile ?? local.vibeProfile,
     profileImage: server.profileImage ?? local.profileImage,
   };
 }
