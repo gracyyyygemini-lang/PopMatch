@@ -19,6 +19,43 @@ function toListingPayload(post: SubleasePost) {
   return stored;
 }
 
+/** A search that hasn't answered by now is reported as failed, never left spinning. */
+const SEARCH_TIMEOUT_MS = 10000;
+
+function withTimeout<T>(promise: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Search took too long. Check your connection and try again.")), SEARCH_TIMEOUT_MS);
+    promise.then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
+export interface ListingSearch {
+  /** Matches building name or address, partial and case-insensitive. */
+  q?: string;
+  /** Whole dollars per month, inclusive. */
+  minPrice?: number;
+  maxPrice?: number;
+}
+
+/** Not-yet-leased listings matching every given filter, newest first. */
+export async function searchListings({ q, minPrice, maxPrice }: ListingSearch): Promise<SubleasePost[]> {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (minPrice !== undefined) params.set("minPrice", String(minPrice));
+  if (maxPrice !== undefined) params.set("maxPrice", String(maxPrice));
+  const res = await withTimeout(apiRequest("GET", `/api/listings?${params}`));
+  return (await res.json()) as SubleasePost[];
+}
+
+/** Active crash posts whose story or dates label contains `q`. */
+export async function searchCrashPosts(q: string): Promise<CrashPost[]> {
+  const res = await withTimeout(apiRequest("GET", `/api/crash-posts?${new URLSearchParams({ q })}`));
+  return (await res.json()) as CrashPost[];
+}
+
 /** Everything not yet leased, newest first. */
 export async function fetchListings(): Promise<SubleasePost[]> {
   const res = await apiRequest("GET", "/api/listings");

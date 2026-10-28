@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Platform, Modal, Animated, Image, Dimensions
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Platform, Modal, Animated, Image, Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,6 +13,10 @@ import { useCallback } from "react";
 import FacePile from "@/components/FacePile";
 import MicroFeedback from "@/components/MicroFeedback";
 import ZonePicker from "@/components/ZonePicker";
+import SearchBar from "@/components/SearchBar";
+import PriceFilter, { PRICE_RANGES, PriceRange } from "@/components/PriceFilter";
+import { useDebouncedValue, useSearch } from "@/hooks/useSearch";
+import { searchListings } from "@/lib/listings";
 import { usePolling } from "@/hooks/usePolling";
 import { PostsSyncBanner } from "@/components/PostsSyncBanner";
 import { useResponsive } from "@/hooks/useResponsive";
@@ -82,6 +87,8 @@ type CategoryFilter = "all" | "roommate_openings" | "summer_only" | "august_gap"
 const DARK_TEAL = "#2C555C";
 /** Other students' new listings show up within this long while the screen is open. */
 const POSTS_POLL_MS = 30000;
+/** Typing pause before a search goes to the server. */
+const SEARCH_DEBOUNCE_MS = 300;
 const CHIP_BORDER = "#E0E8E9";
 const CHIP_SEAFOAM = "#D0F0E0";
 
@@ -527,7 +534,7 @@ function SubleaseCard({ post, onMarkLeased }: {
           </View>
         </View>
 
-        {post.listingType === "roommate" && (
+        {post.listingType === "roommate" && (post.roomsAvailable || post.currentResidentBio) ? (
           <View style={styles.roommateInfo}>
             {post.roomsAvailable ? (
               <View style={styles.roommateInfoItem}>
@@ -541,7 +548,7 @@ function SubleaseCard({ post, onMarkLeased }: {
               </Text>
             ) : null}
           </View>
-        )}
+        ) : null}
 
         {post.description ? (
           <Text style={styles.description} numberOfLines={2}>{post.description}</Text>
@@ -632,6 +639,19 @@ export default function MarketplaceScreen() {
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
   const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
   const [selectedSubFilters, setSelectedSubFilters] = useState<string[]>([]);
+  const [searchText, setSearchText] = useState("");
+  const [priceRange, setPriceRange] = useState<PriceRange>(PRICE_RANGES[0]);
+  const query = useDebouncedValue(searchText.trim(), SEARCH_DEBOUNCE_MS);
+  // Text and price go to the server (GET /api/listings ?q ?minPrice ?maxPrice);
+  // zone, category and the sub-filters below still narrow whatever comes back.
+  const searching = query !== "" || priceRange.min !== undefined || priceRange.max !== undefined;
+  const search = useSearch(
+    () => searchListings({ q: query, minPrice: priceRange.min, maxPrice: priceRange.max }),
+    `${query}|${priceRange.label}`,
+    searching,
+    subleases,   // re-run when the feed refreshes, so results don't go stale
+  );
+  const clearSearch = () => { setSearchText(""); setPriceRange(PRICE_RANGES[0]); };
   const [showCongrats, setShowCongrats] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [leasedPost, setLeasedPost] = useState<SubleasePost | null>(null);
@@ -693,7 +713,7 @@ export default function MarketplaceScreen() {
     roommate_openings: "roommate_openings",
   };
 
-  const filtered = subleases.filter(s => {
+  const filtered = (searching ? search.results ?? [] : subleases).filter(s => {
     if (activeFilter === "roommate_openings") {
       if (s.listingType !== "roommate") return false;
     } else if (activeFilter !== "all") {
@@ -761,7 +781,7 @@ export default function MarketplaceScreen() {
             {activeFilter === "all" ? "Sublease Marketplace" : CATEGORY_LABELS[activeFilter]}
           </Text>
           <Text style={styles.headerSub}>
-            {filtered.length} listing{filtered.length !== 1 ? "s" : ""}
+            {search.loading ? "Searching…" : `${filtered.length} listing${filtered.length !== 1 ? "s" : ""}`}
             {activeFilter !== "all" && CATEGORY_DATES[activeFilter] ? ` · ${CATEGORY_DATES[activeFilter]}` : ""}
           </Text>
         </View>
@@ -773,7 +793,11 @@ export default function MarketplaceScreen() {
       </View>
       <PostsSyncBanner />
 
+      <SearchBar value={searchText} onChangeText={setSearchText} placeholder="Search building or street" />
+
       <ZonePicker selected={zoneFilter} onSelect={setZoneFilter} />
+
+      <PriceFilter selected={priceRange} onSelect={setPriceRange} />
 
       <View style={{ height: 16 }} />
 
@@ -793,7 +817,35 @@ export default function MarketplaceScreen() {
         }]}
         showsVerticalScrollIndicator={false}
       >
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && search.loading ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator color={Colors.ocean} />
+            <Text style={styles.emptySub}>Searching…</Text>
+          </View>
+        ) : filtered.length === 0 && search.error ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="cloud-offline-outline" size={44} color={Colors.textLight} />
+            <Text style={styles.emptyTitle}>{"Search didn't go through"}</Text>
+            <Text style={styles.emptySub}>{search.error}</Text>
+            <TouchableOpacity style={styles.postFirstBtn} onPress={search.retry}>
+              <Text style={styles.postFirstBtnText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filtered.length === 0 && searching ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="search-outline" size={44} color={Colors.textLight} />
+            <Text style={styles.emptyTitle}>No listings match</Text>
+            <Text style={styles.emptySub}>
+              {[query && `Nothing for "${query}"`, priceRange.label !== PRICE_RANGES[0].label && priceRange.label.toLowerCase()]
+                .filter(Boolean).join(", ")}
+              {zoneFilter !== "all" || activeFilter !== "all" ? " with the filters you picked." : "."}
+              {" "}Try another street or building, or widen the price.
+            </Text>
+            <TouchableOpacity style={styles.postFirstBtn} onPress={clearSearch}>
+              <Text style={styles.postFirstBtnText}>Clear search</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filtered.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="storefront-outline" size={44} color={Colors.textLight} />
             <Text style={styles.emptyTitle}>No listings yet</Text>

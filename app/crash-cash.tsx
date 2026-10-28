@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable, TouchableOpacity, Platform,
   Modal, TextInput, KeyboardAvoidingView, ScrollView, useWindowDimensions, Image,
-  Alert,
+  Alert, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,10 +16,15 @@ import CustomAvatar from "@/components/CustomAvatar";
 import { showError } from "@/lib/alert";
 import { usePolling } from "@/hooks/usePolling";
 import { PostsSyncBanner } from "@/components/PostsSyncBanner";
+import SearchBar from "@/components/SearchBar";
+import { useDebouncedValue, useSearch } from "@/hooks/useSearch";
+import { searchCrashPosts } from "@/lib/listings";
 
 const DARK_TEAL = "#2C555C";
 /** Other students' new posts show up within this long while the screen is open. */
 const POSTS_POLL_MS = 30000;
+/** Typing pause before a search goes to the server. */
+const SEARCH_DEBOUNCE_MS = 300;
 const SUBTITLE_GREY = "#6B8A8F";
 const SCREEN_BG = "#FBFBF9";
 const CORAL_FAB = "#FF8C69";
@@ -500,6 +505,11 @@ export default function CrashCashScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { crashPosts, addCrashPost, completeCrashPost, currentUser, startConversation, refreshPosts } = useApp();
   usePolling(refreshPosts, POSTS_POLL_MS);
+  const [searchText, setSearchText] = useState("");
+  const query = useDebouncedValue(searchText.trim(), SEARCH_DEBOUNCE_MS);
+  // The story / dates match runs on the server (GET /api/crash-posts?q=);
+  // the vibe toggle and date window below still apply to what comes back.
+  const search = useSearch(() => searchCrashPosts(query), query, query !== "", crashPosts);
   // Kept until a post goes through, so retries reuse the uploaded photo and can't double-post.
   const pendingPostId = useRef<string | null>(null);
   const { isDesktop, contentMaxWidth } = useResponsive();
@@ -580,7 +590,7 @@ export default function CrashCashScreen() {
   const sorted = useMemo(() => {
     const now = Date.now();
     const maxWindow = now + 10 * 24 * 60 * 60 * 1000;
-    const active = crashPosts
+    const active = (query ? search.results ?? [] : crashPosts)
       .filter(p => p.status === "active" && p.targetDate >= now && p.targetDate <= maxWindow)
       .filter(p => vibeFilter === "all" || p.vibe === vibeFilter)
       .sort((a, b) => a.targetDate - b.targetDate);
@@ -591,7 +601,7 @@ export default function CrashCashScreen() {
       return [...myPosts, ...otherPosts];
     }
     return active;
-  }, [crashPosts, vibeFilter, isHost, currentUser]);
+  }, [crashPosts, query, search.results, vibeFilter, isHost, currentUser]);
 
   return (
     <View style={[styles.container, { backgroundColor: SCREEN_BG }]}>
@@ -606,6 +616,8 @@ export default function CrashCashScreen() {
       </View>
 
       <PostsSyncBanner />
+
+      <SearchBar value={searchText} onChangeText={setSearchText} placeholder="Search stories or dates" />
 
       <SegmentedToggle value={vibeFilter} onChange={setVibeFilter} />
 
@@ -639,11 +651,36 @@ export default function CrashCashScreen() {
         }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>🛋️</Text>
-            <Text style={styles.emptyTitle}>No one is crashing right now!</Text>
-            <Text style={styles.emptySub}>Be the first to offer a spot. 🛋️</Text>
-          </View>
+          search.loading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator color={Colors.ocean} />
+              <Text style={styles.emptySub}>Searching…</Text>
+            </View>
+          ) : search.error ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>📡</Text>
+              <Text style={styles.emptyTitle}>{"Search didn't go through"}</Text>
+              <Text style={styles.emptySub}>{search.error}</Text>
+              <TouchableOpacity style={styles.emptyBtn} onPress={search.retry}>
+                <Text style={styles.emptyBtnText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : query ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>🔍</Text>
+              <Text style={styles.emptyTitle}>No posts match</Text>
+              <Text style={styles.emptySub}>{`Nothing for "${query}". Try another word from a story or a date like "tonight".`}</Text>
+              <TouchableOpacity style={styles.emptyBtn} onPress={() => setSearchText("")}>
+                <Text style={styles.emptyBtnText}>Clear search</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>🛋️</Text>
+              <Text style={styles.emptyTitle}>No one is crashing right now!</Text>
+              <Text style={styles.emptySub}>Be the first to offer a spot. 🛋️</Text>
+            </View>
+          )
         }
       />
 
@@ -815,5 +852,7 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: "center", paddingTop: 80, gap: 8 },
   emptyEmoji: { fontSize: 48 },
   emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 20, color: DARK_TEAL },
-  emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: SUBTITLE_GREY, textAlign: "center" },
+  emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: SUBTITLE_GREY, textAlign: "center", paddingHorizontal: 24 },
+  emptyBtn: { backgroundColor: CORAL_FAB, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
+  emptyBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: "#FFFFFF" },
 });

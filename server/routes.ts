@@ -153,6 +153,26 @@ async function initDb() {
     )
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_crash_posts_feed ON crash_posts (status, target_date)`);
+
+  // Search: price ranges use a plain index; partial, case-insensitive text
+  // matches (ILIKE '%green%') need trigram GIN indexes. Supabase keeps
+  // extensions in the `extensions` schema; plain Postgres uses the default.
+  await query(`CREATE INDEX IF NOT EXISTS idx_listings_price ON listings (price_per_month)`);
+  try {
+    await query(`CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions`)
+      .catch(() => query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`));
+    for (const [name, table, column] of [
+      ["idx_listings_building_trgm", "listings", "building_name"],
+      ["idx_listings_address_trgm", "listings", "address"],
+      ["idx_crash_posts_story_trgm", "crash_posts", "story"],
+      ["idx_crash_posts_dates_trgm", "crash_posts", "dates"],
+    ]) {
+      await query(`CREATE INDEX IF NOT EXISTS ${name} ON ${table} USING gin (${column} gin_trgm_ops)`);
+    }
+  } catch (err) {
+    // Search still works without these, just by scanning.
+    console.warn("pg_trgm unavailable; text search will be unindexed:", err);
+  }
   await query(`ALTER TABLE crash_posts ENABLE ROW LEVEL SECURITY`);
 
   await query(`
@@ -583,6 +603,53 @@ async function emailOfUser(id: unknown): Promise<string | null> {
   if (typeof id !== "string" || !id) return null;
   const [row] = await query<{ email: string }>("SELECT lower(email) AS email FROM users WHERE id = $1", [id]);
   return row?.email ?? null;
+}
+
+const ZONES = ["campustown", "north", "south", "urbana", "downtown"];
+const SEARCH_MAX_LENGTH = 100;
+
+/** `%text%` for ILIKE, with the user's own % and _ matched literally. */
+const containsPattern = (text: string) => `%${text.replace(/[\\%_]/g, ch => "\\" + ch)}%`;
+
+/** A non-negative whole-dollar amount from a query param; null if absent, NaN if malformed. */
+function priceParam(value: unknown): number | null {
+  if (value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 ? n : NaN;
+}
+
+/**
+ * The WHERE clause for listing searches. It always starts from the same
+ * condition as the unfiltered list (not leased) and only ever ANDs more
+ * conditions onto it, so a search can narrow what the marketplace shows but
+ * never reveal anything it wouldn't.
+ */
+function listingFilter(q: Request["query"]): { where: string; params: unknown[] } | { error: string } {
+  const conditions = ["l.leased = FALSE"];
+  const params: unknown[] = [];
+  const add = (sql: (n: string) => string, value: unknown) => {
+    params.push(value);
+    conditions.push(sql(`$${params.length}`));
+  };
+
+  if (typeof q.category === "string" && q.category) add(n => `l.category = ${n}`, q.category);
+  if (typeof q.zone === "string" && q.zone) {
+    if (!ZONES.includes(q.zone)) return { error: `zone must be one of ${ZONES.join(", ")}` };
+    add(n => `l.zone = ${n}`, q.zone);
+  }
+  const text = typeof q.q === "string" ? q.q.trim() : "";
+  if (text) {
+    if (text.length > SEARCH_MAX_LENGTH) return { error: `q can be at most ${SEARCH_MAX_LENGTH} characters` };
+    add(n => `(l.building_name ILIKE ${n} ESCAPE '\\' OR l.address ILIKE ${n} ESCAPE '\\')`, containsPattern(text));
+  }
+  const min = priceParam(q.minPrice);
+  const max = priceParam(q.maxPrice);
+  if (Number.isNaN(min) || Number.isNaN(max)) return { error: "minPrice and maxPrice must be whole dollars, 0 or more" };
+  if (min !== null && max !== null && min > max) return { error: "minPrice can't be more than maxPrice" };
+  if (min !== null) add(n => `l.price_per_month >= ${n}`, min);
+  if (max !== null) add(n => `l.price_per_month <= ${n}`, max);
+
+  return { where: conditions.join(" AND "), params };
 }
 
 const INCREMENTABLE_STATS = ["successful_subleases", "total_matches"];
@@ -1090,14 +1157,20 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
   // fine at campus scale. A field the server ever filters on needs a real
   // column, not a key in details.
 
+  // Optional, combinable filters: ?q= (building name or address, partial,
+  // case-insensitive), ?minPrice= / ?maxPrice= (per month, inclusive),
+  // ?category=, ?zone=. Filtering happens here rather than in the app so a
+  // search is the same query as the list with conditions added (see
+  // listingFilter), and keeps working once listings outgrow one download.
   app.get("/api/listings", async (req: Request, res: Response) => {
     try {
-      const { category } = req.query;
+      const filter = listingFilter(req.query);
+      if ("error" in filter) return res.status(400).json({ error: filter.error });
       const rows = await query<ListingRow>(
         `${LISTING_SELECT}
-         WHERE l.leased = FALSE ${category ? "AND l.category = $1" : ""}
+         WHERE ${filter.where}
          ORDER BY l.created_at DESC`,
-        category ? [category] : []
+        filter.params
       );
       return res.json(rows.map(toListing));
     } catch (err) {
@@ -1190,12 +1263,20 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
   // ─── CRASH POSTS ─────────────────────────────────────────────────────────────
 
   // Active posts whose date hasn't passed; the app narrows the window further.
-  app.get("/api/crash-posts", async (_req: Request, res: Response) => {
+  // ?q= matches the story or the dates label (partial, case-insensitive),
+  // ANDed onto the same conditions as the unfiltered feed.
+  app.get("/api/crash-posts", async (req: Request, res: Response) => {
     try {
+      const text = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      if (text.length > SEARCH_MAX_LENGTH) {
+        return res.status(400).json({ error: `q can be at most ${SEARCH_MAX_LENGTH} characters` });
+      }
       const rows = await query<CrashPostRow>(
         `${CRASH_POST_SELECT}
          WHERE p.status = 'active' AND p.target_date >= NOW()
-         ORDER BY p.created_at DESC`
+           ${text ? `AND (p.story ILIKE $1 ESCAPE '\\' OR p.dates ILIKE $1 ESCAPE '\\')` : ""}
+         ORDER BY p.created_at DESC`,
+        text ? [containsPattern(text)] : []
       );
       return res.json(rows.map(toCrashPost));
     } catch (err) {

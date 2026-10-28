@@ -213,6 +213,15 @@ CREATE INDEX IF NOT EXISTS idx_listings_zone ON listings (zone);
 CREATE INDEX IF NOT EXISTS idx_listings_leased ON listings (leased);
 CREATE INDEX IF NOT EXISTS idx_listings_user ON listings (user_id);
 CREATE INDEX IF NOT EXISTS idx_crash_posts_feed ON crash_posts (status, target_date);
+
+-- Search (GET /api/listings ?q= ?minPrice= ?maxPrice=, GET /api/crash-posts ?q=).
+-- Partial, case-insensitive matches (ILIKE '%green%') need trigram indexes.
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
+CREATE INDEX IF NOT EXISTS idx_listings_price ON listings (price_per_month);
+CREATE INDEX IF NOT EXISTS idx_listings_building_trgm ON listings USING gin (building_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_listings_address_trgm ON listings USING gin (address gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_crash_posts_story_trgm ON crash_posts USING gin (story gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_crash_posts_dates_trgm ON crash_posts USING gin (dates gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages (conversation_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_p1 ON conversations (participant1_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_p2 ON conversations (participant2_id);
