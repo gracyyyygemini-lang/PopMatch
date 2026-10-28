@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
 
 interface AdminData {
   users: number;
@@ -63,13 +63,12 @@ export default function AdminScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const url = new URL("/api/admin/stats", getApiUrl()).toString();
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed");
-      const json = await res.json();
-      setData(json);
-    } catch {
-      setError("Could not load admin data.");
+      const res = await apiRequest("GET", "/api/admin/stats");
+      setData(await res.json());
+    } catch (err) {
+      console.error("Loading admin stats failed:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message.startsWith("403") ? "This account isn't an admin (see ADMIN_EMAILS)." : "Could not load admin data.");
     } finally {
       setLoading(false);
     }

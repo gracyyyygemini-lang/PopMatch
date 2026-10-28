@@ -1,6 +1,10 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
+import type { JWTVerifyGetKey } from "jose";
 import { query } from "./db";
+import {
+  callerUserId, namesSomeoneElse, requireAdmin, requireAuth, supabaseSigningKeys,
+} from "./auth";
 
 async function initDb() {
   await query(`
@@ -434,6 +438,8 @@ const CRASH_POST_SELECT = `
   FROM crash_posts p
   LEFT JOIN users u ON p.user_id = u.id`;
 
+const INCREMENTABLE_STATS = ["successful_subleases", "total_matches"];
+
 const CRASH_VIBES = ["sos", "offering"];
 const CRASH_CURRENCIES = ["cash", "boba", "lion_cover", "food", "favor"];
 
@@ -459,11 +465,19 @@ function toCrashPost(row: CrashPostRow) {
   };
 }
 
-/** A post's author must be a saved profile, or nobody could see who posted it or reply. */
-async function userExists(id: unknown): Promise<boolean> {
-  if (typeof id !== "string" || !id) return false;
-  const rows = await query<{ id: string }>("SELECT id FROM users WHERE id = $1", [id]);
-  return rows.length > 0;
+/**
+ * Runs an UPDATE that only matches the caller's own row (`id = $1 AND
+ * user_id = $2`). Ownership is part of the WHERE clause, so there's no gap
+ * between checking and changing; the follow-up lookup only decides which
+ * error to report.
+ */
+async function updateOwnRow(
+  updateSql: string, existsSql: string, id: string, userId: string,
+): Promise<"updated" | "missing" | "not_owner"> {
+  const updated = await query(updateSql, [id, userId]);
+  if (updated.length > 0) return "updated";
+  const exists = await query(existsSql, [id]);
+  return exists.length > 0 ? "not_owner" : "missing";
 }
 
 function toChatMessage(row: MessageRow) {
@@ -479,49 +493,83 @@ function toChatMessage(row: MessageRow) {
 }
 
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export interface RouteOptions {
+  /** Where token signing keys come from; defaults to the Supabase project's JWKS. */
+  getKey?: JWTVerifyGetKey;
+}
+
+export async function registerRoutes(app: Express, options: RouteOptions = {}): Promise<Server> {
   await initDb();
+
+  // ─── AUTH ────────────────────────────────────────────────────────────────────
+  // Every /api route below acts as req.caller, the account behind a verified
+  // Supabase access token. Ids and emails in URLs and bodies are never
+  // trusted to say who is calling: where a route still accepts one for the
+  // caller, anything but the caller's own is a 403 (namesSomeoneElse).
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    throw new Error("SUPABASE_URL (or EXPO_PUBLIC_SUPABASE_URL) must be set to verify sign-ins.");
+  }
+  app.use("/api", requireAuth({
+    getKey: options.getKey ?? supabaseSigningKeys(supabaseUrl),
+    issuer: new URL("/auth/v1", supabaseUrl).href,
+  }));
 
   // ─── USERS ───────────────────────────────────────────────────────────────────
 
+  // Creates or edits the caller's own profile; there is no way to name another.
   app.post("/api/users", async (req: Request, res: Response) => {
     try {
+      const caller = req.caller!;
       const {
-        id, name, email, major = "", bio = "", budget = 800,
+        id, name, email: claimedEmail, major = "", bio = "", budget = 800,
         gender = "nonbinary", genderPref = "mixed", cleanliness = 3,
         noise = 3, leaseType = "full_year", zone = "campustown",
         landlords = ["other"], staysThanksgiving = false, staysSpringBreak = false,
         avatarColor = "#005F73", college = "", organizations = [], profileImage = "",
       } = req.body;
 
-      if (!id || !name || !email) {
-        return res.status(400).json({ error: "id, name, and email are required" });
+      if (namesSomeoneElse(claimedEmail, caller.email, true)) {
+        return res.status(403).json({ error: "You can only save your own profile" });
+      }
+      const email = caller.email;
+      if (!id || !name) {
+        return res.status(400).json({ error: "id and name are required" });
       }
       if (!email.endsWith(".edu")) {
         return res.status(400).json({ error: "Must use a .edu email address" });
       }
 
       const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
-      await query(
-        `INSERT INTO users (id, name, email, major, bio, budget, gender, gender_pref,
-          cleanliness, noise, lease_type, zone, landlord, stays_thanksgiving,
-          stays_spring_break, avatar_color, college, organizations, profile_image)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-         ON CONFLICT (email) DO UPDATE SET
-           name = EXCLUDED.name, major = EXCLUDED.major, bio = EXCLUDED.bio,
-           budget = EXCLUDED.budget, gender = EXCLUDED.gender,
-           gender_pref = EXCLUDED.gender_pref, cleanliness = EXCLUDED.cleanliness,
-           noise = EXCLUDED.noise, lease_type = EXCLUDED.lease_type,
-           zone = EXCLUDED.zone, landlord = EXCLUDED.landlord,
-           stays_thanksgiving = EXCLUDED.stays_thanksgiving,
-           stays_spring_break = EXCLUDED.stays_spring_break,
-           avatar_color = EXCLUDED.avatar_color, college = EXCLUDED.college,
-           organizations = EXCLUDED.organizations,
-           profile_image = EXCLUDED.profile_image`,
-        [id, name, email, major, bio, budget, gender, genderPref, cleanliness,
-          noise, leaseType, zone, landlordJson, staysThanksgiving, staysSpringBreak,
-          avatarColor, college, organizations, profileImage]
-      );
+      try {
+        await query(
+          `INSERT INTO users (id, name, email, major, bio, budget, gender, gender_pref,
+            cleanliness, noise, lease_type, zone, landlord, stays_thanksgiving,
+            stays_spring_break, avatar_color, college, organizations, profile_image)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+           ON CONFLICT (email) DO UPDATE SET
+             name = EXCLUDED.name, major = EXCLUDED.major, bio = EXCLUDED.bio,
+             budget = EXCLUDED.budget, gender = EXCLUDED.gender,
+             gender_pref = EXCLUDED.gender_pref, cleanliness = EXCLUDED.cleanliness,
+             noise = EXCLUDED.noise, lease_type = EXCLUDED.lease_type,
+             zone = EXCLUDED.zone, landlord = EXCLUDED.landlord,
+             stays_thanksgiving = EXCLUDED.stays_thanksgiving,
+             stays_spring_break = EXCLUDED.stays_spring_break,
+             avatar_color = EXCLUDED.avatar_color, college = EXCLUDED.college,
+             organizations = EXCLUDED.organizations,
+             profile_image = EXCLUDED.profile_image`,
+          [id, name, email, major, bio, budget, gender, genderPref, cleanliness,
+            noise, leaseType, zone, landlordJson, staysThanksgiving, staysSpringBreak,
+            avatarColor, college, organizations, profileImage]
+        );
+      } catch (err) {
+        // A new profile whose id is already someone else's: never overwrite theirs.
+        if ((err as { code?: string }).code === "23505") {
+          return res.status(409).json({ error: "That profile id is taken; generate a new one" });
+        }
+        throw err;
+      }
 
       // On conflict the row keeps its original id, so the client must adopt
       // the id returned here rather than the one it generated.
@@ -533,9 +581,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Profiles are visible to every signed-in student.
   app.get("/api/users/by-email/:email", async (req: Request, res: Response) => {
     try {
-      const [user] = await query<UserRow>("SELECT * FROM users WHERE email = $1", [req.params.email]);
+      const [user] = await query<UserRow>(
+        "SELECT * FROM users WHERE lower(email) = $1",
+        [String(req.params.email).trim().toLowerCase()]
+      );
       if (!user) return res.status(404).json({ error: "User not found" });
       return res.json(toUserProfile(user));
     } catch (err) {
@@ -544,13 +596,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ?exclude=<email> leaves out the viewer's own profile.
+  // Everyone but the caller. (?exclude= is ignored; the caller is always left out.)
   app.get("/api/users", async (req: Request, res: Response) => {
     try {
-      const exclude = typeof req.query.exclude === "string" ? req.query.exclude.toLowerCase() : "";
       const rows = await query<UserRow>(
         "SELECT * FROM users WHERE lower(email) <> $1 ORDER BY name",
-        [exclude]
+        [req.caller!.email]
       );
       return res.json(rows.map(toUserProfile));
     } catch (err) {
@@ -561,13 +612,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── LIKES ───────────────────────────────────────────────────────────────────
 
+  // The caller likes likedEmail.
   app.post("/api/likes", async (req: Request, res: Response) => {
     try {
-      const likerEmail = typeof req.body?.likerEmail === "string" ? req.body.likerEmail.trim().toLowerCase() : "";
+      const likerEmail = req.caller!.email;
+      if (namesSomeoneElse(req.body?.likerEmail, likerEmail, true)) {
+        return res.status(403).json({ error: "You can only like as yourself" });
+      }
       const likedEmail = typeof req.body?.likedEmail === "string" ? req.body.likedEmail.trim().toLowerCase() : "";
 
-      if (!likerEmail || !likedEmail) {
-        return res.status(400).json({ error: "likerEmail and likedEmail are required" });
+      if (!likedEmail) {
+        return res.status(400).json({ error: "likedEmail is required" });
       }
       if (likerEmail === likedEmail) {
         return res.status(400).json({ error: "You can't like yourself" });
@@ -585,10 +640,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Everyone :email liked who also liked :email back.
+  // Everyone the caller liked who liked them back. :email must be the caller.
   app.get("/api/likes/mutual/:email", async (req: Request, res: Response) => {
     try {
-      const email = String(req.params.email).trim().toLowerCase();
+      const email = req.caller!.email;
+      if (namesSomeoneElse(req.params.email, email, true)) {
+        return res.status(403).json({ error: "You can only see your own matches" });
+      }
       const rows = await query<MutualLikeRow>(
         `SELECT mine.liked_email AS email,
                 GREATEST(mine.created_at, theirs.created_at) AS matched_at
@@ -609,17 +667,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── FRIENDS ─────────────────────────────────────────────────────────────────
 
+  // The caller's friends. :email must be the caller.
   app.get("/api/friends/:email", async (req: Request, res: Response) => {
     try {
+      if (namesSomeoneElse(req.params.email, req.caller!.email, true)) {
+        return res.status(403).json({ error: "You can only see your own friends" });
+      }
+      const userId = callerUserId(req, res);
+      if (!userId) return;
       const rows = await query<{
         email: string; name: string; avatar_color: string; major: string;
         college: string; organizations: string[];
       }>(
         `SELECT u2.email, u2.name, u2.avatar_color, u2.major, u2.college, u2.organizations
          FROM friendships fr
-         JOIN users u1 ON fr.user_id = u1.id AND u1.email = $1
-         JOIN users u2 ON fr.friend_id = u2.id`,
-        [req.params.email]
+         JOIN users u2 ON fr.friend_id = u2.id
+         WHERE fr.user_id = $1`,
+        [userId]
       );
       return res.json(rows);
     } catch (err) {
@@ -628,29 +692,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // The caller adds friendEmail.
   app.post("/api/friends", async (req: Request, res: Response) => {
     try {
-      const { userEmail, friendEmail } = req.body;
-      if (!userEmail || !friendEmail) {
-        return res.status(400).json({ error: "userEmail and friendEmail are required" });
+      if (namesSomeoneElse(req.body?.userEmail, req.caller!.email, true)) {
+        return res.status(403).json({ error: "You can only add friends for yourself" });
       }
-      if (userEmail === friendEmail) {
+      const userId = callerUserId(req, res);
+      if (!userId) return;
+      const { friendEmail } = req.body;
+      if (!friendEmail) {
+        return res.status(400).json({ error: "friendEmail is required" });
+      }
+
+      const [friend] = await query<{ id: string }>(
+        "SELECT id FROM users WHERE lower(email) = $1",
+        [String(friendEmail).trim().toLowerCase()]
+      );
+      if (!friend) return res.status(404).json({ error: "That @illinois.edu email is not registered on PopMatch yet" });
+      if (friend.id === userId) {
         return res.status(400).json({ error: "Cannot friend yourself" });
       }
 
-      const [user] = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [userEmail]);
-      const [friend] = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [friendEmail]);
-
-      if (!user) return res.status(404).json({ error: "Your account not found — complete onboarding first" });
-      if (!friend) return res.status(404).json({ error: "That @illinois.edu email is not registered on PopMatch yet" });
-
       await query(
         `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [user.id, friend.id]
+        [userId, friend.id]
       );
       await query(
         `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [friend.id, user.id]
+        [friend.id, userId]
       );
 
       return res.json({ success: true });
@@ -660,15 +730,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // The caller removes friendEmail (both directions, as adding created both).
   app.delete("/api/friends", async (req: Request, res: Response) => {
     try {
-      const { userEmail, friendEmail } = req.body;
-      const [user] = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [userEmail]);
-      const [friend] = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [friendEmail]);
-      if (!user || !friend) return res.status(404).json({ error: "User not found" });
+      if (namesSomeoneElse(req.body?.userEmail, req.caller!.email, true)) {
+        return res.status(403).json({ error: "You can only remove your own friends" });
+      }
+      const userId = callerUserId(req, res);
+      if (!userId) return;
+      const [friend] = await query<{ id: string }>(
+        "SELECT id FROM users WHERE lower(email) = $1",
+        [String(req.body?.friendEmail ?? "").trim().toLowerCase()]
+      );
+      if (!friend) return res.status(404).json({ error: "User not found" });
 
-      await query("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", [user.id, friend.id]);
-      await query("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", [friend.id, user.id]);
+      await query("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", [userId, friend.id]);
+      await query("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", [friend.id, userId]);
       return res.json({ success: true });
     } catch (err) {
       console.error("DELETE /api/friends", err);
@@ -678,21 +755,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── VOUCHES ─────────────────────────────────────────────────────────────────
 
+  // The caller vouches for voucheeEmail.
   app.post("/api/vouches", async (req: Request, res: Response) => {
     try {
-      const { voucherEmail, voucheeEmail, message = "" } = req.body;
-      if (!voucherEmail || !voucheeEmail) {
-        return res.status(400).json({ error: "voucherEmail and voucheeEmail are required" });
+      if (namesSomeoneElse(req.body?.voucherEmail, req.caller!.email, true)) {
+        return res.status(403).json({ error: "You can only vouch as yourself" });
+      }
+      const voucherId = callerUserId(req, res);
+      if (!voucherId) return;
+      const { voucheeEmail, message = "" } = req.body;
+      if (!voucheeEmail) {
+        return res.status(400).json({ error: "voucheeEmail is required" });
       }
 
-      const [voucher] = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [voucherEmail]);
-      const [vouchee] = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [voucheeEmail]);
-      if (!voucher || !vouchee) return res.status(404).json({ error: "User not found" });
+      const [vouchee] = await query<{ id: string }>(
+        "SELECT id FROM users WHERE lower(email) = $1",
+        [String(voucheeEmail).trim().toLowerCase()]
+      );
+      if (!vouchee) return res.status(404).json({ error: "User not found" });
 
       await query(
         `INSERT INTO vouches (voucher_id, vouchee_id, message) VALUES ($1, $2, $3)
          ON CONFLICT (voucher_id, vouchee_id) DO UPDATE SET message = EXCLUDED.message`,
-        [voucher.id, vouchee.id, message]
+        [voucherId, vouchee.id, message]
       );
       return res.json({ success: true });
     } catch (err) {
@@ -701,14 +786,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Withdraws the caller's own vouch.
   app.delete("/api/vouches", async (req: Request, res: Response) => {
     try {
-      const { voucherEmail, voucheeEmail } = req.body;
-      const [voucher] = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [voucherEmail]);
-      const [vouchee] = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [voucheeEmail]);
-      if (!voucher || !vouchee) return res.status(404).json({ error: "User not found" });
+      if (namesSomeoneElse(req.body?.voucherEmail, req.caller!.email, true)) {
+        return res.status(403).json({ error: "You can only withdraw your own vouch" });
+      }
+      const voucherId = callerUserId(req, res);
+      if (!voucherId) return;
+      const [vouchee] = await query<{ id: string }>(
+        "SELECT id FROM users WHERE lower(email) = $1",
+        [String(req.body?.voucheeEmail ?? "").trim().toLowerCase()]
+      );
+      if (!vouchee) return res.status(404).json({ error: "User not found" });
 
-      await query("DELETE FROM vouches WHERE voucher_id = $1 AND vouchee_id = $2", [voucher.id, vouchee.id]);
+      await query("DELETE FROM vouches WHERE voucher_id = $1 AND vouchee_id = $2", [voucherId, vouchee.id]);
       return res.json({ success: true });
     } catch (err) {
       console.error("DELETE /api/vouches", err);
@@ -718,19 +810,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── TRUST INFO ───────────────────────────────────────────────────────────────
 
+  // How the caller is connected to :targetEmail. :viewerEmail must be the caller,
+  // or this would reveal anyone's friend graph.
   app.get("/api/trust/:viewerEmail/:targetEmail", async (req: Request, res: Response) => {
     try {
-      const { viewerEmail, targetEmail } = req.params;
+      const viewerEmail = req.caller!.email;
+      if (namesSomeoneElse(req.params.viewerEmail, viewerEmail, true)) {
+        return res.status(403).json({ error: "You can only see your own connections" });
+      }
+      const targetEmail = String(req.params.targetEmail).trim().toLowerCase();
 
       if (viewerEmail === targetEmail) {
         return res.json({ degree: 1, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
       }
 
       const [viewer] = await query<{ id: string; organizations: string[] }>(
-        "SELECT id, organizations FROM users WHERE email = $1", [viewerEmail]
+        "SELECT id, organizations FROM users WHERE lower(email) = $1", [viewerEmail]
       );
       const [target] = await query<{ id: string; organizations: string[] }>(
-        "SELECT id, organizations FROM users WHERE email = $1", [targetEmail]
+        "SELECT id, organizations FROM users WHERE lower(email) = $1", [targetEmail]
       );
 
       if (!viewer || !target) {
@@ -805,17 +903,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // The caller posts a listing as themselves.
   app.post("/api/listings", async (req: Request, res: Response) => {
     try {
+      if (namesSomeoneElse(req.body?.userId, req.caller!.userId ?? "")) {
+        return res.status(403).json({ error: "You can only post listings as yourself" });
+      }
+      const userId = callerUserId(req, res);
+      if (!userId) return;
       const {
-        id, userId, buildingName, address = "", category = "semester_takeover",
+        id, buildingName, address = "", category = "semester_takeover",
         leaseType = "full_year", pricePerMonth = 0, landlords = ["other"],
         zone = "campustown", availableDuringBreaks = false, breakTypes = [],
         description = "", eventTag = "", moveInDate, moveOutDate,
       } = req.body;
 
-      if (!id || !userId || !buildingName) {
-        return res.status(400).json({ error: "id, userId, and buildingName are required" });
+      if (!id || !buildingName) {
+        return res.status(400).json({ error: "id and buildingName are required" });
       }
       // A file:// path saved here looks fine to the poster and is broken for
       // everyone else, so anything that isn't an uploaded URL is refused.
@@ -830,9 +934,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const endDate = moveOutDate ? new Date(moveOutDate) : null;
       if ((startDate && isNaN(startDate.getTime())) || (endDate && isNaN(endDate.getTime()))) {
         return res.status(400).json({ error: "moveInDate and moveOutDate must be ISO dates" });
-      }
-      if (!(await userExists(userId))) {
-        return res.status(404).json({ error: "Your profile isn't saved on the server yet" });
       }
 
       const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
@@ -859,11 +960,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Marks the caller's own listing leased.
   app.delete("/api/listings/:id", async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
-      const rows = await query("UPDATE listings SET leased = TRUE WHERE id = $1 RETURNING id", [id]);
-      if (rows.length === 0) return res.status(404).json({ error: "Listing not found" });
+      const userId = callerUserId(req, res);
+      if (!userId) return;
+      const outcome = await updateOwnRow(
+        "UPDATE listings SET leased = TRUE WHERE id = $1 AND user_id = $2 RETURNING id",
+        "SELECT 1 FROM listings WHERE id = $1",
+        String(req.params.id), userId
+      );
+      if (outcome === "missing") return res.status(404).json({ error: "Listing not found" });
+      if (outcome === "not_owner") return res.status(403).json({ error: "You can only change your own listings" });
+      // Counted here, not by a separate client call, so it can't be inflated.
+      await query(
+        `INSERT INTO stats (key, value) VALUES ('successful_subleases', 1)
+         ON CONFLICT (key) DO UPDATE SET value = stats.value + 1`
+      ).catch(err => console.error("DELETE /api/listings/:id: counting the sublease", err));
       return res.json({ success: true });
     } catch (err) {
       console.error("DELETE /api/listings/:id", err);
@@ -888,15 +1001,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // The caller posts as themselves.
   app.post("/api/crash-posts", async (req: Request, res: Response) => {
     try {
+      if (namesSomeoneElse(req.body?.userId, req.caller!.userId ?? "")) {
+        return res.status(403).json({ error: "You can only post as yourself" });
+      }
+      const userId = callerUserId(req, res);
+      if (!userId) return;
       const {
-        id, userId, vibe, story = "", imageUrl = "", dates = "", targetDate,
+        id, vibe, story = "", imageUrl = "", dates = "", targetDate,
         zone = "campustown", currency, currencyLabel = "", approxLocation = "",
       } = req.body;
 
-      if (!id || !userId) {
-        return res.status(400).json({ error: "id and userId are required" });
+      if (!id) {
+        return res.status(400).json({ error: "id is required" });
       }
       if (!CRASH_VIBES.includes(vibe)) {
         return res.status(400).json({ error: `vibe must be one of ${CRASH_VIBES.join(", ")}` });
@@ -909,9 +1028,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (imageUrl && !isHttpUrl(imageUrl)) {
         return res.status(400).json({ error: "The photo must be uploaded (http/https URL) before posting" });
-      }
-      if (!(await userExists(userId))) {
-        return res.status(404).json({ error: "Your profile isn't saved on the server yet" });
       }
 
       await query(
@@ -934,14 +1050,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // "Mark as filled": kept for history, gone from the feed.
+  // "Mark as filled" on the caller's own post: kept for history, gone from the feed.
   app.delete("/api/crash-posts/:id", async (req: Request, res: Response) => {
     try {
-      const rows = await query(
-        "UPDATE crash_posts SET status = 'completed' WHERE id = $1 RETURNING id",
-        [req.params.id]
+      const userId = callerUserId(req, res);
+      if (!userId) return;
+      const outcome = await updateOwnRow(
+        "UPDATE crash_posts SET status = 'completed' WHERE id = $1 AND user_id = $2 RETURNING id",
+        "SELECT 1 FROM crash_posts WHERE id = $1",
+        String(req.params.id), userId
       );
-      if (rows.length === 0) return res.status(404).json({ error: "Post not found" });
+      if (outcome === "missing") return res.status(404).json({ error: "Post not found" });
+      if (outcome === "not_owner") return res.status(403).json({ error: "You can only change your own posts" });
       return res.json({ success: true });
     } catch (err) {
       console.error("DELETE /api/crash-posts/:id", err);
@@ -951,10 +1071,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── STATS ───────────────────────────────────────────────────────────────────
 
+  // Only the counters the app actually bumps; anything else would let a
+  // signed-in student create or inflate arbitrary admin stats.
   app.post("/api/stats/increment", async (req: Request, res: Response) => {
     try {
       const { key } = req.body;
-      if (!key) return res.status(400).json({ error: "key is required" });
+      if (!INCREMENTABLE_STATS.includes(key)) {
+        return res.status(400).json({ error: `key must be one of ${INCREMENTABLE_STATS.join(", ")}` });
+      }
       await query(
         `INSERT INTO stats (key, value) VALUES ($1, 1)
          ON CONFLICT (key) DO UPDATE SET value = stats.value + 1`,
@@ -970,11 +1094,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── FEEDBACK ────────────────────────────────────────────────────────────────
 
+  // Feedback is always filed under the caller's email.
   app.post("/api/feedback", async (req: Request, res: Response) => {
     try {
-      const { userEmail, rating, issueCategory = "", issueDetail = "" } = req.body;
-      if (!userEmail || !rating) {
-        return res.status(400).json({ error: "userEmail and rating are required" });
+      const userEmail = req.caller!.email;
+      if (namesSomeoneElse(req.body?.userEmail, userEmail, true)) {
+        return res.status(403).json({ error: "You can only send feedback as yourself" });
+      }
+      const { rating, issueCategory = "", issueDetail = "" } = req.body;
+      if (!rating) {
+        return res.status(400).json({ error: "rating is required" });
       }
       await query(
         `INSERT INTO feedback (user_email, rating, issue_category, issue_detail)
@@ -988,7 +1117,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/feedback/summary", async (_req: Request, res: Response) => {
+  // ADMIN_EMAILS only: includes other students' emails and complaints.
+  app.get("/api/feedback/summary", requireAdmin, async (_req: Request, res: Response) => {
     try {
       const totals = await query<{ rating: string; count: string }>(
         `SELECT rating, COUNT(*) as count FROM feedback GROUP BY rating ORDER BY count DESC`
@@ -1015,7 +1145,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── ADMIN ───────────────────────────────────────────────────────────────────
 
-  app.get("/api/admin/stats", async (_req: Request, res: Response) => {
+  // ADMIN_EMAILS only.
+  app.get("/api/admin/stats", requireAdmin, async (_req: Request, res: Response) => {
     try {
       const [userCount] = await query<{ count: string }>("SELECT COUNT(*) as count FROM users");
       const [listingCount] = await query<{ count: string }>(
@@ -1060,13 +1191,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ─── CONVERSATIONS & MESSAGES ────────────────────────────────────────────────
   // Participants are users.id values. That id never changes once a row exists
   // (POST /api/users upserts by email and keeps it), and the client adopts it,
-  // so it is stable per person across devices.
+  // so it is stable per person across devices. Only the two participants can
+  // see or add to a conversation.
 
+  /** The conversation's participants, or null if it doesn't exist. */
+  async function participantsOf(conversationId: string) {
+    const [conv] = await query<{ participant1_id: string; participant2_id: string }>(
+      "SELECT participant1_id, participant2_id FROM conversations WHERE id = $1",
+      [conversationId]
+    );
+    return conv ? [conv.participant1_id, conv.participant2_id] : null;
+  }
+
+  // The caller opens a conversation with participant2Id (the other person).
   app.post("/api/conversations", async (req: Request, res: Response) => {
     try {
-      const { participant1Id, participant2Id, listingId = "", listingBuilding = "", listingPrice = 0 } = req.body;
-      if (!participant1Id || !participant2Id) {
-        return res.status(400).json({ error: "participant1Id and participant2Id are required" });
+      if (namesSomeoneElse(req.body?.participant1Id, req.caller!.userId ?? "")) {
+        return res.status(403).json({ error: "You can only start conversations as yourself" });
+      }
+      const participant1Id = callerUserId(req, res);
+      if (!participant1Id) return;
+      const { participant2Id, listingId = "", listingBuilding = "", listingPrice = 0 } = req.body;
+      if (!participant2Id) {
+        return res.status(400).json({ error: "participant2Id is required" });
       }
       if (participant1Id === participant2Id) {
         return res.status(400).json({ error: "You can't message yourself" });
@@ -1074,14 +1221,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // A conversation with an id that isn't a saved profile could never be
       // read by anyone, so refuse it instead of storing messages into the void.
-      const known = await query<{ id: string }>(
-        "SELECT id FROM users WHERE id = ANY($1::varchar[])",
-        [[participant1Id, participant2Id]]
-      );
-      if (!known.some(u => u.id === participant1Id)) {
-        return res.status(404).json({ error: "Your profile isn't saved on the server yet" });
-      }
-      if (!known.some(u => u.id === participant2Id)) {
+      const known = await query<{ id: string }>("SELECT id FROM users WHERE id = $1", [participant2Id]);
+      if (known.length === 0) {
         return res.status(404).json({ error: "That person isn't on PopMatch yet" });
       }
 
@@ -1109,37 +1250,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // The caller's conversations. :userId must be the caller.
   app.get("/api/conversations/:userId", async (req: Request, res: Response) => {
     try {
-      const { userId } = req.params;
+      if (namesSomeoneElse(req.params.userId, req.caller!.userId ?? "")) {
+        return res.status(403).json({ error: "You can only see your own conversations" });
+      }
+      const userId = callerUserId(req, res);
+      if (!userId) return;
       const rows = await query<ConversationRow>(
         `${CONVERSATION_SELECT}
          WHERE c.participant1_id = $1 OR c.participant2_id = $1
          ORDER BY COALESCE(last.created_at, c.created_at) DESC`,
         [userId]
       );
-      return res.json(rows.map(row => toConversation(row, String(userId))));
+      return res.json(rows.map(row => toConversation(row, userId)));
     } catch (err) {
       console.error("GET /api/conversations/:userId", err);
       return res.status(500).json({ error: "Failed to fetch conversations" });
     }
   });
 
+  // The caller sends a message; the sender is always the caller.
   app.post("/api/messages", async (req: Request, res: Response) => {
     try {
-      const { conversationId, senderId } = req.body;
+      if (namesSomeoneElse(req.body?.senderId, req.caller!.userId ?? "")) {
+        return res.status(403).json({ error: "You can only send messages as yourself" });
+      }
+      const senderId = callerUserId(req, res);
+      if (!senderId) return;
+      const { conversationId } = req.body;
       const content = typeof req.body?.content === "string" ? req.body.content.trim() : "";
-      if (!conversationId || !senderId || !content) {
-        return res.status(400).json({ error: "conversationId, senderId, and content are required" });
+      if (!conversationId || !content) {
+        return res.status(400).json({ error: "conversationId and content are required" });
       }
 
-      const [conv] = await query<{ participant1_id: string; participant2_id: string }>(
-        "SELECT participant1_id, participant2_id FROM conversations WHERE id = $1",
-        [conversationId]
-      );
-      if (!conv) return res.status(404).json({ error: "Conversation not found" });
-      if (senderId !== conv.participant1_id && senderId !== conv.participant2_id) {
-        return res.status(403).json({ error: "Sender is not in this conversation" });
+      const participants = await participantsOf(conversationId);
+      if (!participants) return res.status(404).json({ error: "Conversation not found" });
+      if (!participants.includes(senderId)) {
+        return res.status(403).json({ error: "You're not in this conversation" });
       }
 
       // The client sends its own id so a retry after a lost response can't
@@ -1164,9 +1313,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Only the two participants may read a conversation.
   app.get("/api/messages/:conversationId", async (req: Request, res: Response) => {
     try {
-      const { conversationId } = req.params;
+      const userId = callerUserId(req, res);
+      if (!userId) return;
+      const conversationId = String(req.params.conversationId);
+      const participants = await participantsOf(conversationId);
+      if (!participants) return res.status(404).json({ error: "Conversation not found" });
+      if (!participants.includes(userId)) {
+        return res.status(403).json({ error: "You're not in this conversation" });
+      }
       const rows = await query<MessageRow>(
         `${MESSAGE_SELECT}
          WHERE m.conversation_id = $1

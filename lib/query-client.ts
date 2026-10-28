@@ -1,6 +1,8 @@
 import { Platform } from "react-native";
 import { fetch } from "expo/fetch";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 
 /**
  * Local Express port in development. The server reads PORT from .env, but only
@@ -65,20 +67,81 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/**
+ * Thrown when there is no usable session. By the time it's thrown the app has
+ * been told (onSignInRequired) and sends the student back to sign in, so
+ * callers can show the message but never need to handle it specially.
+ */
+export class SignInRequiredError extends Error {
+  constructor() {
+    super("Your session ended. Sign in again to continue.");
+    this.name = "SignInRequiredError";
+  }
+}
+
+const signInRequiredListeners = new Set<() => void>();
+
+/** Called whenever a request finds the session gone or rejected for good. */
+export function onSignInRequired(listener: () => void): () => void {
+  signInRequiredListeners.add(listener);
+  return () => signInRequiredListeners.delete(listener);
+}
+
+function signInRequired(): never {
+  signInRequiredListeners.forEach(listener => listener());
+  throw new SignInRequiredError();
+}
+
+/**
+ * The access token for the Authorization header. getSession() refreshes an
+ * expired token on its own; `forceRefresh` is for when the server rejected
+ * one that looked fine locally.
+ */
+async function accessToken(forceRefresh: boolean): Promise<string> {
+  const { data, error } = forceRefresh
+    ? await supabase.auth.refreshSession()
+    : await supabase.auth.getSession();
+  // Offline or Supabase unreachable: the session may be fine, so this is an
+  // ordinary failure the caller retries — not a reason to sign anyone out.
+  if (error && isAuthRetryableFetchError(error)) {
+    throw new Error(`Couldn't reach the sign-in server: ${error.message}`);
+  }
+  const token = data.session?.access_token;
+  if (error || !token) {
+    if (error) console.error("[auth] Couldn't get a session for the API:", error.message);
+    return signInRequired();
+  }
+  return token;
+}
+
+/**
+ * Every /api route requires a Supabase access token. A 401 gets one refresh
+ * and retry; a second 401 means the session is dead and the student is sent
+ * to sign in (SignInRequiredError), never silently dropped.
+ */
 export async function apiRequest(
   method: string,
   route: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const baseUrl = getApiUrl();
-  const url = new URL(route, baseUrl);
+  const url = new URL(route, getApiUrl()).toString();
+  const send = async (token: string) =>
+    fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(data ? { "Content-Type": "application/json" } : {}),
+      },
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: "include",
+    });
 
-  const res = await fetch(url.toString(), {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
+  let res = await send(await accessToken(false));
+  if (res.status === 401) res = await send(await accessToken(true));
+  if (res.status === 401) {
+    console.error(`[auth] ${method} ${route} still unauthorized after refreshing the session`);
+    signInRequired();
+  }
 
   await throwIfResNotOk(res);
   return res;
@@ -90,19 +153,15 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const baseUrl = getApiUrl();
-    const url = new URL(queryKey.join("/") as string, baseUrl);
-
-    const res = await fetch(url.toString(), {
-      credentials: "include",
-    });
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    try {
+      const res = await apiRequest("GET", queryKey.join("/") as string);
+      return await res.json();
+    } catch (error) {
+      if (unauthorizedBehavior === "returnNull" && error instanceof SignInRequiredError) {
+        return null;
+      }
+      throw error;
     }
-
-    await throwIfResNotOk(res);
-    return await res.json();
   };
 
 export const queryClient = new QueryClient({

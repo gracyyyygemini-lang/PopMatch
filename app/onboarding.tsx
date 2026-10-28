@@ -141,7 +141,11 @@ function PonyoProgress({ step, total }: { step: number; total: number }) {
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
-  const { setCurrentUser, setIsOnboarded, setOtpVerifiedEmail } = useApp();
+  const { setCurrentUser, setIsOnboarded, setOtpVerifiedEmail, isOnboarded } = useApp();
+  // Read at sign-in time, not as an effect dependency: finishing onboarding
+  // flips it to true, and that must not re-run the redirect below.
+  const alreadyOnboarded = useRef(isOnboarded);
+  alreadyOnboarded.current = isOnboarded;
 
   const [step, setStep] = useState(0);
 
@@ -177,6 +181,12 @@ export default function OnboardingScreen() {
   useEffect(() => {
     const unsubscribe = onAuthStateChange((sessionUser) => {
       if (!sessionUser) return;
+
+      // Signing back in after a session ended: the profile is already saved.
+      if (alreadyOnboarded.current) {
+        router.replace("/(tabs)");
+        return;
+      }
 
       if (sessionUser.email) {
         setEmail((prev) => prev || sessionUser.email || "");

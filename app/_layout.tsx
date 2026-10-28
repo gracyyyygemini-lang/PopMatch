@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProfileSyncBanner } from "@/components/ProfileSyncBanner";
+import { SessionGuard } from "@/components/SessionGuard";
 import { queryClient } from "@/lib/query-client";
 import {
   useFonts,
@@ -110,6 +111,7 @@ export default function RootLayout() {
             {Platform.OS === "web" ? (
               <WebContainer>
                 <KeyboardProvider>
+                  <SessionGuard />
                   <ProfileSyncBanner />
                   <RootLayoutNav />
                 </KeyboardProvider>
@@ -117,6 +119,7 @@ export default function RootLayout() {
             ) : (
               <View style={{ flex: 1 }}>
                 <KeyboardProvider>
+                  <SessionGuard />
                   <ProfileSyncBanner />
                   <RootLayoutNav />
                 </KeyboardProvider>

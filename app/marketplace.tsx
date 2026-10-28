@@ -12,7 +12,6 @@ import { useCallback } from "react";
 import FacePile from "@/components/FacePile";
 import MicroFeedback from "@/components/MicroFeedback";
 import ZonePicker from "@/components/ZonePicker";
-import { apiRequest } from "@/lib/query-client";
 import { usePolling } from "@/hooks/usePolling";
 import { PostsSyncBanner } from "@/components/PostsSyncBanner";
 import { useResponsive } from "@/hooks/useResponsive";
@@ -722,9 +721,6 @@ export default function MarketplaceScreen() {
       return;
     }
     setLeasedPost(post);
-    // A missed count only skews the admin stats; the listing itself is done.
-    apiRequest("POST", "/api/stats/increment", { key: "successful_subleases" })
-      .catch(error => console.error("Couldn't count the sublease:", error));
     setShowCongrats(true);
   };
 

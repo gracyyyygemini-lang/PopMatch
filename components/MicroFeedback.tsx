@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
 
 type Rating = "smooth" | "bumpy" | "rescue";
 
@@ -81,18 +81,15 @@ export default function MicroFeedback({ visible, userEmail, onClose }: MicroFeed
   const submitFeedback = async (rating: string, category: string, detail: string) => {
     try {
       setSubmitting(true);
-      const base = new URL("/api/feedback", getApiUrl()).toString();
-      await fetch(base, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userEmail,
-          rating,
-          issueCategory: category,
-          issueDetail: detail,
-        }),
+      // Filed under the signed-in account; the server ignores who the body says.
+      await apiRequest("POST", "/api/feedback", {
+        rating,
+        issueCategory: category,
+        issueDetail: detail,
       });
-    } catch {}
+    } catch (error) {
+      console.error("Sending feedback failed:", error);
+    }
     setSubmitting(false);
   };
 
