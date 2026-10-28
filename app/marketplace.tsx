@@ -352,7 +352,25 @@ function FullScreenGallery({ images, visible, onClose, buildingName }: {
 }) {
   const insets = useSafeAreaInsets();
   const [activeIdx, setActiveIdx] = useState(0);
-  const screenW = Dimensions.get("window").width;
+  // Each page is exactly the box between the header and the dots, measured
+  // rather than "100%": react-native-web gives a horizontal ScrollView's
+  // content no height, so a percentage collapses the photo to nothing. Until
+  // the first measurement, the live window size (it follows resizes and
+  // rotation) stands in.
+  const { width: windowW, height: windowH } = useResponsive();
+  const [page, setPage] = useState<{ width: number; height: number } | null>(null);
+  const pageW = page?.width ?? windowW;
+  const pageH = page?.height ?? windowH * 0.7;
+  const scrollRef = useRef<ScrollView>(null);
+
+  // A resize changes the page width; keep the same photo in view.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ x: activeIdx * pageW, animated: false });
+  }, [pageW]);
+
+  useEffect(() => {
+    if (visible) setActiveIdx(0);
+  }, [visible]);
 
   const validImages = images.filter(isValidImageUri);
 
@@ -368,17 +386,21 @@ function FullScreenGallery({ images, visible, onClose, buildingName }: {
           <Text style={fsStyles.counter}>{activeIdx + 1} / {validImages.length}</Text>
         </View>
         <ScrollView
+          ref={scrollRef}
           horizontal pagingEnabled
           showsHorizontalScrollIndicator={false}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            if (width !== page?.width || height !== page?.height) setPage({ width, height });
+          }}
           onMomentumScrollEnd={(e) => {
             const idx = Math.round(e.nativeEvent.contentOffset.x / e.nativeEvent.layoutMeasurement.width);
             setActiveIdx(idx);
           }}
           style={fsStyles.scroll}
-          contentContainerStyle={fsStyles.scrollContent}
         >
           {validImages.map((uri, idx) => (
-            <Image key={idx} source={{ uri }} style={{ width: screenW, height: "100%" }} resizeMode="contain" />
+            <Image key={idx} source={{ uri }} style={{ width: pageW, height: pageH }} resizeMode="contain" />
           ))}
         </ScrollView>
         <View style={[fsStyles.dots, { paddingBottom: insets.bottom + 16 }]}>
@@ -403,7 +425,6 @@ const fsStyles = StyleSheet.create({
   title: { flex: 1, fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.white },
   counter: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: "rgba(255,255,255,0.6)" },
   scroll: { flex: 1 },
-  scrollContent: { alignItems: "center" as const },
   dots: {
     flexDirection: "row", justifyContent: "center", gap: 6, paddingTop: 12,
   },
@@ -785,18 +806,17 @@ export default function MarketplaceScreen() {
               <Text style={styles.postFirstBtnText}>Post a Sublease</Text>
             </TouchableOpacity>
           </View>
-        ) : isDesktop ? (
-          <View style={styles.desktopGrid}>
+        ) : (
+          // One tree for both layouts, only the styles change: crossing the
+          // desktop breakpoint (a resize, a tablet rotating) must not remount
+          // the cards, or an open photo gallery snaps shut.
+          <View style={isDesktop ? styles.desktopGrid : undefined}>
             {filtered.map(post => (
-              <View key={post.id} style={styles.desktopGridItem}>
+              <View key={post.id} style={isDesktop ? styles.desktopGridItem : undefined}>
                 <SubleaseCard post={post} onMarkLeased={handleMarkLeased} />
               </View>
             ))}
           </View>
-        ) : (
-          filtered.map(post => (
-            <SubleaseCard key={post.id} post={post} onMarkLeased={handleMarkLeased} />
-          ))
         )}
       </ScrollView>
 
