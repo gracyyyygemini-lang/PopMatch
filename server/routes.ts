@@ -1197,6 +1197,10 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (!id || !buildingName) {
         return res.status(400).json({ error: "id and buildingName are required" });
       }
+      // price_per_month is an INT: 850.5 would fail the insert as a bare 500.
+      if (!Number.isInteger(Number(pricePerMonth)) || Number(pricePerMonth) < 0) {
+        return res.status(400).json({ error: "pricePerMonth must be whole dollars, 0 or more" });
+      }
       // A file:// path saved here looks fine to the poster and is broken for
       // everyone else, so anything that isn't an uploaded URL is refused.
       const { images, floorPlanUrl } = req.body;

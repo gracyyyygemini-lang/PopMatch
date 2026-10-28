@@ -400,9 +400,12 @@ export default function PostSubleaseScreen() {
   const isShortTerm = days > 0 && days <= 14;
   const isSummer = leaseType === "summer_sublease" && !isShortTerm;
 
+  // Whole dollars: price_per_month is an INT, so 850.50 can't be saved.
+  const priceValid = /^\d+$/.test(price.trim()) && Number(price) > 0;
+
   const canSubmit = !!(
     buildingName.trim() &&
-    price.trim() && !isNaN(Number(price)) && Number(price) > 0 &&
+    priceValid &&
     zone &&
     landlords.length > 0 &&
     hasAtLeastOnePhoto &&
@@ -511,7 +514,7 @@ export default function PostSubleaseScreen() {
   };
 
   const stepValid = (s: number) => {
-    if (s === 0) return !!(buildingName.trim() && price.trim() && !isNaN(Number(price)) && Number(price) > 0 && landlords.length > 0 && roommatePreference);
+    if (s === 0) return !!(buildingName.trim() && priceValid && landlords.length > 0 && roommatePreference);
     if (s === 1) {
       if (!hasAtLeastOnePhoto) return false;
       if (isHostMode && !unitType.trim()) return false;
@@ -584,6 +587,9 @@ export default function PostSubleaseScreen() {
                   keyboardType="numeric" />
                 <Text style={styles.priceMonth}>/mo</Text>
               </View>
+              {price.trim() && !priceValid ? (
+                <Text style={[styles.fieldHint, { color: Colors.alertOrange }]}>Whole dollars only, e.g. 850</Text>
+              ) : null}
             </View>
 
             <View style={styles.field}>

@@ -38,6 +38,7 @@ import {
   verifyUiucOtp,
 } from "@/lib/auth";
 import { uploadProfileImage } from "@/lib/uploads";
+import { fetchUserProfile } from "@/lib/users";
 import { font } from "@/constants/typography";
 
 const MAJORS = [
@@ -187,6 +188,22 @@ export default function OnboardingScreen() {
       if (alreadyOnboarded.current) {
         router.replace("/(tabs)");
         return;
+      }
+
+      // "Onboarded" is remembered per device, so a returning student on a new
+      // device (or after clearing site data) lands here too. Finishing
+      // onboarding would save a fresh profile over theirs — photo, landlords,
+      // break plans and colour reset — so if the server already has one, use
+      // it instead. If the check fails (offline), onboarding carries on as before.
+      if (sessionUser.email) {
+        fetchUserProfile(sessionUser.email)
+          .then(async (existing) => {
+            if (!existing || alreadyOnboarded.current) return;
+            await setCurrentUser(existing);
+            await setIsOnboarded(true);
+            router.replace("/(tabs)");
+          })
+          .catch((error) => console.warn("Couldn't check for an existing profile; continuing onboarding:", error));
       }
 
       if (sessionUser.email) {
