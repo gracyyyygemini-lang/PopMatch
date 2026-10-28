@@ -8,12 +8,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import Colors from "@/constants/colors";
+import Colors, { AVATAR_COLORS } from "@/constants/colors";
 import { showError } from "@/lib/alert";
 import {
   useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType,
   KitchenType, BathroomType, CleaningFrequency, ShoePolicy, Amenities, DEFAULT_AMENITIES
 } from "@/context/AppContext";
+import { font } from "@/constants/typography";
 
 const LEASE_OPTIONS: { key: LeaseType; label: string; desc: string }[] = [
   { key: "full_year", label: "Full Year", desc: "Aug – Jul (12 months)" },
@@ -108,10 +109,9 @@ const AMENITY_SECTIONS: { title: string; items: { key: keyof Amenities; label: s
   },
 ];
 
-const AVATAR_COLORS = ["#1A7AAF", "#CC5500", "#5A8A5A", "#9B59B6", "#E07B00", "#E0BC00"];
 
-const DISABLED_BG = "#E0E8E9";
-const DISABLED_TEXT = "#8A9FA3";
+const DISABLED_BG = "#E6E7E8";
+const DISABLED_TEXT = "#707372";
 
 function autoCategorize(moveIn: Date, moveOut: Date): LeaseType {
   const durationDays = Math.round((moveOut.getTime() - moveIn.getTime()) / (1000 * 60 * 60 * 24));
@@ -495,7 +495,7 @@ export default function PostSubleaseScreen() {
   const { width: winWidth } = useWindowDimensions();
   const isDesktopPs = Platform.OS === "web" && winWidth >= 1024;
   const contentMaxWidthPs = isDesktopPs ? 720 : winWidth;
-  const topPadding = Platform.OS === "web" ? (isDesktopPs ? 24 : 67) : insets.top;
+  const topPadding = Platform.OS === "web" ? (isDesktopPs ? 24 : 32) : insets.top;
 
   const goNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -617,7 +617,7 @@ export default function PostSubleaseScreen() {
                   <TouchableOpacity style={styles.parkingToggle}
                     onPress={() => { setHasParking(!hasParking); Haptics.selectionAsync(); }}>
                     <Text style={styles.parkingLabel}>🚗 Parking Included</Text>
-                    <View style={[styles.toggle, hasParking && { backgroundColor: "#2C555C" }]}>
+                    <View style={[styles.toggle, hasParking && { backgroundColor: "#13294B" }]}>
                       <Text style={[styles.toggleText, hasParking && styles.toggleTextOn]}>
                         {hasParking ? "Yes" : "No"}
                       </Text>
@@ -642,7 +642,7 @@ export default function PostSubleaseScreen() {
               })}
               {warning && (
                 <View style={[styles.warningBox, {
-                  backgroundColor: warning.level === "danger" ? "#FFF0F0" : warning.level === "warn" ? "#FFF4E6" : "#EFF8FF",
+                  backgroundColor: warning.level === "danger" ? "#FFE6D6" : warning.level === "warn" ? "#FFE6D6" : "#E8ECF3",
                   borderLeftColor: warning.level === "danger" ? Colors.alertRed : warning.level === "warn" ? Colors.alertOrange : Colors.ocean
                 }]}>
                   <Ionicons
@@ -699,7 +699,7 @@ export default function PostSubleaseScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Roommate Preference <Text style={{ color: "#FF6B4E" }}>*</Text></Text>
+              <Text style={styles.label}>Roommate Preference <Text style={{ color: Colors.error }}>*</Text></Text>
               <View style={styles.chipRow}>
                 {["Girls Only", "Guys Only", "Co-ed", "Grainger Grind"].map(pref => (
                   <TouchableOpacity key={pref} style={[styles.chip, roommatePreference === pref && styles.chipActive]}
@@ -959,7 +959,7 @@ export default function PostSubleaseScreen() {
 
             {moveInDate && moveOutDate && getDurationDays(moveInDate, moveOutDate) > 0 && getDurationDays(moveInDate, moveOutDate) <= 14 && (
               <View style={styles.field}>
-                <Text style={styles.label}>Event / Category <Text style={{ color: "#FF6B4E" }}>*</Text></Text>
+                <Text style={styles.label}>Event / Category <Text style={{ color: Colors.error }}>*</Text></Text>
                 <Text style={[styles.fieldHint, { marginBottom: 8 }]}>Short stay ({getDurationDays(moveInDate, moveOutDate)} days) — select the event</Text>
                 <View style={styles.chipRow}>
                   {SHORT_TERM_EVENTS.map(evt => (
@@ -991,7 +991,7 @@ export default function PostSubleaseScreen() {
             onPress={handleSubmit}
             disabled={!canSubmit || publishing}
           >
-            <Ionicons name="sparkles" size={20} color={canSubmit ? Colors.white : DISABLED_TEXT} />
+            <Ionicons name="sparkles" size={20} color={canSubmit ? Colors.onOrange : DISABLED_TEXT} />
             <Text style={[styles.submitBtnText, !canSubmit && { color: DISABLED_TEXT }]}>{publishing ? "Publishing…" : "Publish Listing ✨"}</Text>
           </TouchableOpacity>
         )}
@@ -1011,32 +1011,32 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
   headerCenter: { flex: 1, marginLeft: 12 },
-  headerTitle: { fontFamily: "Nunito_700Bold", fontSize: 17, color: Colors.darkTeal },
-  headerSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
+  headerTitle: { ...font.bold, fontSize: 17, color: Colors.darkTeal },
+  headerSub: { ...font.regular, fontSize: 12, color: Colors.textMuted },
   stepDots: { flexDirection: "row", gap: 5 },
   stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.borderSoft },
   stepDotActive: { backgroundColor: Colors.ocean },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 16 },
-  sectionTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.darkTeal },
-  sectionSub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, marginTop: -8 },
+  sectionTitle: { ...font.heavy, fontSize: 22, color: Colors.darkTeal },
+  sectionSub: { ...font.regular, fontSize: 13, color: Colors.textMuted, marginTop: -8 },
   field: { gap: 8 },
-  label: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  fieldHint: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight },
+  label: { ...font.bold, fontSize: 14, color: Colors.charcoal },
+  fieldHint: { ...font.regular, fontSize: 11, color: Colors.textLight },
   input: {
     backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.borderSoft,
-    paddingHorizontal: 14, paddingVertical: 12, fontFamily: "Nunito_400Regular",
+    paddingHorizontal: 14, paddingVertical: 12, ...font.regular,
     fontSize: 15, color: Colors.charcoal,
   },
   textArea: { height: 90, paddingTop: 12 },
   priceRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  priceDollar: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.ocean },
+  priceDollar: { ...font.heavy, fontSize: 22, color: Colors.ocean },
   priceInput: {
     flex: 1, backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
     borderColor: Colors.borderSoft, paddingHorizontal: 14, paddingVertical: 12,
-    fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.ocean,
+    ...font.heavy, fontSize: 22, color: Colors.ocean,
   },
-  priceMonth: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted },
+  priceMonth: { ...font.regular, fontSize: 14, color: Colors.textMuted },
   optionCard: {
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
@@ -1044,15 +1044,15 @@ const styles = StyleSheet.create({
   },
   optionCardActive: { borderColor: Colors.ocean, backgroundColor: Colors.ocean + "10" },
   optionLeft: { flex: 1 },
-  optionLabel: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
+  optionLabel: { ...font.bold, fontSize: 14, color: Colors.charcoal },
   optionLabelActive: { color: Colors.ocean },
-  optionDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
+  optionDesc: { ...font.regular, fontSize: 12, color: Colors.textMuted },
   landlordDot: { width: 12, height: 12, borderRadius: 6 },
   warningBox: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
     borderLeftWidth: 3, borderRadius: 10, padding: 12, marginTop: 4,
   },
-  warningText: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.charcoal, flex: 1, lineHeight: 18 },
+  warningText: { ...font.regular, fontSize: 12, color: Colors.charcoal, flex: 1, lineHeight: 18 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     flexDirection: "row", alignItems: "center", gap: 5,
@@ -1060,21 +1060,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
   chipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
-  chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  chipText: { ...font.semibold, fontSize: 13, color: Colors.textMuted },
   chipTextActive: { color: Colors.white },
   toggleRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5,
     borderColor: Colors.borderSoft, padding: 14,
   },
-  toggleTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  toggleDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
+  toggleTitle: { ...font.bold, fontSize: 14, color: Colors.charcoal },
+  toggleDesc: { ...font.regular, fontSize: 12, color: Colors.textMuted },
   toggle: {
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16,
     backgroundColor: Colors.sandDark, borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
   toggleOn: { backgroundColor: Colors.grassGreen, borderColor: Colors.grassGreen },
-  toggleText: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted },
+  toggleText: { ...font.bold, fontSize: 13, color: Colors.textMuted },
   toggleTextOn: { color: Colors.white },
   summerSubmenu: {
     backgroundColor: "rgba(44, 85, 92, 0.05)",
@@ -1092,26 +1092,26 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   parkingLabel: {
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
     fontSize: 15,
-    color: "#2C555C",
+    color: "#13294B",
   },
   breakOptions: { gap: 8 },
-  breakOptionsLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
+  breakOptionsLabel: { ...font.semibold, fontSize: 12, color: Colors.textMuted },
   photoGrid: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
   photoSlot: {
     width: "31%", aspectRatio: 3 / 4, borderRadius: 14, overflow: "hidden",
     backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
   photoEmpty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6 },
-  photoLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: Colors.textLight, textAlign: "center" },
+  photoLabel: { ...font.semibold, fontSize: 11, color: Colors.textLight, textAlign: "center" },
   photoImage: { width: "100%", height: "100%", resizeMode: "cover" },
   photoLabelOverlay: {
     position: "absolute", bottom: 0, left: 0, right: 0,
     backgroundColor: "rgba(0,0,0,0.55)", paddingVertical: 4, alignItems: "center",
   },
-  photoLabelOverlayText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.white },
-  photoHint: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textLight, marginTop: 4 },
+  photoLabelOverlayText: { ...font.bold, fontSize: 10, color: Colors.white },
+  photoHint: { ...font.regular, fontSize: 12, color: Colors.textLight, marginTop: 4 },
   floorPlanSlot: {
     width: "100%", aspectRatio: 16 / 9, borderRadius: 14, overflow: "hidden",
     backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
@@ -1121,7 +1121,7 @@ const styles = StyleSheet.create({
   floorPlanImage: { width: "100%", height: "100%", resizeMode: "cover" as const },
   amenitySection: { gap: 8, marginBottom: 8 },
   amenitySectionTitle: {
-    fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.textMuted,
+    ...font.bold, fontSize: 13, color: Colors.textMuted,
     textTransform: "uppercase", letterSpacing: 0.8,
   },
   amenityGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -1131,7 +1131,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
   amenityToggleActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
-  amenityToggleText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
+  amenityToggleText: { ...font.semibold, fontSize: 12, color: Colors.textMuted },
   amenityToggleTextActive: { color: Colors.white },
   datePickerBtn: {
     flexDirection: "row", alignItems: "center", gap: 10,
@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderSoft, paddingHorizontal: 14, paddingVertical: 13,
   },
   datePickerText: {
-    flex: 1, fontFamily: "Nunito_600SemiBold", fontSize: 15, color: Colors.ocean,
+    flex: 1, ...font.semibold, fontSize: 15, color: Colors.ocean,
   },
   calendarContainer: {
     backgroundColor: Colors.cardBg, borderRadius: 14, padding: 12, marginTop: 4,
@@ -1150,7 +1150,7 @@ const styles = StyleSheet.create({
     marginBottom: 12, paddingHorizontal: 4,
   },
   calendarTitle: {
-    fontFamily: "Nunito_700Bold", fontSize: 16, color: Colors.ocean,
+    ...font.bold, fontSize: 16, color: Colors.ocean,
   },
   calendarDayHeaders: {
     flexDirection: "row",
@@ -1159,7 +1159,7 @@ const styles = StyleSheet.create({
     flex: 1, alignItems: "center", paddingVertical: 4,
   },
   calendarDayHeaderText: {
-    fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted,
+    ...font.semibold, fontSize: 12, color: Colors.textMuted,
   },
   calendarGrid: {
     flexDirection: "row", flexWrap: "wrap",
@@ -1174,7 +1174,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.ocean, borderRadius: 20,
   },
   calendarDayText: {
-    fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal,
+    ...font.semibold, fontSize: 14, color: Colors.charcoal,
   },
   calendarDayTextActive: { color: Colors.white },
   calendarDayTextDisabled: { color: Colors.borderSoft },
@@ -1187,7 +1187,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.sand, borderWidth: 1, borderColor: Colors.borderSoft,
   },
   yearCellActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
-  yearCellText: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
+  yearCellText: { ...font.semibold, fontSize: 14, color: Colors.charcoal },
   yearCellTextActive: { color: Colors.white },
   footer: {
     paddingHorizontal: 16, paddingTop: 12,
@@ -1197,18 +1197,18 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.ocean, borderRadius: 14, paddingVertical: 14,
   },
-  nextBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
+  nextBtnText: { ...font.heavy, fontSize: 16, color: Colors.white },   // on the navy Next button
   submitBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.coral, borderRadius: 14, paddingVertical: 14,
   },
-  submitBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
+  submitBtnText: { ...font.heavy, fontSize: 16, color: Colors.onOrange },
   gatewayBanner: {
     flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: Colors.darkTeal + "12", borderRadius: 12, padding: 14,
     borderWidth: 1.5, borderColor: Colors.darkTeal + "25", marginBottom: 4,
   },
   gatewayBannerText: {
-    fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.darkTeal, flex: 1, lineHeight: 18,
+    ...font.semibold, fontSize: 13, color: Colors.darkTeal, flex: 1, lineHeight: 18,
   },
 });

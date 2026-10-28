@@ -2,6 +2,7 @@ import React from "react";
 import { Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { font } from "@/constants/typography";
 
 /** Whole dollars per month, both bounds inclusive; undefined = no bound. */
 export interface PriceRange {
@@ -52,6 +53,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
   chipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
-  chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
+  chipText: { ...font.semibold, fontSize: 12, color: Colors.textMuted },
   chipTextActive: { color: Colors.white },
 });

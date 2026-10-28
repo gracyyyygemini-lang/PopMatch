@@ -12,32 +12,33 @@ import { useApp, ChatMessage } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
 import { usePolling } from "@/hooks/usePolling";
+import { font } from "@/constants/typography";
 
-const DARK_TEAL = "#2C555C";
+const DARK_TEAL = "#13294B";
 const CHAT_POLL_MS = 3000;
-const WARM_CREAM = "#FBFBF9";
-const SENT_CORAL = "#FF8C69";
-const RECEIVED_SEAFOAM = "#E8F6F3";
+const WARM_CREAM = "#F2F3F5";
+const SENT_CORAL = "#FF5F05";
+const RECEIVED_SEAFOAM = Colors.blueTint;
 
 const CRASH_CASH_CHIPS: { label: string; bg: string; border: string }[] = [
-  { label: "Still available? 👀", bg: "#FDECE8", border: "#F4A89A" },
-  { label: "When can I pull up? ⌚", bg: "#E8F6F3", border: "#7CC9AA" },
-  { label: "Venmo or Cash? 💸", bg: "#EDF6FA", border: "#8AC4DA" },
-  { label: "Guest parking? 🚗", bg: "#FFEDE8", border: "#E8997A" },
+  { label: "Still available? 👀", bg: "#FFE6D6", border: "#C6C7C6" },
+  { label: "When can I pull up? ⌚", bg: "#E6F2EA", border: "#C6C7C6" },
+  { label: "Venmo or Cash? 💸", bg: "#E8ECF3", border: "#C6C7C6" },
+  { label: "Guest parking? 🚗", bg: "#FFE6D6", border: "#C6C7C6" },
 ];
 
 const COSEEKER_CHIPS: { label: string; bg: string; border: string }[] = [
-  { label: "Hey! Love your profile ✨", bg: "#E8F6F3", border: "#7CC9AA" },
-  { label: "What is your major?", bg: "#FFF5E6", border: "#F0C87A" },
-  { label: "Are you a night owl? 🦇", bg: "#EDF6FA", border: "#8AC4DA" },
-  { label: "Wanna grab coffee and chat? ☕", bg: "#FFEDE8", border: "#E8997A" },
+  { label: "Hey! Love your profile ✨", bg: "#E6F2EA", border: "#C6C7C6" },
+  { label: "What is your major?", bg: "#FFE6D6", border: "#C6C7C6" },
+  { label: "Are you a night owl? 🦇", bg: "#E8ECF3", border: "#C6C7C6" },
+  { label: "Wanna grab coffee and chat? ☕", bg: "#FFE6D6", border: "#C6C7C6" },
 ];
 
 const SUBLEASE_CHIPS: { label: string; bg: string; border: string }[] = [
-  { label: "Is this still available? 🔑", bg: "#E8F0F1", border: "#9AB8BE" },
-  { label: "Are utilities included? 💡", bg: "#EDF6FA", border: "#8AC4DA" },
-  { label: "Can I schedule a tour? 📅", bg: "#FFF5E6", border: "#F0C87A" },
-  { label: "Is it furnished? 🛋️", bg: "#E8F6F3", border: "#7CC9AA" },
+  { label: "Is this still available? 🔑", bg: "#E8ECF3", border: "#8E9090" },
+  { label: "Are utilities included? 💡", bg: "#E8ECF3", border: "#C6C7C6" },
+  { label: "Can I schedule a tour? 📅", bg: "#FFE6D6", border: "#C6C7C6" },
+  { label: "Is it furnished? 🛋️", bg: "#E6F2EA", border: "#C6C7C6" },
 ];
 
 function IcebreakerChip({ item, onPress }: { item: typeof CRASH_CASH_CHIPS[0]; onPress: () => void }) {
@@ -79,7 +80,7 @@ const icStyles = StyleSheet.create({
     borderWidth: 1.5,
   },
   chipText: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 13,
     color: DARK_TEAL,
   },
@@ -142,7 +143,7 @@ export default function ChatScreen() {
   const invertedMessages = [...messages].reverse();
 
   const { isDesktop, contentMaxWidth } = useResponsive();
-  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
+  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 32) : insets.top;
 
   const handleSend = useCallback(() => {
     if (!text.trim() || !params.conversationId) return;
@@ -242,7 +243,7 @@ export default function ChatScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={icStyles.row}
-        style={{ flexGrow: 0, borderTopWidth: 1, borderTopColor: "#EDF2F2", backgroundColor: WARM_CREAM }}
+        style={{ flexGrow: 0, borderTopWidth: 1, borderTopColor: "#E6E7E8", backgroundColor: WARM_CREAM }}
       >
         {activeChips.map((ic, idx) => (
           <IcebreakerChip
@@ -296,13 +297,13 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     backgroundColor: WARM_CREAM,
     borderBottomWidth: 1,
-    borderBottomColor: "#EDF2F2",
+    borderBottomColor: "#E6E7E8",
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: "#E8F0F1",
+    backgroundColor: "#E8ECF3",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -310,12 +311,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerName: {
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
     fontSize: 16,
     color: DARK_TEAL,
   },
   headerContext: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 12,
     color: Colors.textMuted,
   },
@@ -326,19 +327,19 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 4,
-    backgroundColor: "#E8F0F1",
+    backgroundColor: "#E8ECF3",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   listingPreviewText: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 13,
     color: DARK_TEAL,
     flex: 1,
   },
   listingPreviewPrice: {
-    fontFamily: "Nunito_800ExtraBold",
+    ...font.heavy,
     fontSize: 14,
     color: DARK_TEAL,
   },
@@ -357,7 +358,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   emptyMessagesText: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 14,
     color: Colors.textLight,
   },
@@ -385,28 +386,28 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 4,
   },
   bubbleText: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 15,
     color: DARK_TEAL,
     lineHeight: 21,
   },
   bubbleTextOwn: {
-    color: Colors.white,
+    color: Colors.onOrange,   // navy on orange, 4.76:1; white would be 3.05:1
   },
   bubbleTime: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 10,
-    color: Colors.textMuted,
+    color: Colors.textSecondaryOnBg,
     alignSelf: "flex-end",
   },
   bubbleTimeOwn: {
-    color: "rgba(255,255,255,0.7)",
+    color: Colors.onOrange,
   },
   bubbleUnsent: {
     opacity: 0.75,
   },
   failedText: {
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
     fontSize: 11,
     color: Colors.white,
     alignSelf: "flex-end",
@@ -421,7 +422,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     flex: 1,
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 12,
     color: Colors.alertRed,
     lineHeight: 17,
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     backgroundColor: WARM_CREAM,
     borderTopWidth: 1,
-    borderTopColor: "#EDF2F2",
+    borderTopColor: "#E6E7E8",
   },
   textInput: {
     flex: 1,
@@ -442,7 +443,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 15,
     color: DARK_TEAL,
     maxHeight: 100,
@@ -464,7 +465,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyText: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 16,
     color: Colors.textMuted,
   },

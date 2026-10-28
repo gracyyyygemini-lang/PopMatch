@@ -9,21 +9,22 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
-import Colors from "@/constants/colors";
+import Colors, { avatarColor as paletteAvatar } from "@/constants/colors";
 import { useApp, PublicProfile, VibeProfile } from "@/context/AppContext";
 import CustomAvatar from "@/components/CustomAvatar";
 import { showError } from "@/lib/alert";
 import { usePolling } from "@/hooks/usePolling";
+import { font } from "@/constants/typography";
 
 /** New students show up in the deck within this long while it's open. */
 const DECK_REFRESH_MS = 60000;
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const CORAL = "#FF8C69";
-const DARK_TEAL = "#2C555C";
-const SCREEN_BG = "#FBFBF9";
-const MATCH_GREEN = "#34C759";
-const PASS_RED = "#FF6B6B";
+const CORAL = "#FF5F05";
+const DARK_TEAL = "#13294B";
+const SCREEN_BG = "#F2F3F5";
+const MATCH_GREEN = "#006230";
+const PASS_RED = "#FF5F05";
 
 const YEAR_LABELS: Record<string, string> = {
   freshman: "Freshman",
@@ -93,7 +94,7 @@ function HeroCard({
       {hasImage ? (
         <Image source={{ uri: user.profileImage }} style={hc.bgImage} />
       ) : (
-        <View style={[hc.bgFallback, { backgroundColor: user.avatarColor }]}>
+        <View style={[hc.bgFallback, { backgroundColor: paletteAvatar(user.avatarColor) }]}>
           <CustomAvatar name={user.name} avatarColor={user.avatarColor} size={120} fontSize={48} />
         </View>
       )}
@@ -146,37 +147,37 @@ const hc = StyleSheet.create({
   content: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 20, justifyContent: "flex-end" },
   scoreRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginBottom: 4 },
   scoreNum: {
-    fontFamily: "Nunito_800ExtraBold", fontSize: 60, color: CORAL, lineHeight: 64,
+    ...font.heavy, fontSize: 60, color: CORAL, lineHeight: 64,
     textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
   },
   scoreLabel: {
-    fontFamily: "Nunito_800ExtraBold", fontSize: 15, color: "#FFFFFF",
+    ...font.heavy, fontSize: 15, color: "#FFFFFF",
     letterSpacing: 2, marginBottom: 10,
     textShadowColor: "rgba(0,0,0,0.4)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
   },
   name: {
-    fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: "#FFFFFF",
+    ...font.heavy, fontSize: 26, color: "#FFFFFF",
     textShadowColor: "rgba(0,0,0,0.4)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
   },
   vitals: {
-    fontFamily: "Nunito_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.8)", marginTop: 1,
+    ...font.semibold, fontSize: 14, color: "rgba(255,255,255,0.8)", marginTop: 1,
   },
   major: {
-    fontFamily: "Nunito_400Regular", fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 1,
+    ...font.regular, fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 1,
   },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
   chip: {
     backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 16,
     paddingHorizontal: 12, paddingVertical: 6,
   },
-  chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: "#FFFFFF" },
+  chipText: { ...font.semibold, fontSize: 12, color: "#FFFFFF" },
   icebreakerBox: {
     backgroundColor: "rgba(0,0,0,0.4)", borderRadius: 12, padding: 12, marginTop: 10,
   },
   icebreakerPrompt: {
-    fontFamily: "Nunito_700Bold", fontSize: 13, color: "rgba(255,255,255,0.85)", marginBottom: 4,
+    ...font.bold, fontSize: 13, color: "rgba(255,255,255,0.85)", marginBottom: 4,
   },
-  icebreakerAnswer: { fontFamily: "Nunito_400Regular", fontSize: 13, color: "#FFFFFF", lineHeight: 18 },
+  icebreakerAnswer: { ...font.regular, fontSize: 13, color: "#FFFFFF", lineHeight: 18 },
 });
 
 function StaticCard({
@@ -252,19 +253,19 @@ const mm = StyleSheet.create({
     shadowOpacity: 1, shadowRadius: 32, elevation: 12,
   },
   emoji: { fontSize: 56, marginBottom: 8 },
-  title: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: DARK_TEAL, marginBottom: 4 },
-  subtitle: { fontFamily: "Nunito_400Regular", fontSize: 15, color: "#6B8A8F", textAlign: "center", marginBottom: 20 },
+  title: { ...font.heavy, fontSize: 28, color: DARK_TEAL, marginBottom: 4 },
+  subtitle: { ...font.regular, fontSize: 15, color: Colors.textSecondaryOnBg, textAlign: "center", marginBottom: 20 },
   avatarRow: { marginBottom: 24 },
   sayHiBtn: {
     backgroundColor: MATCH_GREEN, borderRadius: 16,
     paddingHorizontal: 40, paddingVertical: 16, width: "100%", alignItems: "center",
     marginBottom: 12,
   },
-  sayHiBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 17, color: "#FFFFFF" },
+  sayHiBtnText: { ...font.heavy, fontSize: 17, color: "#FFFFFF" },
   laterBtn: {
     paddingVertical: 12,
   },
-  laterBtnText: { fontFamily: "Nunito_600SemiBold", fontSize: 15, color: "#6B8A8F" },
+  laterBtnText: { ...font.semibold, fontSize: 15, color: Colors.textSecondaryOnBg },
 });
 
 export default function MatchmakerScreen() {
@@ -280,12 +281,15 @@ export default function MatchmakerScreen() {
   const [matchConvoId, setMatchConvoId] = useState<string>("");
 
   const isDesktopMm = Platform.OS === "web" && screenWidth >= 1024;
-  const topPadding = Platform.OS === "web" ? (isDesktopMm ? 24 : 67) : insets.top;
+  const topPadding = Platform.OS === "web" ? (isDesktopMm ? 24 : 32) : insets.top;
   const bottomPadding = insets.bottom + (Platform.OS === "web" ? 34 : 0);
 
   const contentMaxW = isDesktopMm ? 520 : Math.min(screenWidth, 500);
   const cardWidth = contentMaxW * 0.95;
-  const cardHeight = Math.min(screenHeight * 0.72, 620);
+  // Fits the deck area as measured, so a short window can't push the card
+  // over the header and the buttons.
+  const [deckHeight, setDeckHeight] = useState(0);
+  const cardHeight = Math.min(screenHeight * 0.72, 620, deckHeight ? deckHeight - 16 : Infinity);
 
   useEffect(() => {
     if (currentUser?.intent === "host" || currentUser?.intent === "sublessor") {
@@ -359,7 +363,7 @@ export default function MatchmakerScreen() {
         </View>
       </View>
 
-      <View style={styles.deckArea}>
+      <View style={styles.deckArea} onLayout={e => setDeckHeight(e.nativeEvent.layout.height)}>
         {remaining.length === 0 ? (
           <View style={styles.emptyCard}>
             <Ionicons name="checkmark-circle" size={52} color={Colors.grassGreen} />
@@ -424,10 +428,10 @@ const styles = StyleSheet.create({
     shadowColor: "rgba(0,0,0,0.06)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2,
   },
   headerCenter: { flex: 1 },
-  headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: DARK_TEAL },
-  headerSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: "#6B8A8F" },
+  headerTitle: { ...font.heavy, fontSize: 20, color: DARK_TEAL },
+  headerSub: { ...font.regular, fontSize: 12, color: Colors.textSecondaryOnBg },
   matchBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
-  matchBadgeText: { fontFamily: "Nunito_800ExtraBold", fontSize: 14 },
+  matchBadgeText: { ...font.heavy, fontSize: 14 },
   deckArea: { flex: 1, alignItems: "center", justifyContent: "center" },
   card: {
     position: "absolute",
@@ -446,16 +450,16 @@ const styles = StyleSheet.create({
   passBtn: { backgroundColor: PASS_RED },
   likeBtn: { backgroundColor: MATCH_GREEN },
   actionEmoji: { fontSize: 36 },
-  countBadge: { backgroundColor: "#EDF2F2", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 8 },
-  countText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: "#6B8A8F" },
+  countBadge: { backgroundColor: "#E6E7E8", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 8 },
+  countText: { ...font.semibold, fontSize: 13, color: Colors.textSecondaryOnBg },
   emptyCard: {
     alignItems: "center", justifyContent: "center",
     backgroundColor: Colors.white, borderRadius: 28, padding: 40, gap: 12,
     maxWidth: 400, width: "90%",
     shadowColor: "rgba(0,0,0,0.06)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 16, elevation: 4,
   },
-  emptyTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: DARK_TEAL },
-  emptySub: { fontFamily: "Nunito_400Regular", fontSize: 14, color: "#6B8A8F", textAlign: "center" },
+  emptyTitle: { ...font.heavy, fontSize: 22, color: DARK_TEAL },
+  emptySub: { ...font.regular, fontSize: 14, color: Colors.textSecondaryOnBg, textAlign: "center" },
   goMatchesBtn: { backgroundColor: Colors.ocean, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14, marginTop: 8 },
-  goMatchesBtnText: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.white },
+  goMatchesBtnText: { ...font.bold, fontSize: 15, color: Colors.white },
 });

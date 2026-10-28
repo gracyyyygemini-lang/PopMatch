@@ -5,11 +5,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { font } from "@/constants/typography";
 
 export default function LinkListingScreen() {
   const insets = useSafeAreaInsets();
   const isDesktopLl = Platform.OS === "web" && Dimensions.get("window").width >= 1024;
-  const topPadding = Platform.OS === "web" ? (isDesktopLl ? 24 : 67) : insets.top;
+  const topPadding = Platform.OS === "web" ? (isDesktopLl ? 24 : 32) : insets.top;
 
   return (
     <View style={[styles.container, { paddingTop: topPadding + 20 }]}>
@@ -36,7 +37,7 @@ export default function LinkListingScreen() {
             router.replace("/post-sublease?mode=host");
           }}
         >
-          <Ionicons name="add-circle-outline" size={20} color={Colors.white} />
+          <Ionicons name="add-circle-outline" size={20} color={Colors.onOrange} />
           <Text style={styles.primaryBtnText}>Go to Marketplace</Text>
         </TouchableOpacity>
 
@@ -64,13 +65,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ocean + "15", alignItems: "center", justifyContent: "center",
     marginBottom: 8,
   },
-  title: { fontFamily: "Nunito_800ExtraBold", fontSize: 26, color: Colors.ocean, textAlign: "center" },
+  title: { ...font.heavy, fontSize: 26, color: Colors.ocean, textAlign: "center" },
   subtitle: {
-    fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.charcoal,
+    ...font.regular, fontSize: 15, color: Colors.charcoal,
     textAlign: "center", lineHeight: 22, paddingHorizontal: 20,
   },
   hint: {
-    fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted,
+    ...font.regular, fontSize: 13, color: Colors.textMuted,
     textAlign: "center", paddingHorizontal: 30,
   },
   primaryBtn: {
@@ -78,7 +79,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.orange, borderRadius: 14, paddingVertical: 14,
     paddingHorizontal: 28, marginTop: 12,
   },
-  primaryBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
+  primaryBtnText: { ...font.heavy, fontSize: 16, color: Colors.onOrange },
   secondaryBtn: { paddingVertical: 10, paddingHorizontal: 20 },
-  secondaryBtnText: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.textMuted },
+  secondaryBtnText: { ...font.semibold, fontSize: 14, color: Colors.textMuted },
 });

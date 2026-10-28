@@ -8,19 +8,20 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import Colors from "@/constants/colors";
+import Colors, { AVATAR_COLORS } from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
 import { signOut } from "@/lib/auth";
 import { useResponsive } from "@/hooks/useResponsive";
 import BottomSheetModal from "@/components/BottomSheetModal";
 import CustomAvatar from "@/components/CustomAvatar";
 import type { LeaseType, Zone, Landlord, GenderPref, UserProfile } from "@/context/AppContext";
+import { font } from "@/constants/typography";
 
 type SheetType = "avatar" | "name" | "bio" | "budget" | "major" | "leaseType" | "zone" | "landlord" | "genderPref" | "gender" | null;
 
 const SEAFOAM = "rgba(208,240,224,1)";
 const SEAFOAM_BG = "rgba(208,240,224,0.35)";
-const CORAL = "#FF6B4E";
+const CORAL = "#FF5F05";
 
 const LEASE_LABELS: Record<string, string> = {
   full_year: "Full Year (Aug – Jul)",
@@ -73,11 +74,6 @@ const MAJORS = [
   "Theatre", "Urban Planning", "Other",
 ];
 
-const AVATAR_COLORS = [
-  "#005F73", "#1A9BB5", "#4A8A5A", "#6AAB7A", "#FF6B4E",
-  "#FF8570", "#FFD966", "#E8C14E", "#9B59B6", "#E06800",
-  "#C62828", "#5A7A82", "#2E86AB", "#A23B72",
-];
 
 const GENDER_OPTIONS: { key: "female" | "male" | "nonbinary"; label: string }[] = [
   { key: "female", label: "Woman" },
@@ -105,7 +101,7 @@ function OptionRow({
       accessibilityLabel={label}
       accessibilityState={{ selected }}
     >
-      <Text style={[sh.optionText, selected && { color: Colors.ocean, fontFamily: "Nunito_700Bold" }]}>
+      <Text style={[sh.optionText, selected && { color: Colors.ocean, ...font.bold }]}>
         {label}
       </Text>
       {selected && <Ionicons name="checkmark-circle" size={20} color={color || Colors.ocean} />}
@@ -182,7 +178,7 @@ function BreakBadgeRow({
   });
   const badgeColor = animVal.interpolate({
     inputRange: [0, 1],
-    outputRange: [CORAL, Colors.grassGreen],
+    outputRange: [Colors.earth, Colors.grassGreen],
   });
 
   return (
@@ -213,7 +209,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, matches, likedUserIds, subleases, friends, setCurrentUser, setIsOnboarded } = useApp();
   const { isDesktop, contentMaxWidth } = useResponsive();
-  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
+  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 32) : insets.top;
   const mySubleases = subleases.filter(s => s.userId === currentUser?.id);
   const [versionTaps, setVersionTaps] = useState(0);
   const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -485,7 +481,7 @@ export default function ProfileScreen() {
                 const updated = current.includes(key) ? current.filter(l => l !== key) : [...current, key];
                 updateField("landlords", updated);
               }}
-              color={Colors.orange}
+              color={Colors.earth}
             />
           ))}
         </BottomSheetModal>
@@ -622,7 +618,7 @@ export default function ProfileScreen() {
             <View style={styles.divider} />
             <InfoRow icon="location-outline" label="Preferred Zone" value={ZONE_LABELS[currentUser.zone]} color={Colors.grassGreen} onPress={() => openSheet("zone")} />
             <View style={styles.divider} />
-            <InfoRow icon="business-outline" label="Landlord" value={(currentUser.landlords || []).map(l => LANDLORD_LABELS[l]).join(", ") || "Not set"} color={Colors.orange} onPress={() => openSheet("landlord")} />
+            <InfoRow icon="business-outline" label="Landlord" value={(currentUser.landlords || []).map(l => LANDLORD_LABELS[l]).join(", ") || "Not set"} color={Colors.earth} onPress={() => openSheet("landlord")} />
             <View style={styles.divider} />
             <InfoRow icon="people-outline" label="Roommate Pref" value={GENDER_LABELS[currentUser.genderPref]} color={Colors.goldDark} onPress={() => openSheet("genderPref")} />
           </View>
@@ -730,7 +726,7 @@ export default function ProfileScreen() {
                 {[
                   { label: "Budget compatibility", weight: "35%", color: Colors.ocean },
                   { label: "Cleanliness match", weight: "25%", color: Colors.grassGreen },
-                  { label: "Noise & social level", weight: "20%", color: Colors.orange },
+                  { label: "Noise & social level", weight: "20%", color: Colors.earth },
                   { label: "Zone proximity", weight: "20%", color: Colors.goldDark },
                 ].map(({ label, weight, color }) => (
                   <View key={label} style={styles.algoRow}>
@@ -773,7 +769,7 @@ export default function ProfileScreen() {
             {[
               { label: "Budget", pct: "35%", desc: "Financial compatibility is the biggest factor — you need to agree on rent.", color: Colors.ocean },
               { label: "Cleanliness", pct: "25%", desc: "Living with someone at a similar tidiness level avoids daily friction.", color: Colors.grassGreen },
-              { label: "Noise & Social", pct: "20%", desc: "Night owl vs. early bird? Party vs. quiet? This matters.", color: Colors.orange },
+              { label: "Noise & Social", pct: "20%", desc: "Night owl vs. early bird? Party vs. quiet? This matters.", color: Colors.earth },
               { label: "Zone", pct: "20%", desc: "Preferring the same neighborhood makes apartment hunting easier.", color: Colors.goldDark },
             ].map(({ label, pct, desc, color }) => (
               <View key={label} style={sh.algoModalRow}>
@@ -804,10 +800,10 @@ const sh = StyleSheet.create({
     paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, marginBottom: 4,
   },
   optionText: {
-    fontFamily: "Nunito_600SemiBold", fontSize: 15, color: Colors.charcoal,
+    ...font.semibold, fontSize: 15, color: Colors.charcoal,
   },
   textInput: {
-    fontFamily: "Nunito_400Regular", fontSize: 15, color: Colors.charcoal,
+    ...font.regular, fontSize: 15, color: Colors.charcoal,
     backgroundColor: Colors.sandDark, borderRadius: 12, borderWidth: 1.5,
     borderColor: Colors.borderSoft, padding: 14, marginBottom: 12,
   },
@@ -816,7 +812,7 @@ const sh = StyleSheet.create({
     alignItems: "center",
   },
   saveBtnText: {
-    fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.white,
+    ...font.bold, fontSize: 15, color: Colors.white,
   },
   colorGrid: {
     flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", paddingVertical: 8,
@@ -828,23 +824,23 @@ const sh = StyleSheet.create({
     borderWidth: 3, borderColor: Colors.charcoal,
   },
   algoModalBody: {
-    fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted, lineHeight: 21, marginBottom: 16,
+    ...font.regular, fontSize: 14, color: Colors.textMuted, lineHeight: 21, marginBottom: 16,
   },
   algoModalSection: { gap: 12, marginBottom: 16 },
   algoModalSubtitle: {
-    fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal,
+    ...font.bold, fontSize: 15, color: Colors.charcoal,
   },
   algoModalRow: { gap: 3 },
   algoModalDot: { width: 10, height: 10, borderRadius: 5 },
   algoModalLabel: {
-    fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal, flex: 1,
+    ...font.semibold, fontSize: 14, color: Colors.charcoal, flex: 1,
   },
-  algoModalPct: { fontFamily: "Nunito_700Bold", fontSize: 14 },
+  algoModalPct: { ...font.bold, fontSize: 14 },
   algoModalDesc: {
-    fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, lineHeight: 17, paddingLeft: 18,
+    ...font.regular, fontSize: 12, color: Colors.textMuted, lineHeight: 17, paddingLeft: 18,
   },
   algoModalFooter: {
-    fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, lineHeight: 19,
+    ...font.regular, fontSize: 13, color: Colors.textMuted, lineHeight: 19,
     fontStyle: "italic", marginBottom: 16,
   },
 });
@@ -855,7 +851,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
     paddingHorizontal: 20, paddingBottom: 12,
   },
-  headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
+  headerTitle: { ...font.heavy, fontSize: 28, color: Colors.ocean },
   signOutBtn: {
     width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.cardBg,
     alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.borderSoft,
@@ -863,13 +859,13 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 16 },
   profileCard: {
-    backgroundColor: Colors.cardBg, borderRadius: 20, borderWidth: 1.5,
-    borderColor: Colors.borderSoft, padding: 20, alignItems: "center", gap: 8,
+    backgroundColor: Colors.cardBg, borderRadius: 14,
+    padding: 20, alignItems: "center", gap: 8,
   },
   avatar: {
     width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center",
   },
-  avatarText: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.white },
+  avatarText: { ...font.heavy, fontSize: 28, color: Colors.white },
   editBadge: {
     position: "absolute", bottom: 0, right: 0, width: 22, height: 22, borderRadius: 11,
     backgroundColor: Colors.charcoal, alignItems: "center", justifyContent: "center",
@@ -878,15 +874,15 @@ const styles = StyleSheet.create({
   editableRow: {
     flexDirection: "row", alignItems: "center", gap: 6,
   },
-  profileName: { fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.charcoal },
-  profileEmail: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
+  profileName: { ...font.heavy, fontSize: 22, color: Colors.charcoal },
+  profileEmail: { ...font.regular, fontSize: 13, color: Colors.textMuted },
   majorTag: {
     flexDirection: "row", alignItems: "center", gap: 5,
     backgroundColor: Colors.ocean + "18", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
   },
-  majorTagText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.ocean },
+  majorTagText: { ...font.semibold, fontSize: 12, color: Colors.ocean },
   bio: {
-    fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted,
+    ...font.regular, fontSize: 13, color: Colors.textMuted,
     textAlign: "center", lineHeight: 19,
   },
   editHint: {
@@ -895,47 +891,47 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: "row", width: "100%", gap: 8, marginTop: 4 },
   statBox: { flex: 1, backgroundColor: Colors.sandDark, borderRadius: 12, padding: 12, alignItems: "center", gap: 2 },
   statBoxMid: { backgroundColor: Colors.ocean + "15" },
-  statNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: Colors.charcoal },
-  statLabel: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
+  statNum: { ...font.heavy, fontSize: 20, color: Colors.charcoal },
+  statLabel: { ...font.regular, fontSize: 11, color: Colors.textMuted },
   section: { gap: 8 },
-  sectionTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal, paddingHorizontal: 2 },
-  detailCard: { backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5, borderColor: Colors.borderSoft, overflow: "hidden" },
+  sectionTitle: { ...font.bold, fontSize: 15, color: Colors.charcoal, paddingHorizontal: 2 },
+  detailCard: { backgroundColor: Colors.cardBg, borderRadius: 14, overflow: "hidden" },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   infoIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   infoContent: { flex: 1 },
-  infoLabel: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
-  infoValue: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
+  infoLabel: { ...font.regular, fontSize: 11, color: Colors.textMuted },
+  infoValue: { ...font.semibold, fontSize: 14, color: Colors.charcoal },
   divider: { height: 1, backgroundColor: Colors.sandDark, marginLeft: 60 },
   ratingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14 },
-  ratingLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
-  ratingValue: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  ratingLabel: { ...font.semibold, fontSize: 14, color: Colors.charcoal },
+  ratingValue: { ...font.semibold, fontSize: 13, color: Colors.textMuted },
   dots: { flexDirection: "row", gap: 5 },
   dot: { width: 14, height: 14, borderRadius: 7 },
   breakRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14 },
   breakLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  breakLabel: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal },
+  breakLabel: { ...font.semibold, fontSize: 14, color: Colors.charcoal },
   breakBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  breakBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 12 },
-  algoCard: { backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 16, gap: 10 },
-  algoDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted, lineHeight: 18, flex: 1 },
+  breakBadgeText: { ...font.bold, fontSize: 12 },
+  algoCard: { backgroundColor: Colors.cardBg, borderRadius: 14, padding: 16, gap: 10 },
+  algoDesc: { ...font.regular, fontSize: 12, color: Colors.textMuted, lineHeight: 18, flex: 1 },
   algoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   algoDot: { width: 9, height: 9, borderRadius: 5 },
-  algoLabel: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, flex: 1 },
-  algoWeight: { fontFamily: "Nunito_700Bold", fontSize: 13 },
+  algoLabel: { ...font.regular, fontSize: 13, color: Colors.charcoal, flex: 1 },
+  algoWeight: { ...font.bold, fontSize: 13 },
   signOutFullBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.ocean + "12", borderRadius: 12, borderWidth: 1.5,
     borderColor: Colors.ocean + "30", paddingVertical: 13,
   },
-  signOutFullBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.ocean },
+  signOutFullBtnText: { ...font.bold, fontSize: 14, color: Colors.ocean },
   resetFullBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.errorRed + "10", borderRadius: 12, borderWidth: 1.5,
     borderColor: Colors.errorRed + "30", paddingVertical: 13,
   },
-  resetFullBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.errorRed },
+  resetFullBtnText: { ...font.bold, fontSize: 14, color: Colors.errorRed },
   noProfile: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  noProfileText: { fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted },
+  noProfileText: { ...font.regular, fontSize: 14, color: Colors.textMuted },
   versionLabel: { alignItems: "center", paddingVertical: 12 },
-  versionText: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight },
+  versionText: { ...font.regular, fontSize: 11, color: Colors.textLight },
 });

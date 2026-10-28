@@ -3,9 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native
 import { usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { font } from "@/constants/typography";
 
 const NAV_ITEMS = [
-  { key: "/(tabs)", label: "Browse", icon: "home-outline" as const, activeIcon: "home" as const },
+  { key: "/(tabs)", label: "Home", icon: "home-outline" as const, activeIcon: "home" as const },
   { key: "/(tabs)/inbox", label: "Inbox", icon: "chatbubbles-outline" as const, activeIcon: "chatbubbles" as const },
   { key: "/(tabs)/profile", label: "Profile", icon: "person-outline" as const, activeIcon: "person" as const },
 ];
@@ -103,7 +104,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   logoText: {
-    fontFamily: "Nunito_800ExtraBold",
+    ...font.heavy,
     fontSize: 20,
     color: Colors.charcoal,
     marginLeft: 10,
@@ -124,14 +125,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ocean + "10",
   },
   navLabel: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 15,
     color: Colors.textMuted,
     marginLeft: 14,
   },
   navLabelActive: {
     color: Colors.ocean,
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
   },
   bottomSection: {
     borderTopWidth: 1,

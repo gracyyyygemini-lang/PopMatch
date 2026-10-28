@@ -8,13 +8,14 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { apiRequest } from "@/lib/query-client";
+import { font } from "@/constants/typography";
 
 type Rating = "smooth" | "bumpy" | "rescue";
 
 const RATINGS: { key: Rating; emoji: string; label: string; sub: string; color: string }[] = [
   { key: "smooth", emoji: "🌊", label: "Smooth sailing!", sub: "Great experience", color: Colors.ocean },
   { key: "bumpy", emoji: "🛶", label: "A bit bumpy.", sub: "Okay experience", color: Colors.goldDark },
-  { key: "rescue", emoji: "🦈", label: "Needs a rescue.", sub: "Bad experience", color: Colors.ponyo },
+  { key: "rescue", emoji: "🦈", label: "Needs a rescue.", sub: "Bad experience", color: Colors.earth },
 ];
 
 const ISSUES = [
@@ -170,7 +171,7 @@ export default function MicroFeedback({ visible, userEmail, onClose }: MicroFeed
                         style={[mf.issueChip, active && mf.issueChipActive]}
                         onPress={() => toggleIssue(issue)}
                       >
-                        {active && <Ionicons name="checkmark-circle" size={14} color={Colors.ponyo} />}
+                        {active && <Ionicons name="checkmark-circle" size={14} color={Colors.earth} />}
                         <Text style={[mf.issueText, active && mf.issueTextActive]}>{issue}</Text>
                       </TouchableOpacity>
                     );
@@ -238,10 +239,10 @@ const mf = StyleSheet.create({
     backgroundColor: Colors.borderSoft, alignSelf: "center", marginBottom: 12,
   },
   title: {
-    fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.charcoal, textAlign: "center",
+    ...font.heavy, fontSize: 22, color: Colors.charcoal, textAlign: "center",
   },
   sub: {
-    fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted,
+    ...font.regular, fontSize: 13, color: Colors.textMuted,
     textAlign: "center", marginBottom: 16,
   },
   ratingRow: {
@@ -255,18 +256,18 @@ const mf = StyleSheet.create({
   },
   emoji: { fontSize: 30 },
   ratingLabel: {
-    fontFamily: "Nunito_700Bold", fontSize: 11, color: Colors.charcoal, textAlign: "center",
+    ...font.bold, fontSize: 11, color: Colors.charcoal, textAlign: "center",
   },
   ratingSub: {
-    fontFamily: "Nunito_400Regular", fontSize: 10, color: Colors.textMuted, textAlign: "center",
+    ...font.regular, fontSize: 10, color: Colors.textMuted, textAlign: "center",
   },
   skipBtn: { alignSelf: "center", padding: 10 },
-  skipText: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textLight },
+  skipText: { ...font.regular, fontSize: 13, color: Colors.textLight },
   backBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingVertical: 4, marginBottom: 4,
   },
-  backText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  backText: { ...font.semibold, fontSize: 13, color: Colors.textMuted },
   issueGrid: {
     flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12,
   },
@@ -277,23 +278,23 @@ const mf = StyleSheet.create({
     backgroundColor: Colors.cardBg,
   },
   issueChipActive: {
-    borderColor: Colors.ponyo, backgroundColor: Colors.ponyo + "12",
+    borderColor: Colors.earth, backgroundColor: Colors.earth + "12",
   },
   issueText: {
-    fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted,
+    ...font.semibold, fontSize: 12, color: Colors.textMuted,
   },
-  issueTextActive: { color: Colors.ponyo },
+  issueTextActive: { color: Colors.earth },
   detailInput: {
     borderWidth: 1.5, borderColor: Colors.borderSoft, borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 10,
-    fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal,
+    ...font.regular, fontSize: 13, color: Colors.charcoal,
     backgroundColor: Colors.sand + "60", height: 72, textAlignVertical: "top",
   },
   submitBtn: {
     backgroundColor: Colors.ocean, borderRadius: 14, paddingVertical: 14,
     alignItems: "center", marginTop: 8,
   },
-  submitText: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.white },
+  submitText: { ...font.bold, fontSize: 15, color: Colors.white },
   thanksContainer: {
     alignItems: "center", paddingVertical: 32, gap: 8, position: "relative",
   },
@@ -304,10 +305,10 @@ const mf = StyleSheet.create({
   },
   thanksEmoji: { fontSize: 52, marginBottom: 8 },
   thanksTitle: {
-    fontFamily: "Nunito_800ExtraBold", fontSize: 22, color: Colors.ocean,
+    ...font.heavy, fontSize: 22, color: Colors.ocean,
   },
   thanksSub: {
-    fontFamily: "Nunito_400Regular", fontSize: 14, color: Colors.textMuted,
+    ...font.regular, fontSize: 14, color: Colors.textMuted,
     textAlign: "center", paddingHorizontal: 20,
   },
 });

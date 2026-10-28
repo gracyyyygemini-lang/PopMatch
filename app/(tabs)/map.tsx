@@ -5,8 +5,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
+import Colors, { avatarColor as paletteAvatar } from "@/constants/colors";
 import { useApp, Zone, SubleasePost } from "@/context/AppContext";
+import { font } from "@/constants/typography";
 
 const { width } = Dimensions.get("window");
 
@@ -64,7 +65,7 @@ function ZoneGrid({ selected, onSelect }: { selected: Zone; onSelect: (z: Zone) 
           <Text style={[styles.zoneCellLabel, selected === zone.key && styles.zoneCellLabelActive]}>
             {zone.label}
           </Text>
-          <Text style={styles.zoneCellVibe}>{zone.vibe}</Text>
+          <Text style={[styles.zoneCellVibe, selected === zone.key && styles.zoneCellLabelActive]}>{zone.vibe}</Text>
           {selected === zone.key && (
             <View style={[styles.zoneCellDot, { backgroundColor: zone.color }]} />
           )}
@@ -103,7 +104,7 @@ function ListingPin({ post, index }: { post: SubleasePost; index: number }) {
         <View style={styles.pinExpanded}>
           <Text style={styles.pinDesc} numberOfLines={3}>{post.description}</Text>
           <View style={styles.pinMeta}>
-            <View style={[styles.pinAvatar, { backgroundColor: post.avatarColor }]}>
+            <View style={[styles.pinAvatar, { backgroundColor: paletteAvatar(post.avatarColor) }]}>
               <Text style={styles.pinAvatarText}>{initials}</Text>
             </View>
             <View>
@@ -127,7 +128,7 @@ export default function MapScreen() {
   const zoneUsers = users.filter(u => u.zone === selectedZone && u.id !== currentUser?.id);
   const zoneListings = subleases.filter(s => s.zone === selectedZone);
   const isDesktopMap = Platform.OS === "web" && Dimensions.get("window").width >= 1024;
-  const topPadding = Platform.OS === "web" ? (isDesktopMap ? 24 : 67) : insets.top;
+  const topPadding = Platform.OS === "web" ? (isDesktopMap ? 24 : 32) : insets.top;
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.sand }]}>
@@ -217,7 +218,7 @@ export default function MapScreen() {
                 const initials = user.name.split(" ").map(n => n[0]).join("").slice(0, 2);
                 return (
                   <View key={user.id} style={styles.userCard}>
-                    <View style={[styles.userAvatar, { backgroundColor: user.avatarColor }]}>
+                    <View style={[styles.userAvatar, { backgroundColor: paletteAvatar(user.avatarColor) }]}>
                       <Text style={styles.userInitials}>{initials}</Text>
                     </View>
                     <View style={styles.userInfo}>
@@ -260,8 +261,8 @@ const styles = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
     paddingHorizontal: 20, paddingBottom: 8,
   },
-  headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: Colors.ocean },
-  headerSub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted },
+  headerTitle: { ...font.heavy, fontSize: 28, color: Colors.ocean },
+  headerSub: { ...font.regular, fontSize: 13, color: Colors.textMuted },
   headerBadge: {
     width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.ocean + "15",
     alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: Colors.ocean + "30",
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderSoft, paddingVertical: 9,
   },
   tabBtnActive: { backgroundColor: Colors.ocean + "15", borderColor: Colors.ocean + "40" },
-  tabBtnText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: Colors.textMuted },
+  tabBtnText: { ...font.semibold, fontSize: 13, color: Colors.textMuted },
   tabBtnTextActive: { color: Colors.ocean },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 14 },
@@ -283,15 +284,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBg, borderRadius: 18, borderWidth: 1.5,
     borderColor: Colors.borderSoft, padding: 14, gap: 10,
   },
-  mapCardTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal },
+  mapCardTitle: { ...font.bold, fontSize: 15, color: Colors.charcoal },
   zoneGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   zoneCell: {
-    width: (width - 64) / 2, borderRadius: 12, borderWidth: 2,
+    flexBasis: "46%", flexGrow: 1, borderRadius: 12, borderWidth: 2,
     padding: 12, alignItems: "center", gap: 4, position: "relative",
   },
-  zoneCellLabel: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.textMuted, textAlign: "center" },
+  zoneCellLabel: { ...font.bold, fontSize: 12, color: Colors.textMuted, textAlign: "center" },
   zoneCellLabelActive: { color: Colors.charcoal },
-  zoneCellVibe: { fontFamily: "Nunito_400Regular", fontSize: 10, color: Colors.textLight, textAlign: "center" },
+  zoneCellVibe: { ...font.regular, fontSize: 10, color: Colors.textLight, textAlign: "center" },
   zoneCellDot: { position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: 4 },
   zoneDetail: {
     backgroundColor: Colors.cardBg, borderRadius: 16, borderWidth: 1.5,
@@ -300,22 +301,22 @@ const styles = StyleSheet.create({
   zoneDetailHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   zoneDetailIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   zoneDetailMeta: { flex: 1 },
-  zoneDetailName: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: Colors.charcoal },
-  zoneDetailVibe: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
+  zoneDetailName: { ...font.heavy, fontSize: 18, color: Colors.charcoal },
+  zoneDetailVibe: { ...font.regular, fontSize: 12, color: Colors.textMuted },
   rentBadge: { alignItems: "flex-end" },
-  rentText: { fontFamily: "Nunito_700Bold", fontSize: 13 },
-  rentSub: { fontFamily: "Nunito_400Regular", fontSize: 10, color: Colors.textMuted },
+  rentText: { ...font.bold, fontSize: 13 },
+  rentSub: { ...font.regular, fontSize: 10, color: Colors.textMuted },
   prosConsList: { flexDirection: "row", gap: 16 },
   prosCol: { flex: 1, gap: 5 },
   consCol: { flex: 1, gap: 5 },
-  prosTitle: { fontFamily: "Nunito_700Bold", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 },
-  consTitle: { fontFamily: "Nunito_700Bold", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 },
+  prosTitle: { ...font.bold, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 },
+  consTitle: { ...font.bold, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 },
   proItem: { flexDirection: "row", alignItems: "flex-start", gap: 5 },
   conItem: { flexDirection: "row", alignItems: "flex-start", gap: 5 },
-  proText: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.charcoal, flex: 1, lineHeight: 17 },
-  conText: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.charcoal, flex: 1, lineHeight: 17 },
+  proText: { ...font.regular, fontSize: 12, color: Colors.charcoal, flex: 1, lineHeight: 17 },
+  conText: { ...font.regular, fontSize: 12, color: Colors.charcoal, flex: 1, lineHeight: 17 },
   section: { gap: 8 },
-  sectionTitle: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.charcoal },
+  sectionTitle: { ...font.bold, fontSize: 15, color: Colors.charcoal },
   listingPin: {
     backgroundColor: Colors.cardBg, borderRadius: 14, borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 12,
   },
@@ -323,29 +324,29 @@ const styles = StyleSheet.create({
   pinTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   pinIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   pinInfo: { flex: 1 },
-  pinBuilding: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  pinZone: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
+  pinBuilding: { ...font.bold, fontSize: 14, color: Colors.charcoal },
+  pinZone: { ...font.regular, fontSize: 11, color: Colors.textMuted },
   pinPriceBlock: { alignItems: "flex-end" },
-  pinPrice: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.ocean },
-  pinPriceSub: { fontFamily: "Nunito_400Regular", fontSize: 10, color: Colors.textMuted },
+  pinPrice: { ...font.heavy, fontSize: 16, color: Colors.ocean },
+  pinPriceSub: { ...font.regular, fontSize: 10, color: Colors.textMuted },
   pinExpanded: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.borderSoft, gap: 10 },
-  pinDesc: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.charcoal, lineHeight: 19 },
+  pinDesc: { ...font.regular, fontSize: 13, color: Colors.charcoal, lineHeight: 19 },
   pinMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
   pinAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  pinAvatarText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.white },
-  pinPoster: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.charcoal },
-  pinRole: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
+  pinAvatarText: { ...font.bold, fontSize: 10, color: Colors.white },
+  pinPoster: { ...font.bold, fontSize: 12, color: Colors.charcoal },
+  pinRole: { ...font.regular, fontSize: 11, color: Colors.textMuted },
   userCard: {
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 12,
   },
   userAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  userInitials: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
+  userInitials: { ...font.bold, fontSize: 14, color: Colors.white },
   userInfo: { flex: 1 },
-  userName: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  userDetails: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.textMuted },
+  userName: { ...font.bold, fontSize: 14, color: Colors.charcoal },
+  userDetails: { ...font.regular, fontSize: 12, color: Colors.textMuted },
   userScore: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  userScoreText: { fontFamily: "Nunito_800ExtraBold", fontSize: 11, color: Colors.white },
+  userScoreText: { ...font.heavy, fontSize: 11, color: Colors.white },
   emptyState: { alignItems: "center", gap: 8, paddingTop: 40 },
-  emptyText: { fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, textAlign: "center" },
+  emptyText: { ...font.regular, fontSize: 13, color: Colors.textMuted, textAlign: "center" },
 });

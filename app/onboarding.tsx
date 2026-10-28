@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import Colors from "@/constants/colors";
+import Colors, { AVATAR_COLORS } from "@/constants/colors";
 import {
   useApp,
   UserProfile,
@@ -38,6 +38,7 @@ import {
   verifyUiucOtp,
 } from "@/lib/auth";
 import { uploadProfileImage } from "@/lib/uploads";
+import { font } from "@/constants/typography";
 
 const MAJORS = [
   "Accountancy", "Aerospace Engineering", "Agricultural & Biological Engineering",
@@ -282,8 +283,8 @@ export default function OnboardingScreen() {
     }
   };
 
-  const DISABLED_BG = "#E0E8E9";
-  const DISABLED_TEXT = "#8A9FA3";
+  const DISABLED_BG = "#E6E7E8";
+  const DISABLED_TEXT = "#707372";
 
   const isStepComplete = (s: number): boolean => {
     switch (s) {
@@ -313,15 +314,8 @@ export default function OnboardingScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSavingProfile(true);
 
-    const avatarColors = [
-      Colors.tealLight,
-      Colors.ponyo,
-      Colors.grassGreen,
-      "#9B59B6",
-      Colors.yellowDark,
-      Colors.teal,
-    ];
-    const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
+    // Colours that pass contrast with white initials.
+    const avatarColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
 
     const userId = Date.now().toString() + Math.random().toString(36).substr(2, 6);
 
@@ -399,7 +393,7 @@ export default function OnboardingScreen() {
 
   const onbWidth = Dimensions.get("window").width;
   const isDesktopOnb = Platform.OS === "web" && onbWidth >= 1024;
-  const topPadding = Platform.OS === "web" ? (isDesktopOnb ? 24 : 67) : insets.top;
+  const topPadding = Platform.OS === "web" ? (isDesktopOnb ? 24 : 32) : insets.top;
 
   return (
     <KeyboardAvoidingView
@@ -714,7 +708,7 @@ export default function OnboardingScreen() {
             <Ionicons
               name={isSupplySide && step === 2 ? "home" : step === STEPS - 1 ? "heart" : "arrow-forward"}
               size={17}
-              color={isFormComplete ? Colors.white : DISABLED_TEXT}
+              color={isFormComplete ? Colors.onOrange : DISABLED_TEXT}
             />
           </TouchableOpacity>
         )}
@@ -783,21 +777,21 @@ const styles = StyleSheet.create({
     borderColor: Colors.teal + "28",
   },
   stepTitle: {
-    fontFamily: "Nunito_800ExtraBold",
+    ...font.heavy,
     fontSize: 27,
     color: Colors.teal,
     textAlign: "center",
     lineHeight: 34,
   },
   stepSubtitle: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 15,
     color: Colors.textMuted,
     textAlign: "center",
     marginBottom: 6,
   },
   label: {
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
     fontSize: 14,
     color: Colors.charcoal,
     marginTop: 6,
@@ -809,7 +803,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderSoft,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 15,
     color: Colors.charcoal,
     flexDirection: "row",
@@ -817,15 +811,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   textArea: { height: 90, paddingTop: 13 },
-  selectText: { fontFamily: "Nunito_400Regular", fontSize: 15 },
-  fieldHint: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textLight },
+  selectText: { ...font.regular, fontSize: 15 },
+  fieldHint: { ...font.regular, fontSize: 11, color: Colors.textLight },
   optionalTag: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 12,
     color: Colors.textLight,
   },
   deferNote: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 12,
     color: Colors.textMuted,
     lineHeight: 18,
@@ -844,25 +838,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   otpSendBtnText: {
-    fontFamily: "Nunito_800ExtraBold",
+    ...font.heavy,
     fontSize: 16,
     color: Colors.white,
   },
   codeInput: {
     textAlign: "center",
-    fontFamily: "Nunito_800ExtraBold",
+    ...font.heavy,
     fontSize: 28,
     letterSpacing: 10,
   },
   linkText: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 13,
     color: Colors.teal,
     textAlign: "center",
     marginTop: 4,
   },
   dividerText: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 12,
     color: Colors.textLight,
     textAlign: "center",
@@ -880,12 +874,12 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   ssoBtnText: {
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
     fontSize: 15,
     color: Colors.teal,
   },
   errorText: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 13,
     color: Colors.errorRed,
     textAlign: "center",
@@ -897,13 +891,13 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 3,
-    borderColor: "#D0F0E0",
+    borderColor: "#E6F2EA",
   },
   avatarPlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: "#D0F0E0",
+    backgroundColor: "#E6F2EA",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
@@ -911,7 +905,7 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
   },
   avatarHint: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 11,
     color: Colors.teal,
     marginTop: 4,
@@ -927,7 +921,7 @@ const styles = StyleSheet.create({
   },
   chipActive: { backgroundColor: Colors.teal, borderColor: Colors.teal },
   chipText: {
-    fontFamily: "Nunito_600SemiBold",
+    ...font.semibold,
     fontSize: 13,
     color: Colors.textMuted,
   },
@@ -951,12 +945,12 @@ const styles = StyleSheet.create({
   },
   budgetDisplay: { alignItems: "center", minWidth: 110 },
   budgetValue: {
-    fontFamily: "Nunito_800ExtraBold",
+    ...font.heavy,
     fontSize: 36,
     color: Colors.teal,
   },
   budgetSub: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 12,
     color: Colors.textMuted,
   },
@@ -973,13 +967,13 @@ const styles = StyleSheet.create({
   optionCardActive: { borderColor: Colors.teal, backgroundColor: Colors.teal + "0E" },
   optionLeft: { flex: 1 },
   optionLabel: {
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
     fontSize: 14,
     color: Colors.charcoal,
   },
   optionLabelActive: { color: Colors.teal },
   optionDesc: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 12,
     color: Colors.textMuted,
     marginTop: 1,
@@ -999,10 +993,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  ratingNum: { fontFamily: "Nunito_800ExtraBold", fontSize: 17 },
+  ratingNum: { ...font.heavy, fontSize: 17 },
   scaleLabels: { flexDirection: "row", justifyContent: "space-between" },
   scaleLabel: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 11,
     color: Colors.textLight,
   },
@@ -1018,12 +1012,12 @@ const styles = StyleSheet.create({
   },
   toggleInfo: { flex: 1 },
   toggleTitle: {
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
     fontSize: 14,
     color: Colors.charcoal,
   },
   toggleDesc: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 12,
     color: Colors.textMuted,
   },
@@ -1037,7 +1031,7 @@ const styles = StyleSheet.create({
   },
   toggleOn: { backgroundColor: Colors.grassGreen, borderColor: Colors.grassGreen },
   toggleText: {
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
     fontSize: 13,
     color: Colors.textMuted,
   },
@@ -1058,12 +1052,12 @@ const styles = StyleSheet.create({
   },
   majorSelected: { backgroundColor: Colors.teal + "14" },
   majorText: {
-    fontFamily: "Nunito_400Regular",
+    ...font.regular,
     fontSize: 14,
     color: Colors.charcoal,
   },
   majorTextSelected: {
-    fontFamily: "Nunito_700Bold",
+    ...font.bold,
     color: Colors.teal,
   },
   footer: {
@@ -1096,8 +1090,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   nextBtnText: {
-    fontFamily: "Nunito_800ExtraBold",
+    ...font.heavy,
     fontSize: 16,
-    color: Colors.white,
+    color: Colors.onOrange,
   },
 });

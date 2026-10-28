@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
+import { font } from "@/constants/typography";
 
 /**
  * Shown on every screen while the profile exists only on this device. A failed
@@ -53,12 +54,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingBottom: 10,
   },
   content: { flex: 1 },
-  title: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.alertRed },
-  body: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.charcoal, lineHeight: 17, marginTop: 2 },
-  detail: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted, lineHeight: 15, marginTop: 4 },
+  title: { ...font.bold, fontSize: 13, color: Colors.alertRed },
+  body: { ...font.regular, fontSize: 12, color: Colors.charcoal, lineHeight: 17, marginTop: 2 },
+  detail: { ...font.regular, fontSize: 11, color: Colors.textMuted, lineHeight: 15, marginTop: 4 },
   retryBtn: {
     backgroundColor: Colors.alertRed, borderRadius: 8,
     paddingHorizontal: 10, paddingVertical: 6, alignSelf: "center",
   },
-  retryText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.white },
+  retryText: { ...font.bold, fontSize: 12, color: Colors.white },
 });

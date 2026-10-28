@@ -2,6 +2,7 @@ import React from "react";
 import { View, TextInput, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { font } from "@/constants/typography";
 
 /** Rounded search field in the same style as the zone chips below it. */
 export default function SearchBar({ value, onChangeText, placeholder }: {
@@ -44,7 +45,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
   input: {
-    flex: 1, fontFamily: "Nunito_600SemiBold", fontSize: 14, color: Colors.charcoal,
+    flex: 1, ...font.semibold, fontSize: 14, color: Colors.charcoal,
     paddingVertical: 0,
     // The rounded field already frames the text; the browser's square focus
     // ring drawn inside it looked broken. Chrome draws its ring for

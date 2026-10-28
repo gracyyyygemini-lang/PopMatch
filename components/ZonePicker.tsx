@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { Zone } from "@/context/AppContext";
+import { font } from "@/constants/typography";
 
 const ZONES: { key: Zone | "all"; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "all", label: "All Zones", icon: "apps-outline" },
@@ -53,6 +54,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBg, borderWidth: 1.5, borderColor: Colors.borderSoft,
   },
   chipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
-  chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: Colors.textMuted },
+  chipText: { ...font.semibold, fontSize: 12, color: Colors.textMuted },
   chipTextActive: { color: Colors.white },
 });

@@ -5,8 +5,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Colors from "@/constants/colors";
+import Colors, { avatarColor as paletteAvatar } from "@/constants/colors";
 import { MutualFriend } from "@/context/AppContext";
+import { font } from "@/constants/typography";
 
 interface FacePileProps {
   mutuals: MutualFriend[];
@@ -20,12 +21,12 @@ function Avatar({ name, color, size, style }: {
   return (
     <View style={[{
       width: size, height: size, borderRadius: size / 2,
-      backgroundColor: color,
+      backgroundColor: paletteAvatar(color),
       alignItems: "center", justifyContent: "center",
       borderWidth: 2, borderColor: Colors.cardBg,
     }, style]}>
       <Text style={{
-        fontFamily: "Nunito_700Bold",
+        ...font.bold,
         fontSize: size * 0.35,
         color: Colors.white,
       }}>
@@ -74,7 +75,7 @@ export default function FacePile({ mutuals, maxVisible = 3 }: FacePileProps) {
               left: visible.length * (AVATAR_SIZE - OVERLAP),
               zIndex: 0,
             }]}>
-              <Text style={{ fontFamily: "Nunito_700Bold", fontSize: 9, color: Colors.white }}>
+              <Text style={{ ...font.bold, fontSize: 9, color: Colors.white }}>
                 +{overflow}
               </Text>
             </View>
@@ -117,7 +118,7 @@ export default function FacePile({ mutuals, maxVisible = 3 }: FacePileProps) {
                 const initials = m.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
                 return (
                   <View key={m.id} style={fp.friendRow}>
-                    <View style={[fp.friendAvatar, { backgroundColor: m.avatarColor }]}>
+                    <View style={[fp.friendAvatar, { backgroundColor: paletteAvatar(m.avatarColor) }]}>
                       <Text style={fp.friendInitials}>{initials}</Text>
                     </View>
                     <View style={fp.friendInfo}>
@@ -150,7 +151,7 @@ const fp = StyleSheet.create({
     height: 26, position: "relative",
   },
   label: {
-    fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.ocean,
+    ...font.bold, fontSize: 12, color: Colors.ocean,
   },
   modalOverlay: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.4)",
@@ -169,10 +170,10 @@ const fp = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4,
   },
   sheetTitle: {
-    fontFamily: "Nunito_700Bold", fontSize: 18, color: Colors.ocean, flex: 1,
+    ...font.bold, fontSize: 18, color: Colors.ocean, flex: 1,
   },
   sheetSub: {
-    fontFamily: "Nunito_400Regular", fontSize: 13, color: Colors.textMuted, marginBottom: 16,
+    ...font.regular, fontSize: 13, color: Colors.textMuted, marginBottom: 16,
   },
   friendRow: {
     flexDirection: "row", alignItems: "center", gap: 12,
@@ -181,13 +182,13 @@ const fp = StyleSheet.create({
   friendAvatar: {
     width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center",
   },
-  friendInitials: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
+  friendInitials: { ...font.bold, fontSize: 14, color: Colors.white },
   friendInfo: { flex: 1 },
-  friendName: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
+  friendName: { ...font.bold, fontSize: 14, color: Colors.charcoal },
   friendBadge: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: Colors.grassGreen + "18",
     paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
   },
-  friendBadgeText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.grassGreen },
+  friendBadgeText: { ...font.bold, fontSize: 10, color: Colors.grassGreen },
 });

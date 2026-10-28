@@ -19,23 +19,24 @@ import { PostsSyncBanner } from "@/components/PostsSyncBanner";
 import SearchBar from "@/components/SearchBar";
 import { useDebouncedValue, useSearch } from "@/hooks/useSearch";
 import { searchCrashPosts } from "@/lib/listings";
+import { font } from "@/constants/typography";
 
-const DARK_TEAL = "#2C555C";
+const DARK_TEAL = "#13294B";
 /** Other students' new posts show up within this long while the screen is open. */
 const POSTS_POLL_MS = 30000;
 /** Typing pause before a search goes to the server. */
 const SEARCH_DEBOUNCE_MS = 300;
-const SUBTITLE_GREY = "#6B8A8F";
-const SCREEN_BG = "#FBFBF9";
-const CORAL_FAB = "#FF8C69";
-const SOS_TINT = "#FDECE8";
-const OFFER_TINT = "#E8F6F3";
-const SOS_RED = "#E74C3C";
-const OFFERING_GREEN = "#D0F0E0";
+const SUBTITLE_GREY = "#5E6160";
+const SCREEN_BG = "#F2F3F5";
+const CORAL_FAB = "#FF5F05";
+const SOS_TINT = "#FFE6D6";
+const OFFER_TINT = "#E6F2EA";
+const SOS_RED = "#B3261E";
+const OFFERING_GREEN = "#E6F2EA";
 const GRID_GAP = 12;
 const GRID_PAD = 16;
-const DISABLED_BG = "#E0E8E9";
-const DISABLED_TEXT = "#8A9FA3";
+const DISABLED_BG = "#E6E7E8";
+const DISABLED_TEXT = "#707372";
 
 const ZONE_SHORT: Record<string, string> = {
   campustown: "Campustown",
@@ -46,11 +47,11 @@ const ZONE_SHORT: Record<string, string> = {
 };
 
 const PLACEHOLDER_IMGS: Record<string, { colors: string[]; icon: keyof typeof Ionicons.glyphMap }> = {
-  campustown: { colors: ["#FFE5D9", "#FBBF9E"], icon: "storefront-outline" },
-  north: { colors: ["#D6EAF8", "#A9CCE3"], icon: "hardware-chip-outline" },
-  south: { colors: ["#D5F5E3", "#A9DFBF"], icon: "football-outline" },
-  urbana: { colors: ["#FCF3CF", "#F9E79F"], icon: "leaf-outline" },
-  downtown: { colors: ["#E8DAEF", "#D2B4DE"], icon: "business-outline" },
+  campustown: { colors: ["#FFE6D6", "#C6C7C6"], icon: "storefront-outline" },
+  north: { colors: ["#E8ECF3", "#C6C7C6"], icon: "hardware-chip-outline" },
+  south: { colors: ["#E6F2EA", "#C6C7C6"], icon: "football-outline" },
+  urbana: { colors: ["#FFE6D6", "#FFE6D6"], icon: "leaf-outline" },
+  downtown: { colors: ["#F3E7EF", "#C6C7C6"], icon: "business-outline" },
 };
 
 const CURRENCY_OPTIONS: { key: CrashCurrency; emoji: string; label: string }[] = [
@@ -145,7 +146,7 @@ function GridCard({
           ) : (
             <Pressable onPress={onDm}>
               {({ pressed }) => (
-                <View style={[gc.dmBtn, pressed && { backgroundColor: "#1E4448", transform: [{ scale: 0.95 }] }]}>
+                <View style={[gc.dmBtn, pressed && { backgroundColor: "#13294B", transform: [{ scale: 0.95 }] }]}>
                   <Text style={gc.dmBtnText}>DM ⚡️</Text>
                 </View>
               )}
@@ -159,7 +160,7 @@ function GridCard({
 
 const gc = StyleSheet.create({
   card: {
-    borderRadius: 16, overflow: "hidden",
+    borderRadius: 14, overflow: "hidden",
     shadowColor: "rgba(0,0,0,0.05)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 16,
     elevation: 2,
   },
@@ -171,33 +172,33 @@ const gc = StyleSheet.create({
     width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center",
     borderWidth: 2, borderColor: Colors.white,
   },
-  avatarText: { fontFamily: "Nunito_800ExtraBold", fontSize: 12, color: Colors.white },
+  avatarText: { ...font.heavy, fontSize: 12, color: Colors.white },
   tagOverlay: { position: "absolute", bottom: -10, left: 8 },
   tagPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  tagSos: { backgroundColor: "#FF6B4E" },
+  tagSos: { backgroundColor: Colors.error },
   tagOffer: { backgroundColor: Colors.grassGreen },
-  tagText: { fontFamily: "Nunito_800ExtraBold", fontSize: 11, color: Colors.white },
+  tagText: { ...font.heavy, fontSize: 11, color: Colors.white },
   details: { padding: 8, paddingTop: 16, gap: 6 },
-  story: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: DARK_TEAL, lineHeight: 18 },
+  story: { ...font.semibold, fontSize: 13, color: DARK_TEAL, lineHeight: 18 },
   essBox: { backgroundColor: Colors.white, borderRadius: 8, padding: 6, gap: 3 },
   essItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   essIcon: { fontSize: 11 },
-  essText: { fontFamily: "Nunito_400Regular", fontSize: 11, color: DARK_TEAL, flex: 1 },
+  essText: { ...font.regular, fontSize: 11, color: DARK_TEAL, flex: 1 },
   actionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
-  currency: { fontFamily: "Nunito_800ExtraBold", fontSize: 13, color: DARK_TEAL, flex: 1 },
+  currency: { ...font.heavy, fontSize: 13, color: DARK_TEAL, flex: 1 },
   dmBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: DARK_TEAL },
-  dmBtnText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.white },
+  dmBtnText: { ...font.bold, fontSize: 12, color: Colors.white },
   filledBtn: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
     borderWidth: 1.5, borderColor: SUBTITLE_GREY, backgroundColor: "transparent",
   },
-  filledBtnText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: SUBTITLE_GREY },
-  pinnedCard: { borderWidth: 2, borderColor: "#005F73" },
+  filledBtnText: { ...font.bold, fontSize: 12, color: SUBTITLE_GREY },
+  pinnedCard: { borderWidth: 2, borderColor: "#13294B" },
   pinnedOverlay: { position: "absolute", top: 8, right: 8 },
   pinnedPill: {
     backgroundColor: "rgba(0,95,115,0.85)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10,
   },
-  pinnedText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: "#FFFFFF" },
+  pinnedText: { ...font.bold, fontSize: 10, color: "#FFFFFF" },
 });
 
 function SegmentedToggle({ value, onChange }: { value: VibeFilter; onChange: (v: VibeFilter) => void }) {
@@ -223,13 +224,13 @@ function SegmentedToggle({ value, onChange }: { value: VibeFilter; onChange: (v:
 
 const seg = StyleSheet.create({
   wrap: {
-    flexDirection: "row", backgroundColor: "#EDF2F2", borderRadius: 14, padding: 3,
+    flexDirection: "row", backgroundColor: "#E6E7E8", borderRadius: 14, padding: 3,
     marginHorizontal: GRID_PAD, marginBottom: 8,
   },
   item: { paddingVertical: 8, borderRadius: 12, alignItems: "center" },
   itemActive: { backgroundColor: Colors.white, shadowColor: "rgba(0,0,0,0.06)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6, elevation: 2 },
-  text: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: SUBTITLE_GREY },
-  textActive: { fontFamily: "Nunito_700Bold", color: DARK_TEAL },
+  text: { ...font.semibold, fontSize: 13, color: SUBTITLE_GREY },
+  textActive: { ...font.bold, color: DARK_TEAL },
 });
 
 function getNext10Days(): { label: string; ts: number }[] {
@@ -434,26 +435,26 @@ const np = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 14, maxHeight: "90%",
   },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.borderSoft, alignSelf: "center", marginBottom: 8 },
-  title: { fontFamily: "Nunito_800ExtraBold", fontSize: 20, color: DARK_TEAL, marginBottom: 4 },
+  title: { ...font.heavy, fontSize: 20, color: DARK_TEAL, marginBottom: 4 },
   urgentBox: {
     backgroundColor: SOS_TINT, borderRadius: 12, padding: 12,
   },
-  urgentText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: DARK_TEAL, lineHeight: 19 },
-  label: { fontFamily: "Nunito_700Bold", fontSize: 13, color: SUBTITLE_GREY, marginTop: 4 },
-  required: { color: "#FF6B4E", fontSize: 13 },
+  urgentText: { ...font.semibold, fontSize: 13, color: DARK_TEAL, lineHeight: 19 },
+  label: { ...font.bold, fontSize: 13, color: SUBTITLE_GREY, marginTop: 4 },
+  required: { color: Colors.error, fontSize: 13 },
   vibeRow: { flexDirection: "row", gap: 10 },
   vibeOption: {
-    flex: 1, paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, borderColor: "#E0E8E9",
+    flex: 1, paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, borderColor: "#E6E7E8",
     alignItems: "center",
   },
   vibeActive: { backgroundColor: SOS_RED + "15", borderColor: SOS_RED },
   vibeActiveGreen: { backgroundColor: OFFERING_GREEN, borderColor: Colors.grassGreen },
-  vibeOptionText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: DARK_TEAL },
+  vibeOptionText: { ...font.bold, fontSize: 14, color: DARK_TEAL },
   imagePlaceholder: {
-    height: 120, borderRadius: 14, borderWidth: 2, borderColor: "#E0E8E9", borderStyle: "dashed",
-    backgroundColor: "#F5F8F8", alignItems: "center", justifyContent: "center", gap: 6,
+    height: 120, borderRadius: 14, borderWidth: 2, borderColor: "#E6E7E8", borderStyle: "dashed",
+    backgroundColor: "#F2F3F5", alignItems: "center", justifyContent: "center", gap: 6,
   },
-  imagePlaceholderText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: SUBTITLE_GREY },
+  imagePlaceholderText: { ...font.semibold, fontSize: 13, color: SUBTITLE_GREY },
   imagePreviewWrap: { height: 160, borderRadius: 14, overflow: "hidden", position: "relative" },
   imagePreview: { width: "100%", height: "100%", resizeMode: "cover" },
   imageOverlay: {
@@ -461,43 +462,43 @@ const np = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.4)", flexDirection: "row", alignItems: "center",
     justifyContent: "center", gap: 6, paddingVertical: 8,
   },
-  imageOverlayText: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.white },
+  imageOverlayText: { ...font.bold, fontSize: 13, color: Colors.white },
   textArea: {
-    fontFamily: "Nunito_400Regular", fontSize: 14, color: DARK_TEAL,
-    backgroundColor: "#F0F5F5", borderRadius: 14, padding: 12, minHeight: 80,
+    ...font.regular, fontSize: 14, color: DARK_TEAL,
+    backgroundColor: "#F2F3F5", borderRadius: 14, padding: 12, minHeight: 80,
     textAlignVertical: "top",
   },
   input: {
-    fontFamily: "Nunito_400Regular", fontSize: 14, color: DARK_TEAL,
-    backgroundColor: "#F0F5F5", borderRadius: 14, padding: 12, height: 44,
+    ...font.regular, fontSize: 14, color: DARK_TEAL,
+    backgroundColor: "#F2F3F5", borderRadius: 14, padding: 12, height: 44,
   },
   safetyHint: {
-    fontFamily: "Nunito_400Regular", fontSize: 11, color: "rgba(44, 85, 92, 0.6)",
+    ...font.regular, fontSize: 11, color: "rgba(44, 85, 92, 0.6)",
     marginTop: 4, lineHeight: 15,
   },
   dateChip: {
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20,
-    borderWidth: 1.5, borderColor: "#E0E8E9", backgroundColor: Colors.white,
+    borderWidth: 1.5, borderColor: "#E6E7E8", backgroundColor: Colors.white,
   },
   dateChipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
-  dateChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: DARK_TEAL },
+  dateChipText: { ...font.semibold, fontSize: 12, color: DARK_TEAL },
   zoneChip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1.5, borderColor: "#E0E8E9", backgroundColor: Colors.white,
+    borderWidth: 1.5, borderColor: "#E6E7E8", backgroundColor: Colors.white,
   },
   zoneChipActive: { backgroundColor: Colors.ocean, borderColor: Colors.ocean },
-  zoneChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: DARK_TEAL },
+  zoneChipText: { ...font.semibold, fontSize: 12, color: DARK_TEAL },
   btnRow: { flexDirection: "row", gap: 12, marginTop: 8 },
   cancelBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: "#E0E8E9",
+    flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: "#E6E7E8",
     alignItems: "center",
   },
-  cancelBtnText: { fontFamily: "Nunito_700Bold", fontSize: 15, color: SUBTITLE_GREY },
+  cancelBtnText: { ...font.bold, fontSize: 15, color: SUBTITLE_GREY },
   submitBtn: {
     flex: 2, paddingVertical: 14, borderRadius: 14, backgroundColor: CORAL_FAB,
     alignItems: "center",
   },
-  submitBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 15, color: Colors.white },
+  submitBtnText: { ...font.heavy, fontSize: 15, color: Colors.onOrange },
 });
 
 export default function CrashCashScreen() {
@@ -513,7 +514,7 @@ export default function CrashCashScreen() {
   // Kept until a post goes through, so retries reuse the uploaded photo and can't double-post.
   const pendingPostId = useRef<string | null>(null);
   const { isDesktop, contentMaxWidth } = useResponsive();
-  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
+  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 32) : insets.top;
   const [showNewPost, setShowNewPost] = useState(false);
   const [vibeFilter, setVibeFilter] = useState<VibeFilter>("all");
   const [selectedPost, setSelectedPost] = useState<CrashPost | null>(null);
@@ -690,7 +691,7 @@ export default function CrashCashScreen() {
       >
         {({ pressed }) => (
           <View style={[styles.fabInner, pressed && { transform: [{ scale: 0.92 }] }]}>
-            <Ionicons name="add" size={26} color={Colors.white} />
+            <Ionicons name="add" size={26} color={Colors.onOrange} />
           </View>
         )}
       </Pressable>
@@ -794,39 +795,39 @@ const dm = StyleSheet.create({
   body: { paddingHorizontal: 20, paddingTop: 20, gap: 20 },
   userRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   userInfo: { flex: 1 },
-  userName: { fontFamily: "Nunito_700Bold", fontSize: 18, color: DARK_TEAL },
-  userTime: { fontFamily: "Nunito_400Regular", fontSize: 13, color: SUBTITLE_GREY },
+  userName: { ...font.bold, fontSize: 18, color: DARK_TEAL },
+  userTime: { ...font.regular, fontSize: 13, color: SUBTITLE_GREY },
   tagPill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14 },
-  tagSos: { backgroundColor: "#FF6B4E" },
+  tagSos: { backgroundColor: Colors.error },
   tagOffer: { backgroundColor: Colors.grassGreen },
-  tagText: { fontFamily: "Nunito_800ExtraBold", fontSize: 12, color: Colors.white },
-  storyText: { fontFamily: "Nunito_600SemiBold", fontSize: 18, lineHeight: 26, color: DARK_TEAL },
+  tagText: { ...font.heavy, fontSize: 12, color: Colors.white },
+  storyText: { ...font.semibold, fontSize: 18, lineHeight: 26, color: DARK_TEAL },
   essBox: {
     backgroundColor: Colors.white, borderRadius: 16, padding: 16, gap: 12,
     shadowColor: "rgba(0,0,0,0.04)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 1,
   },
   essItem: { flexDirection: "row", alignItems: "center", gap: 8 },
   essIcon: { fontSize: 18 },
-  essLabel: { fontFamily: "Nunito_400Regular", fontSize: 13, color: SUBTITLE_GREY, width: 50 },
-  essValue: { fontFamily: "Nunito_700Bold", fontSize: 15, color: DARK_TEAL, flex: 1 },
-  essDivider: { height: 1, backgroundColor: "#EDF2F2" },
+  essLabel: { ...font.regular, fontSize: 13, color: SUBTITLE_GREY, width: 50 },
+  essValue: { ...font.bold, fontSize: 15, color: DARK_TEAL, flex: 1 },
+  essDivider: { height: 1, backgroundColor: "#E6E7E8" },
   footer: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 20, paddingVertical: 14,
-    backgroundColor: SCREEN_BG, borderTopWidth: 1, borderTopColor: "#EDF2F2",
+    backgroundColor: SCREEN_BG, borderTopWidth: 1, borderTopColor: "#E6E7E8",
     shadowColor: "rgba(0,0,0,0.06)", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 4,
   },
-  footerCurrency: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: DARK_TEAL },
+  footerCurrency: { ...font.heavy, fontSize: 18, color: DARK_TEAL },
   dmBtn: {
     paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14, backgroundColor: DARK_TEAL,
     shadowColor: "rgba(0,0,0,0.1)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 4,
   },
-  dmBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 16, color: Colors.white },
+  dmBtnText: { ...font.heavy, fontSize: 16, color: Colors.white },
   filledBtn: {
     paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14,
     borderWidth: 1.5, borderColor: SUBTITLE_GREY, backgroundColor: "transparent",
   },
-  filledBtnText: { fontFamily: "Nunito_700Bold", fontSize: 16, color: SUBTITLE_GREY },
+  filledBtnText: { ...font.bold, fontSize: 16, color: SUBTITLE_GREY },
 });
 
 const styles = StyleSheet.create({
@@ -841,8 +842,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   headerTextWrap: { flex: 1 },
-  headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 24, color: DARK_TEAL },
-  headerSub: { fontFamily: "Nunito_400Regular", fontSize: 12, color: SUBTITLE_GREY, lineHeight: 17, marginTop: 2 },
+  headerTitle: { ...font.heavy, fontSize: 24, color: DARK_TEAL },
+  headerSub: { ...font.regular, fontSize: 12, color: SUBTITLE_GREY, lineHeight: 17, marginTop: 2 },
   fab: { position: "absolute", right: 20 },
   fabInner: {
     width: 56, height: 56, borderRadius: 28, backgroundColor: CORAL_FAB,
@@ -851,8 +852,8 @@ const styles = StyleSheet.create({
   },
   emptyState: { alignItems: "center", paddingTop: 80, gap: 8 },
   emptyEmoji: { fontSize: 48 },
-  emptyTitle: { fontFamily: "Nunito_700Bold", fontSize: 20, color: DARK_TEAL },
-  emptySub: { fontFamily: "Nunito_400Regular", fontSize: 13, color: SUBTITLE_GREY, textAlign: "center", paddingHorizontal: 24 },
+  emptyTitle: { ...font.bold, fontSize: 20, color: DARK_TEAL },
+  emptySub: { ...font.regular, fontSize: 13, color: SUBTITLE_GREY, textAlign: "center", paddingHorizontal: 24 },
   emptyBtn: { backgroundColor: CORAL_FAB, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
-  emptyBtnText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: "#FFFFFF" },
+  emptyBtnText: { ...font.bold, fontSize: 14, color: Colors.onOrange },
 });

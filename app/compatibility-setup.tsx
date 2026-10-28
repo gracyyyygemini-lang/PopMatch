@@ -11,12 +11,13 @@ import {
   useApp, StarSign, MBTI, CollegeYear, GreekLife, VibeProfile,
 } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import { font } from "@/constants/typography";
 
-const DARK_TEAL = "#2C555C";
-const SUBTITLE_GREY = "#6B8A8F";
-const SCREEN_BG = "#FBFBF9";
-const SEAFOAM = "#D0F0E0";
-const CHIP_BORDER = "#E0E8E9";
+const DARK_TEAL = "#13294B";
+const SUBTITLE_GREY = "#5E6160";
+const SCREEN_BG = "#F2F3F5";
+const SEAFOAM = "#E6F2EA";
+const CHIP_BORDER = "#E6E7E8";
 
 const STAR_SIGNS: { key: StarSign; emoji: string; label: string }[] = [
   { key: "aries", emoji: "♈️", label: "Aries" },
@@ -91,7 +92,7 @@ function ChipRow({
         return (
           <Pressable key={chip} onPress={() => { onSelect(chip); Haptics.selectionAsync(); }}>
             {({ pressed }) => (
-              <View style={[s.chip, isActive && s.chipActive, pressed && !isActive && { backgroundColor: "#F2F7F7" }]}>
+              <View style={[s.chip, isActive && s.chipActive, pressed && !isActive && { backgroundColor: "#F2F3F5" }]}>
                 {isActive && multiSelect && <Ionicons name="checkmark" size={14} color={DARK_TEAL} style={{ marginRight: 2 }} />}
                 <Text style={[s.chipText, isActive && s.chipTextActive]}>{chip}</Text>
               </View>
@@ -134,7 +135,7 @@ function DropdownSelect<T extends string>({
               style={[s.dropdownItem, selected === opt && s.dropdownItemActive]}
               onPress={() => { onSelect(opt); setOpen(false); Haptics.selectionAsync(); }}
             >
-              <Text style={[s.dropdownItemText, selected === opt && { color: Colors.teal, fontFamily: "Nunito_700Bold" }]}>
+              <Text style={[s.dropdownItemText, selected === opt && { color: Colors.teal, ...font.bold }]}>
                 {label(opt)}
               </Text>
               {selected === opt && <Ionicons name="checkmark-circle" size={16} color={Colors.teal} />}
@@ -150,7 +151,7 @@ export default function CompatibilitySetupScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, setCurrentUser } = useApp();
   const { isDesktop, contentMaxWidth } = useResponsive();
-  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
+  const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 32) : insets.top;
 
   const [identity, setIdentity] = useState<"girl" | "guy" | "nonbinary">(
     currentUser?.gender === "female" ? "girl" : currentUser?.gender === "male" ? "guy" : "nonbinary"
@@ -173,8 +174,8 @@ export default function CompatibilitySetupScreen() {
   const [promptAnswer, setPromptAnswer] = useState("");
   const [showPromptPicker, setShowPromptPicker] = useState(false);
 
-  const DISABLED_BG = "#E0E8E9";
-  const DISABLED_TEXT = "#8A9FA3";
+  const DISABLED_BG = "#E6E7E8";
+  const DISABLED_TEXT = "#707372";
 
   const isFormComplete =
     !!starSign &&
@@ -382,18 +383,18 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 20, paddingBottom: 12 },
   headerTextWrap: {},
-  headerTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: DARK_TEAL },
-  headerSub: { fontFamily: "Nunito_400Regular", fontSize: 14, color: SUBTITLE_GREY, marginTop: 2 },
+  headerTitle: { ...font.heavy, fontSize: 28, color: DARK_TEAL },
+  headerSub: { ...font.regular, fontSize: 14, color: SUBTITLE_GREY, marginTop: 2 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8, gap: 6 },
-  sectionTitle: { fontFamily: "Nunito_800ExtraBold", fontSize: 18, color: DARK_TEAL, marginTop: 8, marginBottom: 2 },
-  label: { fontFamily: "Nunito_700Bold", fontSize: 13, color: SUBTITLE_GREY, marginTop: 8 },
+  sectionTitle: { ...font.heavy, fontSize: 18, color: DARK_TEAL, marginTop: 8, marginBottom: 2 },
+  label: { ...font.bold, fontSize: 13, color: SUBTITLE_GREY, marginTop: 8 },
   chipRowWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   vitalsChip: {
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
     backgroundColor: Colors.white, borderWidth: 1.5, borderColor: CHIP_BORDER,
   },
   vitalsChipActive: { backgroundColor: Colors.teal, borderColor: Colors.teal },
-  vitalsChipText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: DARK_TEAL },
+  vitalsChipText: { ...font.semibold, fontSize: 13, color: DARK_TEAL },
   vitalsChipTextActive: { color: Colors.white },
   chipScroll: { gap: 8, paddingVertical: 4 },
   chip: {
@@ -402,14 +403,14 @@ const s = StyleSheet.create({
     backgroundColor: Colors.white, borderWidth: 1.5, borderColor: CHIP_BORDER,
   },
   chipActive: { backgroundColor: SEAFOAM, borderColor: SEAFOAM },
-  chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: DARK_TEAL },
-  chipTextActive: { fontFamily: "Nunito_700Bold" },
+  chipText: { ...font.semibold, fontSize: 12, color: DARK_TEAL },
+  chipTextActive: { ...font.bold },
   dropdown: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     backgroundColor: Colors.white, borderRadius: 14, borderWidth: 1.5, borderColor: CHIP_BORDER,
     paddingHorizontal: 14, paddingVertical: 13, marginTop: 4,
   },
-  dropdownText: { fontFamily: "Nunito_400Regular", fontSize: 14, color: DARK_TEAL },
+  dropdownText: { ...font.regular, fontSize: 14, color: DARK_TEAL },
   dropdownList: {
     backgroundColor: Colors.white, borderRadius: 12, borderWidth: 1.5, borderColor: CHIP_BORDER,
     marginTop: 4, overflow: "hidden",
@@ -417,25 +418,25 @@ const s = StyleSheet.create({
   dropdownItem: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 14, paddingVertical: 11,
-    borderBottomWidth: 1, borderBottomColor: "#F0F5F5",
+    borderBottomWidth: 1, borderBottomColor: "#F2F3F5",
   },
   dropdownItemActive: { backgroundColor: Colors.teal + "0E" },
-  dropdownItemText: { fontFamily: "Nunito_400Regular", fontSize: 14, color: DARK_TEAL },
+  dropdownItemText: { ...font.regular, fontSize: 14, color: DARK_TEAL },
   divider: { height: 1, backgroundColor: CHIP_BORDER, marginVertical: 12 },
   promptPickerBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.white, borderRadius: 16, borderWidth: 1.5, borderColor: CHIP_BORDER,
     paddingVertical: 16, marginTop: 4,
   },
-  promptPickerBtnText: { fontFamily: "Nunito_700Bold", fontSize: 15, color: Colors.teal },
+  promptPickerBtnText: { ...font.bold, fontSize: 15, color: Colors.teal },
   promptCard: {
     backgroundColor: SEAFOAM, borderRadius: 16, padding: 16, marginTop: 4, gap: 8,
   },
   promptChangeBtn: { alignSelf: "flex-end" },
-  promptChangeText: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.teal },
-  promptQuestion: { fontFamily: "Nunito_700Bold", fontSize: 14, color: DARK_TEAL },
+  promptChangeText: { ...font.bold, fontSize: 12, color: Colors.teal },
+  promptQuestion: { ...font.bold, fontSize: 14, color: DARK_TEAL },
   promptInput: {
-    fontFamily: "Nunito_400Regular", fontSize: 14, color: DARK_TEAL,
+    ...font.regular, fontSize: 14, color: DARK_TEAL,
     backgroundColor: Colors.white, borderRadius: 12, padding: 12, minHeight: 70,
     textAlignVertical: "top",
   },
@@ -445,9 +446,9 @@ const s = StyleSheet.create({
   },
   promptOption: {
     paddingHorizontal: 14, paddingVertical: 13,
-    borderBottomWidth: 1, borderBottomColor: "#F0F5F5",
+    borderBottomWidth: 1, borderBottomColor: "#F2F3F5",
   },
-  promptOptionText: { fontFamily: "Nunito_600SemiBold", fontSize: 13, color: DARK_TEAL },
+  promptOptionText: { ...font.semibold, fontSize: 13, color: DARK_TEAL },
   footer: {
     paddingHorizontal: 20, paddingTop: 12,
     backgroundColor: SCREEN_BG, borderTopWidth: 1, borderTopColor: CHIP_BORDER,
@@ -456,5 +457,5 @@ const s = StyleSheet.create({
     backgroundColor: Colors.ponyo, borderRadius: 16, paddingVertical: 16,
     alignItems: "center", justifyContent: "center",
   },
-  finishBtnText: { fontFamily: "Nunito_800ExtraBold", fontSize: 17, color: Colors.white },
+  finishBtnText: { ...font.heavy, fontSize: 17, color: Colors.onOrange },
 });

@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, DimensionValue,
 } from "react-native";
 import Colors from "@/constants/colors";
+import { font } from "@/constants/typography";
 
 export default function BottomSheetModal({
   visible,
@@ -58,6 +59,6 @@ const bsStyles = StyleSheet.create({
     alignSelf: "center", marginBottom: 16,
   },
   title: {
-    fontFamily: "Nunito_700Bold", fontSize: 18, color: Colors.charcoal, marginBottom: 16,
+    ...font.bold, fontSize: 18, color: Colors.charcoal, marginBottom: 16,
   },
 });

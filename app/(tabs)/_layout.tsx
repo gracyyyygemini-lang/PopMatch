@@ -1,20 +1,21 @@
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
-import { BlurView } from "expo-blur";
-import { Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import Colors from "@/constants/colors";
 import { useResponsive } from "@/hooks/useResponsive";
 import WebSidebar from "@/components/WebSidebar";
+import { font } from "@/constants/typography";
 
 function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>Browse</Label>
+        <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="inbox">
         <Icon sf={{ default: "bubble.left.and.bubble.right", selected: "bubble.left.and.bubble.right.fill" }} />
@@ -28,35 +29,41 @@ function NativeTabLayout() {
   );
 }
 
+/** Floating rounded bar, inset from the screen edges (phones and narrow web). */
+const FLOATING_BAR = {
+  position: "absolute" as const,
+  left: 16,
+  right: 16,
+  bottom: 16,
+  height: 68,
+  borderRadius: 22,
+  borderTopWidth: 0,
+  backgroundColor: Colors.card,
+  paddingTop: 6,
+  paddingBottom: 6,
+  elevation: 8,
+  shadowColor: "#13294B",
+  shadowOpacity: 0.12,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 6 },
+};
+
 function ClassicTabLayout({ hideTabBar }: { hideTabBar?: boolean }) {
-  const isWeb = Platform.OS === "web";
-  const isIOS = Platform.OS === "ios";
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.ocean,
-        tabBarInactiveTintColor: Colors.textMuted,
+        // Blue active, Storm inactive: 14.5:1 and 4.8:1 on the white bar.
+        tabBarActiveTintColor: Colors.illiniBlue,
+        tabBarInactiveTintColor: Colors.storm,
         tabBarStyle: hideTabBar
           ? { display: "none" }
-          : {
-              position: "absolute",
-              backgroundColor: isIOS ? "transparent" : Colors.sand,
-              borderTopWidth: isWeb ? 1 : 0,
-              borderTopColor: Colors.borderSoft,
-              elevation: 0,
-              ...(isWeb ? { height: 84 } : {}),
-            },
-        tabBarBackground: () =>
-          hideTabBar ? null :
-          isIOS ? (
-            <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
-          ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.sand }]} />
-          ) : null,
+          : { ...FLOATING_BAR, bottom: 16 + insets.bottom },
+        tabBarItemStyle: { borderRadius: 16 },
         tabBarLabelStyle: {
-          fontFamily: "Nunito_600SemiBold",
+          ...font.semibold,
           fontSize: 11,
         },
       }}
@@ -64,7 +71,7 @@ function ClassicTabLayout({ hideTabBar }: { hideTabBar?: boolean }) {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Browse",
+          title: "Home",
           tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={22} color={color} />,
         }}
       />

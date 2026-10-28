@@ -1,5 +1,7 @@
 import React from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
+import { font } from "@/constants/typography";
+import { avatarColor as paletteAvatar } from "@/constants/colors";
 
 interface CustomAvatarProps {
   name: string;
@@ -39,7 +41,7 @@ export default function CustomAvatar({
     <View
       style={[
         styles.fallback,
-        { width: size, height: size, borderRadius, backgroundColor: avatarColor },
+        { width: size, height: size, borderRadius, backgroundColor: paletteAvatar(avatarColor) },
       ]}
     >
       <Text
@@ -63,7 +65,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   initials: {
-    fontFamily: "Nunito_800ExtraBold",
+    ...font.heavy,
     color: "#FFFFFF",
   },
 });

@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
+import { font } from "@/constants/typography";
 
 export function ScamBanner() {
   const { scamBannerDismissed, dismissScamBanner } = useApp();
@@ -30,13 +31,13 @@ export function ScamBanner() {
 const styles = StyleSheet.create({
   banner: {
     flexDirection: "row", alignItems: "flex-start", gap: 10,
-    backgroundColor: "#FFF4E0",
+    backgroundColor: "#FFE6D6",
     borderLeftWidth: 3, borderLeftColor: Colors.alertOrange,
     borderRadius: 12, padding: 12,
   },
   iconWrap: { paddingTop: 1 },
   content: { flex: 1 },
-  title: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.alertOrange },
-  body: { fontFamily: "Nunito_400Regular", fontSize: 12, color: Colors.charcoal, lineHeight: 17, marginTop: 2 },
+  title: { ...font.bold, fontSize: 13, color: Colors.alertOrange },
+  body: { ...font.regular, fontSize: 12, color: Colors.charcoal, lineHeight: 17, marginTop: 2 },
   closeBtn: { padding: 2 },
 });
