@@ -13,6 +13,10 @@ import Colors from "@/constants/colors";
 import { useApp, UserProfile, VibeProfile } from "@/context/AppContext";
 import CustomAvatar from "@/components/CustomAvatar";
 import { showError } from "@/lib/alert";
+import { usePolling } from "@/hooks/usePolling";
+
+/** New students show up in the deck within this long while it's open. */
+const DECK_REFRESH_MS = 60000;
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CORAL = "#FF8C69";
@@ -267,7 +271,7 @@ export default function MatchmakerScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const {
-    currentUser, users, addMatch, addLiked, passUser,
+    currentUser, deck, refreshDeck, addMatch, addLiked, passUser,
     likedUserIds, passedUserIds, computeScore, subleases,
     likeUser, startMatchConversation,
   } = useApp();
@@ -292,7 +296,11 @@ export default function MatchmakerScreen() {
     }
   }, [currentUser?.intent]);
 
-  const filtered = users.filter(u => {
+  // Server-side the deck leaves out everyone passed on from any device;
+  // passedUserIds below still hides a pass the instant it's made.
+  usePolling(refreshDeck, DECK_REFRESH_MS);
+
+  const filtered = deck.filter(u => {
     if (!currentUser) return true;
     if (u.id === currentUser.id) return false;
     if (!matchesGenderFilter(currentUser, u)) return false;

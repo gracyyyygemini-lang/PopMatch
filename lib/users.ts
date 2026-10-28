@@ -64,6 +64,16 @@ export async function fetchUserProfile(email: string): Promise<UserProfile | nul
   }
 }
 
+/**
+ * The swipe deck: everyone fetchUsers returns except students you passed on.
+ * Only the matchmaker uses this — a pass doesn't hide anyone from the map or
+ * friend lookups, which use fetchUsers.
+ */
+export async function fetchDeck(): Promise<UserProfile[]> {
+  const res = await apiRequest("GET", "/api/users?deck=true");
+  return (await res.json()) as UserProfile[];
+}
+
 export async function fetchUsers(excludeEmail?: string): Promise<UserProfile[]> {
   const route = excludeEmail
     ? `/api/users?exclude=${encodeURIComponent(excludeEmail)}`

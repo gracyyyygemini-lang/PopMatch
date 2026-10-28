@@ -180,6 +180,21 @@ async function initDb() {
   `);
   await query(`ALTER TABLE passes ENABLE ROW LEVEL SECURITY`);
 
+  // One row per "add friend". A friendship is two rows pointing at each other
+  // (see confirmedFriendsOf); one row alone is a pending add nobody else sees.
+  await query(`
+    CREATE TABLE IF NOT EXISTS friend_adds (
+      id SERIAL PRIMARY KEY,
+      adder_email VARCHAR NOT NULL,
+      added_email VARCHAR NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (adder_email, added_email),
+      CHECK (adder_email <> added_email)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_friend_adds_added ON friend_adds (added_email)`);
+  await query(`ALTER TABLE friend_adds ENABLE ROW LEVEL SECURITY`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS stats (
       key VARCHAR PRIMARY KEY,
@@ -696,16 +711,19 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     }
   });
 
-  // Everyone but the caller and anyone they've passed on. (?exclude= is
-  // ignored; the caller is always left out.)
+  // Everyone but the caller. ?deck=true (the swipe deck only) also leaves
+  // out anyone the caller passed on: a pass means "not a roommate match for
+  // me", so the map and friend lookups still see them. (?exclude= is ignored;
+  // the caller is always left out.)
   app.get("/api/users", async (req: Request, res: Response) => {
     try {
+      const deck = req.query.deck === "true";
       const rows = await query<UserRow>(
         `SELECT * FROM users u
          WHERE lower(u.email) <> $1
-           AND NOT EXISTS (
+           ${deck ? `AND NOT EXISTS (
              SELECT 1 FROM passes p WHERE p.passer_email = $1 AND p.passed_email = lower(u.email)
-           )
+           )` : ""}
          ORDER BY u.name`,
         [req.caller!.email]
       );
@@ -799,24 +817,35 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
   });
 
   // ─── FRIENDS ─────────────────────────────────────────────────────────────────
+  // Mutual-add, like likes becoming a match: POST records only the caller's
+  // side (friend_adds), and a friendship exists once both people have added
+  // each other. Every read below goes through confirmedFriendsOf, so a
+  // one-sided add never shows anywhere — not in friend lists, mutual-friend
+  // counts or vouches — and adding never reveals whether the other person
+  // added you or is even on PopMatch.
 
-  // The caller's friends. :email must be the caller.
+  /** SQL for the emails confirmed (two-sided) friends with the email in `param`. */
+  const confirmedFriendsOf = (param: string) => `
+    SELECT mine.added_email FROM friend_adds mine
+    JOIN friend_adds theirs
+      ON theirs.adder_email = mine.added_email AND theirs.added_email = mine.adder_email
+    WHERE mine.adder_email = ${param}`;
+
+  // The caller's confirmed friends. :email must be the caller.
   app.get("/api/friends/:email", async (req: Request, res: Response) => {
     try {
       if (namesSomeoneElse(req.params.email, req.caller!.email, true)) {
         return res.status(403).json({ error: "You can only see your own friends" });
       }
-      const userId = callerUserId(req, res);
-      if (!userId) return;
       const rows = await query<{
         email: string; name: string; avatar_color: string; major: string;
         college: string; organizations: string[];
       }>(
-        `SELECT u2.email, u2.name, u2.avatar_color, u2.major, u2.college, u2.organizations
-         FROM friendships fr
-         JOIN users u2 ON fr.friend_id = u2.id
-         WHERE fr.user_id = $1`,
-        [userId]
+        `SELECT u.email, u.name, u.avatar_color, u.major, u.college, u.organizations
+         FROM users u
+         WHERE lower(u.email) IN (${confirmedFriendsOf("$1")})
+         ORDER BY u.name`,
+        [req.caller!.email]
       );
       return res.json(rows);
     } catch (err) {
@@ -825,57 +854,28 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     }
   });
 
-  // The caller adds friendEmail.
+  // Records the caller's side. The response is the same whether or not the
+  // other person has added back or has an account, so it can't be used to
+  // probe either; the friends list shows the result.
   app.post("/api/friends", async (req: Request, res: Response) => {
     try {
-      if (namesSomeoneElse(req.body?.userEmail, req.caller!.email, true)) {
+      const adderEmail = req.caller!.email;
+      if (namesSomeoneElse(req.body?.userEmail, adderEmail, true)) {
         return res.status(403).json({ error: "You can only add friends for yourself" });
       }
-      const userId = callerUserId(req, res);
-      if (!userId) return;
-      const { friendEmail } = req.body;
-      if (!friendEmail) {
+      const addedEmail = typeof req.body?.friendEmail === "string" ? req.body.friendEmail.trim().toLowerCase() : "";
+      if (!addedEmail) {
         return res.status(400).json({ error: "friendEmail is required" });
       }
-
-      const [friend] = await query<{ id: string }>(
-        "SELECT id FROM users WHERE lower(email) = $1",
-        [String(friendEmail).trim().toLowerCase()]
-      );
-      if (!friend) return res.status(404).json({ error: "That @illinois.edu email is not registered on PopMatch yet" });
-      if (friend.id === userId) {
+      if (addedEmail === adderEmail) {
         return res.status(400).json({ error: "Cannot friend yourself" });
       }
 
-      // A friendship is written on both sides, so it needs some sign the
-      // other person wants contact: a mutual match or a conversation.
-      const [connection] = await query<{ connected: boolean }>(
-        `SELECT EXISTS (
-           SELECT 1 FROM likes mine
-           JOIN likes theirs ON theirs.liker_email = mine.liked_email AND theirs.liked_email = mine.liker_email
-           WHERE mine.liker_email = $1 AND mine.liked_email = $2
-         ) OR EXISTS (
-           SELECT 1 FROM conversations
-           WHERE (participant1_id = $3 AND participant2_id = $4)
-              OR (participant1_id = $4 AND participant2_id = $3)
-         ) AS connected`,
-        [req.caller!.email, String(friendEmail).trim().toLowerCase(), userId, friend.id]
-      );
-      if (!connection.connected) {
-        return res.status(403).json({
-          error: "You can only add friends you've matched with or messaged on PopMatch",
-        });
-      }
-
       await query(
-        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [userId, friend.id]
+        `INSERT INTO friend_adds (adder_email, added_email) VALUES ($1, $2)
+         ON CONFLICT (adder_email, added_email) DO NOTHING`,
+        [adderEmail, addedEmail]
       );
-      await query(
-        `INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [friend.id, userId]
-      );
-
       return res.json({ success: true });
     } catch (err) {
       console.error("POST /api/friends", err);
@@ -883,22 +883,18 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     }
   });
 
-  // The caller removes friendEmail (both directions, as adding created both).
+  // Withdraws the caller's side; the friendship stops counting for both.
   app.delete("/api/friends", async (req: Request, res: Response) => {
     try {
-      if (namesSomeoneElse(req.body?.userEmail, req.caller!.email, true)) {
+      const adderEmail = req.caller!.email;
+      if (namesSomeoneElse(req.body?.userEmail, adderEmail, true)) {
         return res.status(403).json({ error: "You can only remove your own friends" });
       }
-      const userId = callerUserId(req, res);
-      if (!userId) return;
-      const [friend] = await query<{ id: string }>(
-        "SELECT id FROM users WHERE lower(email) = $1",
-        [String(req.body?.friendEmail ?? "").trim().toLowerCase()]
+      const addedEmail = String(req.body?.friendEmail ?? "").trim().toLowerCase();
+      await query(
+        "DELETE FROM friend_adds WHERE adder_email = $1 AND added_email = $2",
+        [adderEmail, addedEmail]
       );
-      if (!friend) return res.status(404).json({ error: "User not found" });
-
-      await query("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", [userId, friend.id]);
-      await query("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", [friend.id, userId]);
       return res.json({ success: true });
     } catch (err) {
       console.error("DELETE /api/friends", err);
@@ -908,7 +904,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
 
   // ─── VOUCHES ─────────────────────────────────────────────────────────────────
 
-  // The caller vouches for voucheeEmail.
+  // The caller vouches for a confirmed friend.
   app.post("/api/vouches", async (req: Request, res: Response) => {
     try {
       if (namesSomeoneElse(req.body?.voucherEmail, req.caller!.email, true)) {
@@ -916,16 +912,22 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       }
       const voucherId = callerUserId(req, res);
       if (!voucherId) return;
-      const { voucheeEmail, message = "" } = req.body;
+      const { message = "" } = req.body;
+      const voucheeEmail = String(req.body?.voucheeEmail ?? "").trim().toLowerCase();
       if (!voucheeEmail) {
         return res.status(400).json({ error: "voucheeEmail is required" });
       }
 
+      // Same answer for "not friends yet" and "no such student", so a vouch
+      // can't be used to probe who added you or who's on the app.
       const [vouchee] = await query<{ id: string }>(
-        "SELECT id FROM users WHERE lower(email) = $1",
-        [String(voucheeEmail).trim().toLowerCase()]
+        `SELECT u.id FROM users u
+         WHERE lower(u.email) = $2 AND $2 IN (${confirmedFriendsOf("$1")})`,
+        [req.caller!.email, voucheeEmail]
       );
-      if (!vouchee) return res.status(404).json({ error: "User not found" });
+      if (!vouchee) {
+        return res.status(403).json({ error: "You can only vouch for friends who've added you back" });
+      }
 
       await query(
         `INSERT INTO vouches (voucher_id, vouchee_id, message) VALUES ($1, $2, $3)
@@ -947,13 +949,12 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       }
       const voucherId = callerUserId(req, res);
       if (!voucherId) return;
-      const [vouchee] = await query<{ id: string }>(
-        "SELECT id FROM users WHERE lower(email) = $1",
-        [String(req.body?.voucheeEmail ?? "").trim().toLowerCase()]
+      await query(
+        `DELETE FROM vouches
+         WHERE voucher_id = $1
+           AND vouchee_id IN (SELECT id FROM users WHERE lower(email) = $2)`,
+        [voucherId, String(req.body?.voucheeEmail ?? "").trim().toLowerCase()]
       );
-      if (!vouchee) return res.status(404).json({ error: "User not found" });
-
-      await query("DELETE FROM vouches WHERE voucher_id = $1 AND vouchee_id = $2", [voucherId, vouchee.id]);
       return res.json({ success: true });
     } catch (err) {
       console.error("DELETE /api/vouches", err);
@@ -963,8 +964,9 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
 
   // ─── TRUST INFO ───────────────────────────────────────────────────────────────
 
-  // How the caller is connected to :targetEmail. :viewerEmail must be the caller,
-  // or this would reveal anyone's friend graph.
+  // How the caller is connected to :targetEmail, counting only confirmed
+  // friendships. :viewerEmail must be the caller, or this would reveal
+  // anyone's friend graph.
   app.get("/api/trust/:viewerEmail/:targetEmail", async (req: Request, res: Response) => {
     try {
       const viewerEmail = req.caller!.email;
@@ -988,44 +990,41 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         return res.json({ degree: null, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
       }
 
-      const isDirect = await query<{ id: string }>(
-        "SELECT fr.id FROM friendships fr WHERE fr.user_id = $1 AND fr.friend_id = $2",
-        [viewer.id, target.id]
+      const sharedOrgs = (viewer.organizations || []).filter(
+        (org: string) => (target.organizations || []).includes(org)
       );
-
-      if (isDirect.length > 0) {
-        const vouchedBy = await query<{ name: string; email: string }>(
+      // A vouch counts only while the voucher is still the target's confirmed
+      // friend, so a lapsed friendship can't keep vouching.
+      const vouchesFrom = (voucherFilter: string) =>
+        query<{ name: string; email: string }>(
           `SELECT u.name, u.email FROM vouches v
-           JOIN users u ON v.voucher_id = u.id WHERE v.vouchee_id = $1`,
-          [target.id]
+           JOIN users u ON v.voucher_id = u.id
+           WHERE v.vouchee_id = $1
+             AND lower(u.email) IN (${confirmedFriendsOf("$2")})
+             ${voucherFilter}`,
+          voucherFilter ? [target.id, targetEmail, viewerEmail] : [target.id, targetEmail]
         );
-        const sharedOrgs = (viewer.organizations || []).filter(
-          (org: string) => (target.organizations || []).includes(org)
-        );
-        return res.json({ degree: 1, mutualFriends: [], vouchedBy, sharedOrgs });
+
+      const [direct] = await query<{ friends: boolean }>(
+        `SELECT $2 IN (${confirmedFriendsOf("$1")}) AS friends`,
+        [viewerEmail, targetEmail]
+      );
+      if (direct.friends) {
+        return res.json({ degree: 1, mutualFriends: [], vouchedBy: await vouchesFrom(""), sharedOrgs });
       }
 
       const mutualFriends = await query<{ name: string; email: string; avatar_color: string }>(
         `SELECT u.name, u.email, u.avatar_color
          FROM users u
-         WHERE u.id IN (SELECT friend_id FROM friendships WHERE user_id = $1)
-           AND u.id IN (SELECT friend_id FROM friendships WHERE user_id = $2)`,
-        [viewer.id, target.id]
+         WHERE lower(u.email) IN (${confirmedFriendsOf("$1")})
+           AND lower(u.email) IN (${confirmedFriendsOf("$2")})`,
+        [viewerEmail, targetEmail]
       );
 
+      // Second degree: only vouches from people who are friends with both.
       const vouchedBy = mutualFriends.length > 0
-        ? await query<{ name: string; email: string }>(
-            `SELECT u.name, u.email FROM vouches v
-             JOIN users u ON v.voucher_id = u.id
-             WHERE v.vouchee_id = $1
-               AND v.voucher_id IN (SELECT friend_id FROM friendships WHERE user_id = $2)`,
-            [target.id, viewer.id]
-          )
+        ? await vouchesFrom(`AND lower(u.email) IN (${confirmedFriendsOf("$3")})`)
         : [];
-
-      const sharedOrgs = (viewer.organizations || []).filter(
-        (org: string) => (target.organizations || []).includes(org)
-      );
 
       const degree = mutualFriends.length > 0 ? 2 : null;
       return res.json({ degree, mutualFriends, vouchedBy, sharedOrgs });

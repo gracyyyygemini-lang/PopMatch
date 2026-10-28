@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS intent VARCHAR;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS vibe_profile JSONB;
 
+-- UNUSED since friends became mutual-add (friend_adds below). Kept, empty,
+-- so nothing referencing it breaks; safe to drop.
 CREATE TABLE IF NOT EXISTS friendships (
   id SERIAL PRIMARY KEY,
   user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
@@ -177,6 +179,18 @@ CREATE TABLE IF NOT EXISTS passes (
   CHECK (passer_email <> passed_email)
 );
 
+-- One row per "add friend", keyed by email like likes. A friendship is two
+-- rows pointing at each other; a lone row is a pending add that the API never
+-- shows to anyone, including the person who was added.
+CREATE TABLE IF NOT EXISTS friend_adds (
+  id SERIAL PRIMARY KEY,
+  adder_email VARCHAR NOT NULL,
+  added_email VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (adder_email, added_email),
+  CHECK (adder_email <> added_email)
+);
+
 -- ─── Indexes ────────────────────────────────────────────────────────────────
 -- The app filters listings constantly; these keep the marketplace fast as the
 -- table grows past a few hundred rows.
@@ -197,6 +211,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 -- The UNIQUE constraint already indexes (liker_email, liked_email); this one
 -- covers the reverse lookup "who liked me".
 CREATE INDEX IF NOT EXISTS idx_likes_liked ON likes (liked_email);
+CREATE INDEX IF NOT EXISTS idx_friend_adds_added ON friend_adds (added_email);
 
 -- ─── Seed rows ──────────────────────────────────────────────────────────────
 
@@ -226,6 +241,7 @@ ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE passes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE friend_adds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crash_posts ENABLE ROW LEVEL SECURITY;
 
 -- ─── Avatar storage ─────────────────────────────────────────────────────────

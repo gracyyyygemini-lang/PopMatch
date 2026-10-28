@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { fetchUserProfile, fetchUsers, mergeProfile, saveUserProfile } from "@/lib/users";
+import { fetchDeck, fetchUserProfile, fetchUsers, mergeProfile, saveUserProfile } from "@/lib/users";
 import { fetchMutualMatches, saveLike, savePass } from "@/lib/likes";
 import { apiErrorMessage, fetchConversations, fetchMessages, openConversation, postMessage } from "@/lib/messages";
 import {
@@ -387,6 +387,9 @@ interface AppContextValue {
   /** Other students' profiles from the users table (MOCK_USERS only when opted in). */
   users: UserProfile[];
   refreshUsers: () => Promise<void>;
+  /** The swipe deck: `users` minus anyone the caller passed on (on any device). */
+  deck: UserProfile[];
+  refreshDeck: () => Promise<void>;
   matches: MatchRecord[];
   addMatch: (record: MatchRecord) => void;
   scamBannerDismissed: boolean;
@@ -564,6 +567,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
   const [profileSyncError, setProfileSyncError] = useState<string | null>(null);
   const [users, setUsers] = useState<UserProfile[]>(USE_MOCK_USERS ? MOCK_USERS : []);
+  const [deck, setDeck] = useState<UserProfile[]>(USE_MOCK_USERS ? MOCK_USERS : []);
   const [isOnboarded, setIsOnboardedState] = useState(false);
   const [otpVerifiedEmail, setOtpVerifiedEmailState] = useState("");
   const [matches, setMatches] = useState<MatchRecord[]>([]);
@@ -781,8 +785,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshDeck = async () => {
+    if (USE_MOCK_USERS || !currentUser) return;
+    try {
+      const list = await fetchDeck();
+      setDeck(list.filter(u => u.id !== currentUser.id && u.email !== currentUser.email));
+    } catch (error) {
+      console.error("Couldn't load the swipe deck:", error);
+    }
+  };
+
   useEffect(() => {
     refreshUsers();
+    refreshDeck();
   }, [currentUser?.email]);
 
   const setIsOnboarded = async (v: boolean) => {
@@ -1217,7 +1232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({
     currentUser, setCurrentUser, profileSyncError, retryProfileSync, isOnboarded, setIsOnboarded,
     otpVerifiedEmail, setOtpVerifiedEmail,
-    users, refreshUsers, matches, addMatch, scamBannerDismissed, dismissScamBanner,
+    users, refreshUsers, deck, refreshDeck, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
     subleases, addSublease, removeSublease,
     crashPosts, addCrashPost, completeCrashPost, refreshPosts, postsError,
@@ -1226,7 +1241,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshConversations, refreshMessages, messagingError,
     likeUser, passUser,
   }), [
-    currentUser, profileSyncError, users, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
+    currentUser, profileSyncError, users, deck, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, crashPosts, postsError, friends,
     conversations, chatMessages, messagingError
   ]);
