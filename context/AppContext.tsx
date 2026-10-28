@@ -94,8 +94,17 @@ export interface UserProfile {
   vibeProfile?: VibeProfile;
 }
 
+/**
+ * Another student as the API returns them: everything but `email`, which only
+ * ever comes back on your own profile. Identify other students by `id`.
+ */
+export type PublicProfile = Omit<UserProfile, "email">;
+
+/** Device-only. `email` is the address you typed when adding them. */
 export interface FriendRecord {
   email: string;
+  /** Their users.id once known; trust info matches on this, never on email. */
+  userId?: string;
   name: string;
   avatarColor: string;
   major?: string;
@@ -106,8 +115,8 @@ export interface FriendRecord {
 }
 
 export interface MutualFriend {
+  id: string;
   name: string;
-  email: string;
   avatarColor: string;
 }
 
@@ -115,7 +124,6 @@ export interface SubleasePost {
   id: string;
   userId: string;
   userName: string;
-  userEmail: string;
   buildingName: string;
   address: string;
   leaseType: LeaseType;
@@ -163,7 +171,7 @@ export interface Conversation {
   lastMessageAt?: number;
   otherUserName?: string;
   otherUserAvatar?: string;
-  otherUserEmail?: string;
+  otherUserId?: string;
   otherUserProfileImage?: string;
   source?: ConversationSource;
   createdAt?: number;
@@ -191,7 +199,6 @@ export interface CrashPost {
   id: string;
   userId: string;
   userName: string;
-  userEmail: string;
   avatarColor: string;
   vibe: CrashVibe;
   story: string;
@@ -223,7 +230,7 @@ export interface TrustInfo {
 
 const DEMO_POSTS: SubleasePost[] = [
   {
-    id: "sp1", userId: "u1", userName: "Mei Lin", userEmail: "meilin2@illinois.edu",
+    id: "sp1", userId: "u1", userName: "Mei Lin",
     buildingName: "Hub Champaign", address: "210 E Green St", leaseType: "fall_sublease",
     pricePerMonth: 950, landlords: ["american"], zone: "campustown",
     availableDuringBreaks: false, breakTypes: [],
@@ -234,7 +241,7 @@ const DEMO_POSTS: SubleasePost[] = [
     cleaningFrequency: "weekly", shoePolicy: "shoes_off", images: [],
   },
   {
-    id: "sp2", userId: "u3", userName: "Jake Torres", userEmail: "jtorres6@illinois.edu",
+    id: "sp2", userId: "u3", userName: "Jake Torres",
     buildingName: "707 S Mathews", address: "707 S Mathews Ave", leaseType: "spring_sublease",
     pricePerMonth: 750, landlords: ["jsm"], zone: "north",
     availableDuringBreaks: true, breakTypes: ["spring_break"],
@@ -245,7 +252,7 @@ const DEMO_POSTS: SubleasePost[] = [
     cleaningFrequency: "weekly", shoePolicy: "no_policy", images: [],
   },
   {
-    id: "sp3", userId: "u5", userName: "Marcus Webb", userEmail: "mwebb3@illinois.edu",
+    id: "sp3", userId: "u5", userName: "Marcus Webb",
     buildingName: "Fairview Apts", address: "505 E Fairview", leaseType: "summer_sublease",
     pricePerMonth: 620, landlords: ["ugroup"], zone: "urbana",
     availableDuringBreaks: true, breakTypes: ["thanksgiving", "spring_break"],
@@ -256,7 +263,7 @@ const DEMO_POSTS: SubleasePost[] = [
     cleaningFrequency: "monthly", shoePolicy: "front_door", images: [],
   },
   {
-    id: "sp4", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
+    id: "sp4", userId: "u6", userName: "Sofia Reyes",
     buildingName: "The Orchard", address: "301 S Race St", leaseType: "summer_sublease",
     pricePerMonth: 540, landlords: ["other"], zone: "urbana",
     availableDuringBreaks: false, breakTypes: [],
@@ -267,7 +274,7 @@ const DEMO_POSTS: SubleasePost[] = [
     cleaningFrequency: "daily", shoePolicy: "shoes_off", images: [],
   },
   {
-    id: "sp5", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
+    id: "sp5", userId: "u7", userName: "Liam Park",
     buildingName: "Campustown Flats", address: "512 E Green St", leaseType: "fall_sublease",
     pricePerMonth: 890, landlords: ["bailey"], zone: "campustown",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
@@ -278,7 +285,7 @@ const DEMO_POSTS: SubleasePost[] = [
     cleaningFrequency: "weekly", shoePolicy: "front_door", images: [],
   },
   {
-    id: "sp6", userId: "u8", userName: "Zoe Mitchell", userEmail: "zmitchell@illinois.edu",
+    id: "sp6", userId: "u8", userName: "Zoe Mitchell",
     buildingName: "Stadium Terrace", address: "1001 S Cottage Grove", leaseType: "full_year",
     pricePerMonth: 760, landlords: ["smile"], zone: "south",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
@@ -289,7 +296,7 @@ const DEMO_POSTS: SubleasePost[] = [
     cleaningFrequency: "weekly", shoePolicy: "no_policy", images: [],
   },
   {
-    id: "sp7", userId: "u4", userName: "Emily Chen", userEmail: "echen4@illinois.edu",
+    id: "sp7", userId: "u4", userName: "Emily Chen",
     buildingName: "309 E Chalmers", address: "309 E Chalmers St", leaseType: "fall_sublease",
     pricePerMonth: 680, landlords: ["jsm"], zone: "campustown",
     availableDuringBreaks: true, breakTypes: ["thanksgiving"],
@@ -302,7 +309,7 @@ const DEMO_POSTS: SubleasePost[] = [
     cleaningFrequency: "weekly", shoePolicy: "shoes_off", images: [],
   },
   {
-    id: "sp8", userId: "u9", userName: "Raj Patel", userEmail: "rpatel8@illinois.edu",
+    id: "sp8", userId: "u9", userName: "Raj Patel",
     buildingName: "Illini Tower", address: "409 E Chalmers St", leaseType: "spring_sublease",
     pricePerMonth: 820, landlords: ["american"], zone: "campustown",
     availableDuringBreaks: false, breakTypes: [],
@@ -315,7 +322,7 @@ const DEMO_POSTS: SubleasePost[] = [
     cleaningFrequency: "weekly", shoePolicy: "no_policy", images: [],
   },
   {
-    id: "sp9", userId: "u2", userName: "Jordan Kim", userEmail: "jkim12@illinois.edu",
+    id: "sp9", userId: "u2", userName: "Jordan Kim",
     buildingName: "512 E Stoughton", address: "512 E Stoughton St", leaseType: "full_year",
     pricePerMonth: 590, landlords: ["cpm"], zone: "north",
     availableDuringBreaks: true, breakTypes: ["thanksgiving", "spring_break"],
@@ -331,7 +338,7 @@ const DEMO_POSTS: SubleasePost[] = [
 
 const DEMO_CRASH: CrashPost[] = [
   {
-    id: "cr1", userId: "u2", userName: "Jake Thompson", userEmail: "jthom22@illinois.edu",
+    id: "cr1", userId: "u2", userName: "Jake Thompson",
     avatarColor: "#CC5500", vibe: "sos",
     story: "Locked out of the Ike. Need a floor to sleep on, will buy you a Blue Guy at Kam's tomorrow.",
     imageUrl: "", dates: "Tonight only", targetDate: Date.now() + 86400000, zone: "south",
@@ -339,7 +346,7 @@ const DEMO_CRASH: CrashPost[] = [
     timestamp: Date.now() - 600000, status: "active",
   },
   {
-    id: "cr2", userId: "u5", userName: "Marcus Williams", userEmail: "mwill5@illinois.edu",
+    id: "cr2", userId: "u5", userName: "Marcus Williams",
     avatarColor: "#1A7AAF", vibe: "offering",
     story: "Roommate is gone. Got an air mattress near Grainger. Yours for $15 or a burrito from Maize.",
     imageUrl: "", dates: "Tomorrow – 3 days", targetDate: Date.now() + 259200000, zone: "north",
@@ -347,7 +354,7 @@ const DEMO_CRASH: CrashPost[] = [
     timestamp: Date.now() - 1800000, status: "active",
   },
   {
-    id: "cr3", userId: "u4", userName: "Aisha Okonkwo", userEmail: "aokonkwo@illinois.edu",
+    id: "cr3", userId: "u4", userName: "Aisha Okonkwo",
     avatarColor: "#5A8A5A", vibe: "sos",
     story: "Flight got cancelled. Stranded at Willard with a suitcase and no plan. Can venmo or buy boba.",
     imageUrl: "", dates: "Tonight only", targetDate: Date.now() + 43200000, zone: "campustown",
@@ -355,7 +362,7 @@ const DEMO_CRASH: CrashPost[] = [
     timestamp: Date.now() - 3600000, status: "active",
   },
   {
-    id: "cr4", userId: "u6", userName: "Sofia Reyes", userEmail: "sreyes2@illinois.edu",
+    id: "cr4", userId: "u6", userName: "Sofia Reyes",
     avatarColor: "#9B59B6", vibe: "offering",
     story: "Empty couch in my apartment all Moms Weekend. $20/night or cover me at Red Lion Saturday.",
     imageUrl: "", dates: "This weekend", targetDate: Date.now() + 432000000, zone: "campustown",
@@ -363,7 +370,7 @@ const DEMO_CRASH: CrashPost[] = [
     timestamp: Date.now() - 7200000, status: "active",
   },
   {
-    id: "cr5", userId: "u7", userName: "Liam Park", userEmail: "lpark9@illinois.edu",
+    id: "cr5", userId: "u7", userName: "Liam Park",
     avatarColor: "#E0BC00", vibe: "offering",
     story: "Subletting my studio for graduation weekend. Walk to Foellinger. Clean, private, AC.",
     imageUrl: "", dates: "May 9 – May 12", targetDate: Date.now() + 604800000, zone: "campustown",
@@ -385,10 +392,10 @@ interface AppContextValue {
   otpVerifiedEmail: string;
   setOtpVerifiedEmail: (email: string) => void;
   /** Other students' profiles from the users table (MOCK_USERS only when opted in). */
-  users: UserProfile[];
+  users: PublicProfile[];
   refreshUsers: () => Promise<void>;
   /** The swipe deck: `users` minus anyone the caller passed on (on any device). */
-  deck: UserProfile[];
+  deck: PublicProfile[];
   refreshDeck: () => Promise<void>;
   matches: MatchRecord[];
   addMatch: (record: MatchRecord) => void;
@@ -398,7 +405,7 @@ interface AppContextValue {
   passedUserIds: string[];
   addLiked: (id: string) => void;
   addPassed: (id: string) => void;
-  computeScore: (a: UserProfile, b: UserProfile) => number;
+  computeScore: (a: PublicProfile, b: PublicProfile) => number;
   /** From the listings table; the device copy is only a cache for first paint. */
   subleases: SubleasePost[];
   /** Uploads the photos, then saves. Throws with a user-facing message; safe to call again with the same post. */
@@ -418,12 +425,12 @@ interface AppContextValue {
   addFriend: (friend: Omit<FriendRecord, "vouchedByMe" | "timestamp">) => Promise<void>;
   removeFriend: (email: string) => Promise<void>;
   toggleVouch: (email: string) => Promise<void>;
-  getTrustInfo: (userEmail: string) => TrustInfo;
+  getTrustInfo: (userId: string) => TrustInfo;
   /** From the conversations table; the device copy is only a cache for first paint. */
   conversations: Conversation[];
   /** Opens (or finds) the conversation on the server and resolves its id. Throws with a user-facing message. */
-  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource) => Promise<string>;
-  startMatchConversation: (targetUser: UserProfile) => Promise<string>;
+  startConversation: (targetUserId: string, targetName: string, targetAvatar: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, targetProfileImage?: string, source?: ConversationSource) => Promise<string>;
+  startMatchConversation: (targetUser: PublicProfile) => Promise<string>;
   /** Shows the message at once; it stays marked "sending"/"failed" and is retried until the server has it. */
   sendMessage: (conversationId: string, content: string) => void;
   retryMessage: (messageId: string) => void;
@@ -433,9 +440,9 @@ interface AppContextValue {
   /** Why the last load or send failed; null once one succeeds. */
   messagingError: string | null;
   /** Records the like and resolves true if they had already liked us back. */
-  likeUser: (user: UserProfile) => Promise<boolean>;
+  likeUser: (user: PublicProfile) => Promise<boolean>;
   /** Hides them here at once and records the pass on the server (retried until it lands). */
-  passUser: (user: UserProfile) => Promise<void>;
+  passUser: (user: PublicProfile) => Promise<void>;
 }
 
 /** MOCK_USERS who "already liked you" — only consulted when USE_MOCK_USERS is on. */
@@ -455,8 +462,11 @@ const MESSAGE_RETRY_MS = 5000;
 const LISTINGS_KEY = "@popmatch_listings_cache";
 const CRASH_POSTS_KEY = "@popmatch_crash_posts_cache";
 const POSTS_RETRY_MS = 15000;
-/** Passes the server hasn't confirmed yet (emails), retried until it does. */
-const PENDING_PASSES_KEY = "@popmatch_pending_passes";
+/**
+ * Passes the server hasn't confirmed yet (users.id), retried until it does.
+ * New key: the old one held emails, which the API no longer accepts.
+ */
+const PENDING_PASSES_KEY = "@popmatch_pending_passes_v2";
 const PASS_RETRY_MS = 30000;
 
 /** Server rows win; unsent local ones (status set) are kept until the server has them. */
@@ -549,7 +559,7 @@ export const MOCK_USERS: UserProfile[] = [
   },
 ];
 
-function computeScore(a: UserProfile, b: UserProfile): number {
+function computeScore(a: PublicProfile, b: PublicProfile): number {
   const budgetDiff = (a.budget - b.budget) / 500;
   const cleanDiff = (a.cleanliness - b.cleanliness) / 4;
   const noiseDiff = (a.noise - b.noise) / 4;
@@ -566,8 +576,8 @@ function computeScore(a: UserProfile, b: UserProfile): number {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
   const [profileSyncError, setProfileSyncError] = useState<string | null>(null);
-  const [users, setUsers] = useState<UserProfile[]>(USE_MOCK_USERS ? MOCK_USERS : []);
-  const [deck, setDeck] = useState<UserProfile[]>(USE_MOCK_USERS ? MOCK_USERS : []);
+  const [users, setUsers] = useState<PublicProfile[]>(USE_MOCK_USERS ? MOCK_USERS : []);
+  const [deck, setDeck] = useState<PublicProfile[]>(USE_MOCK_USERS ? MOCK_USERS : []);
   const [isOnboarded, setIsOnboardedState] = useState(false);
   const [otpVerifiedEmail, setOtpVerifiedEmailState] = useState("");
   const [matches, setMatches] = useState<MatchRecord[]>([]);
@@ -778,8 +788,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshUsers = async () => {
     if (USE_MOCK_USERS) return;
     try {
-      const list = await fetchUsers(currentUser?.email);
-      setUsers(list.filter(u => u.id !== currentUser?.id && u.email !== currentUser?.email));
+      const list = await fetchUsers();
+      setUsers(list.filter(u => u.id !== currentUser?.id));
     } catch (error) {
       console.warn("Couldn't load profiles:", error);
     }
@@ -789,7 +799,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (USE_MOCK_USERS || !currentUser) return;
     try {
       const list = await fetchDeck();
-      setDeck(list.filter(u => u.id !== currentUser.id && u.email !== currentUser.email));
+      setDeck(list.filter(u => u.id !== currentUser.id));
     } catch (error) {
       console.error("Couldn't load the swipe deck:", error);
     }
@@ -967,15 +977,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setConversations(prev => [{ ...conv, ...local }, ...prev.filter(c => c.id !== conv.id)]);
   };
 
-  const startConversation = async (_targetUserId: string, targetName: string, _targetAvatar: string, targetEmail: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, _targetProfileImage?: string, source?: ConversationSource): Promise<string> => {
+  const startConversation = async (targetUserId: string, _targetName: string, _targetAvatar: string, listingId: string, listingBuilding: string, listingPrice: number, listingUnitType?: string, _targetProfileImage?: string, source?: ConversationSource): Promise<string> => {
     try {
       const myId = await resolveMyId();
-      // A post carries whatever id its author's device had at the time; the
-      // users table is the authority, looked up by email the way likes are.
-      const target = await fetchUserProfile(targetEmail);
-      if (!target) throw new Error(`${targetName} isn't on PopMatch yet, so messages can't reach them.`);
+      // Listings and crash posts come from the server, so their userId is the
+      // poster's canonical users.id; a demo post's isn't, and the server says so.
       const conv = await openConversation({
-        participant1Id: myId, participant2Id: target.id, listingId, listingBuilding, listingPrice,
+        participant1Id: myId, participant2Id: targetUserId, listingId, listingBuilding, listingPrice,
       });
       storeConversation(conv, { listingUnitType, source });
       return conv.id;
@@ -985,7 +993,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const startMatchConversation = async (targetUser: UserProfile): Promise<string> => {
+  const startMatchConversation = async (targetUser: PublicProfile): Promise<string> => {
     try {
       const myId = await resolveMyId();
       // Sorted so both people get the same listing id, whichever of them opens it.
@@ -1110,13 +1118,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return chatMessages.filter(m => m.conversationId === conversationId).sort((a, b) => a.createdAt - b.createdAt);
   };
 
-  const likeUser = async (user: UserProfile): Promise<boolean> => {
+  const likeUser = async (user: PublicProfile): Promise<boolean> => {
     if (USE_MOCK_USERS) return MOCK_LIKED_BY_IDS.includes(user.id);
     if (!currentUser) return false;
     try {
-      await saveLike(currentUser.email, user.email);
+      await saveLike(user.id);
       const mutual = await fetchMutualMatches(currentUser.email);
-      return mutual.some(m => m.email === user.email.toLowerCase());
+      return mutual.some(m => m.userId === user.id);
     } catch (error) {
       console.warn("Couldn't save the like to the server:", error);
       return false;
@@ -1129,11 +1137,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   /** Sends one pass; on failure it joins the queue the effect below retries. */
-  const sendPass = async (email: string): Promise<boolean> => {
+  const sendPass = async (userId: string): Promise<boolean> => {
     try {
-      await savePass(email);
+      await savePass(userId);
       setPendingPasses(prev => {
-        const next = prev.filter(e => e !== email);
+        const next = prev.filter(id => id !== userId);
         savePendingPasses(next);
         return next;
       });
@@ -1141,8 +1149,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("[passes] Couldn't save the pass; will retry:", error);
       setPendingPasses(prev => {
-        if (prev.includes(email)) return prev;
-        const next = [...prev, email];
+        if (prev.includes(userId)) return prev;
+        const next = [...prev, userId];
         savePendingPasses(next);
         return next;
       });
@@ -1150,10 +1158,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const passUser = async (user: UserProfile) => {
+  const passUser = async (user: PublicProfile) => {
     await addPassed(user.id);
     if (USE_MOCK_USERS) return;
-    await sendPass(user.email.trim().toLowerCase());
+    await sendPass(user.id);
   };
 
   // A pass that didn't reach the server would put that student back in the
@@ -1163,13 +1171,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (pendingPasses.length === 0 || !currentUser) return;
     const timer = setInterval(() => {
-      pendingPasses.forEach(email => sendPassRef.current(email));
+      pendingPasses.forEach(id => sendPassRef.current(id));
     }, PASS_RETRY_MS);
     return () => clearInterval(timer);
   }, [pendingPasses, currentUser?.email]);
 
-  const getTrustInfo = (userEmail: string): TrustInfo => {
-    const directFriend = friends.find(f => f.email === userEmail);
+  const getTrustInfo = (userId: string): TrustInfo => {
+    const directFriend = friends.find(f => f.userId === userId);
     if (directFriend) {
       return {
         degree: 1,
@@ -1180,7 +1188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    const targetMockUser = users.find(u => u.email === userEmail);
+    const targetMockUser = users.find(u => u.id === userId);
     if (!targetMockUser) {
       return { degree: null, isFriend: false, vouchedByFriend: null, sharedOrg: null, mutualFriends: [] };
     }
@@ -1188,7 +1196,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const mutuals: MutualFriend[] = [];
 
     for (const friend of friends) {
-      const friendMockUser = users.find(u => u.email === friend.email);
+      const friendMockUser = friend.userId ? users.find(u => u.id === friend.userId) : undefined;
       if (!friendMockUser) continue;
 
       const friendKnowsTarget = (friendMockUser.organizations || []).some(
@@ -1197,15 +1205,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (friendKnowsTarget) {
         mutuals.push({
+          id: friendMockUser.id,
           name: friend.name,
-          email: friend.email,
           avatarColor: friend.avatarColor,
         });
       }
     }
 
     if (mutuals.length > 0) {
-      const vouchedFriend = friends.find(f => f.vouchedByMe && mutuals.some(m => m.email === f.email));
+      const vouchedFriend = friends.find(f => f.vouchedByMe && mutuals.some(m => m.id === f.userId));
       const sharedOrg = (currentUser?.organizations || []).find(
         org => (targetMockUser.organizations || []).includes(org)
       ) ?? null;

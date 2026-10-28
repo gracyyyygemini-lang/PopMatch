@@ -57,7 +57,7 @@ export default function FacePile({ mutuals, maxVisible = 3 }: FacePileProps) {
         <View style={[fp.pile, { width: AVATAR_SIZE + (visible.length - 1) * (AVATAR_SIZE - OVERLAP) + (overflow > 0 ? AVATAR_SIZE - OVERLAP : 0) }]}>
           {visible.map((m, i) => (
             <Avatar
-              key={m.email}
+              key={m.id}
               name={m.name}
               color={m.avatarColor}
               size={AVATAR_SIZE}
@@ -116,13 +116,12 @@ export default function FacePile({ mutuals, maxVisible = 3 }: FacePileProps) {
               {mutuals.map(m => {
                 const initials = m.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
                 return (
-                  <View key={m.email} style={fp.friendRow}>
+                  <View key={m.id} style={fp.friendRow}>
                     <View style={[fp.friendAvatar, { backgroundColor: m.avatarColor }]}>
                       <Text style={fp.friendInitials}>{initials}</Text>
                     </View>
                     <View style={fp.friendInfo}>
                       <Text style={fp.friendName}>{m.name}</Text>
-                      <Text style={fp.friendEmail}>{m.email}</Text>
                     </View>
                     <View style={fp.friendBadge}>
                       <Ionicons name="people" size={11} color={Colors.grassGreen} />
@@ -185,7 +184,6 @@ const fp = StyleSheet.create({
   friendInitials: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.white },
   friendInfo: { flex: 1 },
   friendName: { fontFamily: "Nunito_700Bold", fontSize: 14, color: Colors.charcoal },
-  friendEmail: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
   friendBadge: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: Colors.grassGreen + "18",

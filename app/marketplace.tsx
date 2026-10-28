@@ -437,12 +437,12 @@ function SubleaseCard({ post, onMarkLeased }: {
   onMarkLeased: (post: SubleasePost) => void;
 }) {
   const { getTrustInfo, currentUser, startConversation } = useApp();
-  const trust = getTrustInfo(post.userEmail);
+  const trust = getTrustInfo(post.userId);
   const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
   const rawCat = post.listingType === "roommate" ? "roommate_openings" : (post.category || "semester_takeover");
   const cat = rawCat === "summer" ? "summer_only" : ["spring", "fall", "full_year"].includes(rawCat) ? "semester_takeover" : rawCat;
   const catColor = CATEGORY_COLORS[cat] || Colors.ocean;
-  const isOwner = currentUser?.email === post.userEmail;
+  const isOwner = currentUser?.id === post.userId;
   const [galleryVisible, setGalleryVisible] = useState(false);
 
   const allImages: string[] = [];
@@ -564,7 +564,7 @@ function SubleaseCard({ post, onMarkLeased }: {
           </View>
           <View style={styles.posterInfo}>
             <Text style={styles.posterName}>{post.userName}</Text>
-            <Text style={styles.posterEmail}>{post.userEmail}</Text>
+            <Text style={styles.posterRole}>{post.listingType === "roommate" ? "Current resident" : "Subleasing"}</Text>
           </View>
           <View style={{ alignItems: "flex-end" as const, gap: 4 }}>
             {trust.degree === 1 && (
@@ -591,7 +591,7 @@ function SubleaseCard({ post, onMarkLeased }: {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               try {
                 const convoId = await startConversation(
-                  post.userId, post.userName, post.avatarColor, post.userEmail,
+                  post.userId, post.userName, post.avatarColor,
                   post.id, post.buildingName, post.pricePerMonth, post.unitType, undefined, "sublease"
                 );
                 router.push(`/chat?conversationId=${convoId}&source=sublease`);
@@ -726,8 +726,8 @@ export default function MarketplaceScreen() {
 
     return true;
   }).sort((a, b) => {
-    const aOwn = currentUser?.email === a.userEmail ? 1 : 0;
-    const bOwn = currentUser?.email === b.userEmail ? 1 : 0;
+    const aOwn = currentUser?.id === a.userId ? 1 : 0;
+    const bOwn = currentUser?.id === b.userId ? 1 : 0;
     if (aOwn !== bOwn) return bOwn - aOwn;
     return b.timestamp - a.timestamp;
   });
@@ -1021,7 +1021,7 @@ const styles = StyleSheet.create({
   posterInitials: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.white },
   posterInfo: { flex: 1 },
   posterName: { fontFamily: "Nunito_700Bold", fontSize: 13, color: Colors.charcoal },
-  posterEmail: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
+  posterRole: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
   trustChip: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8,

@@ -10,9 +10,9 @@ import { apiRequest } from "@/lib/query-client";
 
 const isUploaded = (uri: string) => /^https?:\/\//i.test(uri);
 
-/** The poster's name, email and color come from their profile on the server. */
+/** The poster's name and color come from their profile on the server. */
 function toListingPayload(post: SubleasePost) {
-  const { userName: _name, userEmail: _email, avatarColor: _color, timestamp: _ts, ...stored } = post;
+  const { userName: _name, avatarColor: _color, timestamp: _ts, ...stored } = post;
   if (stored.images?.some(uri => !isUploaded(uri)) || (stored.floorPlanUrl && !isUploaded(stored.floorPlanUrl))) {
     throw new Error("Photos must be uploaded before the listing is saved.");
   }
@@ -43,7 +43,7 @@ export async function fetchCrashPosts(): Promise<CrashPost[]> {
 }
 
 export async function createCrashPost(post: CrashPost): Promise<CrashPost> {
-  const { userName: _name, userEmail: _email, avatarColor: _color, timestamp: _ts, status: _status, ...stored } = post;
+  const { userName: _name, avatarColor: _color, timestamp: _ts, status: _status, ...stored } = post;
   if (stored.imageUrl && !isUploaded(stored.imageUrl)) {
     throw new Error("The photo must be uploaded before the post is saved.");
   }

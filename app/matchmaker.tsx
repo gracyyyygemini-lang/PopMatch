@@ -10,7 +10,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
 import Colors from "@/constants/colors";
-import { useApp, UserProfile, VibeProfile } from "@/context/AppContext";
+import { useApp, PublicProfile, VibeProfile } from "@/context/AppContext";
 import CustomAvatar from "@/components/CustomAvatar";
 import { showError } from "@/lib/alert";
 import { usePolling } from "@/hooks/usePolling";
@@ -47,7 +47,7 @@ const CLEAN_LABELS: Record<string, string> = {
   messy: "Messy",
 };
 
-function matchesGenderFilter(current: UserProfile, candidate: UserProfile): boolean {
+function matchesGenderFilter(current: PublicProfile, candidate: PublicProfile): boolean {
   if (current.genderPref === "girls_only" && candidate.gender !== "female") return false;
   if (current.genderPref === "boys_only" && candidate.gender !== "male") return false;
   return true;
@@ -79,7 +79,7 @@ function getHabitChips(vp: VibeProfile): string[] {
 function HeroCard({
   user, score, cardHeight, cardWidth,
 }: {
-  user: UserProfile; score: number; cardHeight: number; cardWidth: number;
+  user: PublicProfile; score: number; cardHeight: number; cardWidth: number;
 }) {
   const vp = user.vibeProfile;
   const hasImage = !!user.profileImage;
@@ -182,7 +182,7 @@ const hc = StyleSheet.create({
 function StaticCard({
   user, score, cardWidth, cardHeight, isTop,
 }: {
-  user: UserProfile; score: number; cardWidth: number; cardHeight: number; isTop: boolean;
+  user: PublicProfile; score: number; cardWidth: number; cardHeight: number; isTop: boolean;
 }) {
   return (
     <View
@@ -204,7 +204,7 @@ function MatchModal({
   onClose,
 }: {
   visible: boolean;
-  matchedUser: UserProfile | null;
+  matchedUser: PublicProfile | null;
   onSayHi: () => void;
   onClose: () => void;
 }) {
@@ -276,7 +276,7 @@ export default function MatchmakerScreen() {
     likeUser, startMatchConversation,
   } = useApp();
 
-  const [matchModalUser, setMatchModalUser] = useState<UserProfile | null>(null);
+  const [matchModalUser, setMatchModalUser] = useState<PublicProfile | null>(null);
   const [matchConvoId, setMatchConvoId] = useState<string>("");
 
   const isDesktopMm = Platform.OS === "web" && screenWidth >= 1024;
@@ -310,7 +310,7 @@ export default function MatchmakerScreen() {
   const remaining = filtered.filter(u => !likedUserIds.includes(u.id) && !passedUserIds.includes(u.id));
   const topCards = remaining.slice(0, 3);
 
-  const handleLike = useCallback(async (user: UserProfile) => {
+  const handleLike = useCallback(async (user: PublicProfile) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const score = currentUser ? computeScore(currentUser, user) : 75;
     await addLiked(user.id);
@@ -327,7 +327,7 @@ export default function MatchmakerScreen() {
     }
   }, [currentUser, computeScore, likeUser, startMatchConversation, addLiked, addMatch]);
 
-  const handlePass = useCallback(async (user: UserProfile) => {
+  const handlePass = useCallback(async (user: PublicProfile) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await passUser(user);
   }, [passUser]);

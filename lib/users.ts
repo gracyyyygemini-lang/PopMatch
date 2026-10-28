@@ -1,4 +1,4 @@
-import type { UserProfile } from "@/context/AppContext";
+import type { PublicProfile, UserProfile } from "@/context/AppContext";
 import { apiRequest } from "@/lib/query-client";
 
 /**
@@ -53,7 +53,7 @@ export async function saveUserProfile(user: UserProfile): Promise<UserProfile> {
   return mergeProfile(user, saved);
 }
 
-/** null when no profile has been saved for this email yet. */
+/** Your own profile, or null if it hasn't been saved yet. Any other email is a 403. */
 export async function fetchUserProfile(email: string): Promise<UserProfile | null> {
   try {
     const res = await apiRequest("GET", `/api/users/by-email/${encodeURIComponent(email)}`);
@@ -69,15 +69,13 @@ export async function fetchUserProfile(email: string): Promise<UserProfile | nul
  * Only the matchmaker uses this — a pass doesn't hide anyone from the map or
  * friend lookups, which use fetchUsers.
  */
-export async function fetchDeck(): Promise<UserProfile[]> {
+export async function fetchDeck(): Promise<PublicProfile[]> {
   const res = await apiRequest("GET", "/api/users?deck=true");
-  return (await res.json()) as UserProfile[];
+  return (await res.json()) as PublicProfile[];
 }
 
-export async function fetchUsers(excludeEmail?: string): Promise<UserProfile[]> {
-  const route = excludeEmail
-    ? `/api/users?exclude=${encodeURIComponent(excludeEmail)}`
-    : "/api/users";
-  const res = await apiRequest("GET", route);
-  return (await res.json()) as UserProfile[];
+/** Everyone but you, without emails (see PublicProfile). */
+export async function fetchUsers(): Promise<PublicProfile[]> {
+  const res = await apiRequest("GET", "/api/users");
+  return (await res.json()) as PublicProfile[];
 }

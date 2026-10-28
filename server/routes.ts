@@ -261,12 +261,16 @@ async function initDb() {
   console.log("Database initialized");
 }
 
-type MutualLikeRow = { email: string; matched_at: Date | string };
+type MutualLikeRow = { user_id: string; matched_at: Date | string };
 
-/** The match became mutual when the later of the two likes landed. */
+/**
+ * The match became mutual when the later of the two likes landed. Identified
+ * by users.id: likes are stored by email, but no email but your own ever
+ * leaves the server.
+ */
 function toMutualMatch(row: MutualLikeRow) {
   return {
-    email: row.email,
+    userId: row.user_id,
     matchedAt: new Date(row.matched_at).getTime(),
   };
 }
@@ -355,13 +359,16 @@ function parseLandlords(value: string | null): string[] {
 /**
  * Postgres rows are snake_case; the app's UserProfile is camelCase. Every
  * users endpoint responds through this so column names never reach the UI.
+ * `email` is included only on the caller's own profile: anyone else's would
+ * let any signed-in student harvest addresses and test who has an account.
  */
-function toUserProfile(row: UserRow) {
+function toUserProfile(row: UserRow, callerEmail: string) {
   const vibeProfile = toVibeProfile(row.vibe_profile);
+  const own = row.email.trim().toLowerCase() === callerEmail;
   return {
     id: row.id,
     name: row.name,
-    email: row.email,
+    ...(own ? { email: row.email } : {}),
     major: row.major ?? "",
     bio: row.bio ?? "",
     budget: row.budget ?? 800,
@@ -388,9 +395,9 @@ type ConversationRow = {
   listing_id: string | null; listing_building: string | null; listing_price: number | null;
   created_at: Date | string;
   participant1_name: string | null; participant1_avatar: string | null;
-  participant1_email: string | null; participant1_image: string | null;
+  participant1_image: string | null;
   participant2_name: string | null; participant2_avatar: string | null;
-  participant2_email: string | null; participant2_image: string | null;
+  participant2_image: string | null;
   last_message: string | null; last_message_at: Date | string | null;
 };
 
@@ -398,9 +405,9 @@ type ConversationRow = {
 const CONVERSATION_SELECT = `
   SELECT c.*,
     u1.name AS participant1_name, u1.avatar_color AS participant1_avatar,
-    u1.email AS participant1_email, u1.profile_image AS participant1_image,
+    u1.profile_image AS participant1_image,
     u2.name AS participant2_name, u2.avatar_color AS participant2_avatar,
-    u2.email AS participant2_email, u2.profile_image AS participant2_image,
+    u2.profile_image AS participant2_image,
     last.content AS last_message, last.created_at AS last_message_at
   FROM conversations c
   LEFT JOIN users u1 ON c.participant1_id = u1.id
@@ -417,8 +424,8 @@ const CONVERSATION_SELECT = `
 function toConversation(row: ConversationRow, viewerId: string) {
   const viewerIsP1 = row.participant1_id === viewerId;
   const other = viewerIsP1
-    ? { name: row.participant2_name, avatar: row.participant2_avatar, email: row.participant2_email, image: row.participant2_image }
-    : { name: row.participant1_name, avatar: row.participant1_avatar, email: row.participant1_email, image: row.participant1_image };
+    ? { id: row.participant2_id, name: row.participant2_name, avatar: row.participant2_avatar, image: row.participant2_image }
+    : { id: row.participant1_id, name: row.participant1_name, avatar: row.participant1_avatar, image: row.participant1_image };
   return {
     id: row.id,
     participant1Id: row.participant1_id,
@@ -431,7 +438,7 @@ function toConversation(row: ConversationRow, viewerId: string) {
     ...(row.last_message_at ? { lastMessageAt: new Date(row.last_message_at).getTime() } : {}),
     otherUserName: other.name ?? "",
     otherUserAvatar: other.avatar ?? "",
-    otherUserEmail: other.email ?? "",
+    otherUserId: other.id,
     ...(other.image ? { otherUserProfileImage: other.image } : {}),
   };
 }
@@ -503,12 +510,15 @@ type ListingRow = {
   break_types: string[] | null; description: string | null; event_name: string | null;
   start_date: Date | string | null; end_date: Date | string | null;
   created_at: Date | string; details: unknown;
-  user_name: string | null; user_email: string | null; user_avatar: string | null;
+  user_name: string | null; user_avatar: string | null;
 };
 
-/** Poster's name, email and color come from users, so they can't drift from the profile. */
+/**
+ * Poster's name and color come from users, so they can't drift from the
+ * profile. Their email is never selected: posts identify people by userId.
+ */
 const LISTING_SELECT = `
-  SELECT l.*, u.name AS user_name, u.email AS user_email, u.avatar_color AS user_avatar
+  SELECT l.*, u.name AS user_name, u.avatar_color AS user_avatar
   FROM listings l
   LEFT JOIN users u ON l.user_id = u.id`;
 
@@ -520,7 +530,6 @@ function toListing(row: ListingRow) {
     id: row.id,
     userId: row.user_id,
     userName: row.user_name ?? "",
-    userEmail: row.user_email ?? "",
     avatarColor: row.user_avatar ?? "#005F73",
     buildingName: row.building_name,
     address: row.address ?? "",
@@ -544,13 +553,37 @@ type CrashPostRow = {
   id: string; user_id: string; vibe: string; story: string; image_url: string;
   dates: string; target_date: Date | string; zone: string; currency: string;
   currency_label: string; approx_location: string; status: string; created_at: Date | string;
-  user_name: string | null; user_email: string | null; user_avatar: string | null;
+  user_name: string | null; user_avatar: string | null;
 };
 
 const CRASH_POST_SELECT = `
-  SELECT p.*, u.name AS user_name, u.email AS user_email, u.avatar_color AS user_avatar
+  SELECT p.*, u.name AS user_name, u.avatar_color AS user_avatar
   FROM crash_posts p
   LEFT JOIN users u ON p.user_id = u.id`;
+
+type PersonRow = {
+  id: string; name: string; avatar_color: string | null; major?: string | null;
+  college?: string | null; organizations?: string[] | null;
+};
+
+/** Another student as the friends list and trust info show them: no email. */
+function toPerson(row: PersonRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    avatarColor: row.avatar_color ?? "#005F73",
+    ...(row.major != null ? { major: row.major } : {}),
+    ...(row.college != null ? { college: row.college } : {}),
+    ...(row.organizations != null ? { organizations: row.organizations } : {}),
+  };
+}
+
+/** The email behind a users.id, for acting on someone the client knows only by id. */
+async function emailOfUser(id: unknown): Promise<string | null> {
+  if (typeof id !== "string" || !id) return null;
+  const [row] = await query<{ email: string }>("SELECT lower(email) AS email FROM users WHERE id = $1", [id]);
+  return row?.email ?? null;
+}
 
 const INCREMENTABLE_STATS = ["successful_subleases", "total_matches"];
 
@@ -563,7 +596,6 @@ function toCrashPost(row: CrashPostRow) {
     id: row.id,
     userId: row.user_id,
     userName: row.user_name ?? "",
-    userEmail: row.user_email ?? "",
     avatarColor: row.user_avatar ?? "#005F73",
     vibe: row.vibe,
     story: row.story,
@@ -703,22 +735,25 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       // On conflict the row keeps its original id, so the client must adopt
       // the id returned here rather than the one it generated.
       const [user] = await query<UserRow>("SELECT * FROM users WHERE email = $1", [email]);
-      return res.json(toUserProfile(user));
+      return res.json(toUserProfile(user, caller.email));
     } catch (err) {
       console.error("POST /api/users", err);
       return res.status(500).json({ error: "Failed to save user" });
     }
   });
 
-  // Profiles are visible to every signed-in student.
+  // The caller's own profile only (the app syncs it on launch). Looking up
+  // anyone else by email would tell you whether they have an account, so any
+  // other address is a 403 — the same 403 whether or not it exists.
   app.get("/api/users/by-email/:email", async (req: Request, res: Response) => {
     try {
-      const [user] = await query<UserRow>(
-        "SELECT * FROM users WHERE lower(email) = $1",
-        [String(req.params.email).trim().toLowerCase()]
-      );
+      const email = req.caller!.email;
+      if (String(req.params.email).trim().toLowerCase() !== email) {
+        return res.status(403).json({ error: "You can only look up your own profile" });
+      }
+      const [user] = await query<UserRow>("SELECT * FROM users WHERE lower(email) = $1", [email]);
       if (!user) return res.status(404).json({ error: "User not found" });
-      return res.json(toUserProfile(user));
+      return res.json(toUserProfile(user, email));
     } catch (err) {
       console.error("GET /api/users/by-email", err);
       return res.status(500).json({ error: "Failed to fetch user" });
@@ -741,7 +776,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
          ORDER BY u.name`,
         [req.caller!.email]
       );
-      return res.json(rows.map(toUserProfile));
+      return res.json(rows.map(row => toUserProfile(row, req.caller!.email)));
     } catch (err) {
       console.error("GET /api/users", err);
       return res.status(500).json({ error: "Failed to fetch users" });
@@ -750,17 +785,20 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
 
   // ─── LIKES ───────────────────────────────────────────────────────────────────
 
-  // The caller likes likedEmail.
+  // The caller likes likedUserId. Stored by email (see likes), resolved here
+  // so the client never needs anyone else's address.
   app.post("/api/likes", async (req: Request, res: Response) => {
     try {
       const likerEmail = req.caller!.email;
       if (namesSomeoneElse(req.body?.likerEmail, likerEmail, true)) {
         return res.status(403).json({ error: "You can only like as yourself" });
       }
-      const likedEmail = typeof req.body?.likedEmail === "string" ? req.body.likedEmail.trim().toLowerCase() : "";
-
+      if (!req.body?.likedUserId) {
+        return res.status(400).json({ error: "likedUserId is required" });
+      }
+      const likedEmail = await emailOfUser(req.body.likedUserId);
       if (!likedEmail) {
-        return res.status(400).json({ error: "likedEmail is required" });
+        return res.status(404).json({ error: "Student not found" });
       }
       if (likerEmail === likedEmail) {
         return res.status(400).json({ error: "You can't like yourself" });
@@ -778,16 +816,20 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     }
   });
 
-  // The caller passes on passedEmail; GET /api/users stops returning them.
+  // The caller passes on passedUserId; GET /api/users?deck=true stops
+  // returning them.
   app.post("/api/passes", async (req: Request, res: Response) => {
     try {
       const passerEmail = req.caller!.email;
       if (namesSomeoneElse(req.body?.passerEmail, passerEmail, true)) {
         return res.status(403).json({ error: "You can only pass as yourself" });
       }
-      const passedEmail = typeof req.body?.passedEmail === "string" ? req.body.passedEmail.trim().toLowerCase() : "";
+      if (!req.body?.passedUserId) {
+        return res.status(400).json({ error: "passedUserId is required" });
+      }
+      const passedEmail = await emailOfUser(req.body.passedUserId);
       if (!passedEmail) {
-        return res.status(400).json({ error: "passedEmail is required" });
+        return res.status(404).json({ error: "Student not found" });
       }
       if (passerEmail === passedEmail) {
         return res.status(400).json({ error: "You can't pass on yourself" });
@@ -813,12 +855,13 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         return res.status(403).json({ error: "You can only see your own matches" });
       }
       const rows = await query<MutualLikeRow>(
-        `SELECT mine.liked_email AS email,
+        `SELECT u.id AS user_id,
                 GREATEST(mine.created_at, theirs.created_at) AS matched_at
          FROM likes mine
          JOIN likes theirs
            ON theirs.liker_email = mine.liked_email
           AND theirs.liked_email = mine.liker_email
+         JOIN users u ON lower(u.email) = mine.liked_email
          WHERE mine.liker_email = $1
          ORDER BY matched_at DESC`,
         [email]
@@ -836,7 +879,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
   // each other. Every read below goes through confirmedFriendsOf, so a
   // one-sided add never shows anywhere — not in friend lists, mutual-friend
   // counts or vouches — and adding never reveals whether the other person
-  // added you or is even on PopMatch.
+  // added you or is even on PopMatch. Responses name people by id, never email.
 
   /** SQL for the emails confirmed (two-sided) friends with the email in `param`. */
   const confirmedFriendsOf = (param: string) => `
@@ -851,26 +894,24 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (namesSomeoneElse(req.params.email, req.caller!.email, true)) {
         return res.status(403).json({ error: "You can only see your own friends" });
       }
-      const rows = await query<{
-        email: string; name: string; avatar_color: string; major: string;
-        college: string; organizations: string[];
-      }>(
-        `SELECT u.email, u.name, u.avatar_color, u.major, u.college, u.organizations
+      const rows = await query<PersonRow>(
+        `SELECT u.id, u.name, u.avatar_color, u.major, u.college, u.organizations
          FROM users u
          WHERE lower(u.email) IN (${confirmedFriendsOf("$1")})
          ORDER BY u.name`,
         [req.caller!.email]
       );
-      return res.json(rows);
+      return res.json(rows.map(toPerson));
     } catch (err) {
       console.error("GET /api/friends", err);
       return res.status(500).json({ error: "Failed to fetch friends" });
     }
   });
 
-  // Records the caller's side. The response is the same whether or not the
-  // other person has added back or has an account, so it can't be used to
-  // probe either; the friends list shows the result.
+  // Records the caller's side. Adding by typed email is the intended flow,
+  // so this one route still takes an email. The response is the same whether
+  // or not the other person has added back or has an account, so it can't be
+  // used to probe either; the friends list shows the result.
   app.post("/api/friends", async (req: Request, res: Response) => {
     try {
       const adderEmail = req.caller!.email;
@@ -898,17 +939,23 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
   });
 
   // Withdraws the caller's side; the friendship stops counting for both.
+  // friendUserId for a friend from the list, or friendEmail to cancel an add
+  // the caller typed themselves. Always the same response.
   app.delete("/api/friends", async (req: Request, res: Response) => {
     try {
       const adderEmail = req.caller!.email;
       if (namesSomeoneElse(req.body?.userEmail, adderEmail, true)) {
         return res.status(403).json({ error: "You can only remove your own friends" });
       }
-      const addedEmail = String(req.body?.friendEmail ?? "").trim().toLowerCase();
-      await query(
-        "DELETE FROM friend_adds WHERE adder_email = $1 AND added_email = $2",
-        [adderEmail, addedEmail]
-      );
+      const addedEmail = req.body?.friendUserId
+        ? await emailOfUser(req.body.friendUserId)
+        : String(req.body?.friendEmail ?? "").trim().toLowerCase();
+      if (addedEmail) {
+        await query(
+          "DELETE FROM friend_adds WHERE adder_email = $1 AND added_email = $2",
+          [adderEmail, addedEmail]
+        );
+      }
       return res.json({ success: true });
     } catch (err) {
       console.error("DELETE /api/friends", err);
@@ -918,9 +965,8 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
 
   // ─── VOUCHES ─────────────────────────────────────────────────────────────────
 
-  // The caller vouches for a confirmed friend. Keyed by email and never
-  // touches users, so whether the vouchee has a profile can't change the
-  // answer: only the friendship does, and both sides already know that.
+  // The caller vouches for a confirmed friend, named by voucheeUserId. An
+  // unknown id gets the same 403 as a non-friend.
   app.post("/api/vouches", async (req: Request, res: Response) => {
     try {
       const voucherEmail = req.caller!.email;
@@ -928,13 +974,13 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         return res.status(403).json({ error: "You can only vouch as yourself" });
       }
       const { message = "" } = req.body;
-      const voucheeEmail = String(req.body?.voucheeEmail ?? "").trim().toLowerCase();
-      if (!voucheeEmail) {
-        return res.status(400).json({ error: "voucheeEmail is required" });
+      if (!req.body?.voucheeUserId) {
+        return res.status(400).json({ error: "voucheeUserId is required" });
       }
+      const voucheeEmail = await emailOfUser(req.body.voucheeUserId);
 
       const [friends] = await query<{ yes: boolean }>(
-        `SELECT $2 IN (${confirmedFriendsOf("$1")}) AS yes`,
+        `SELECT $2::varchar IS NOT NULL AND $2 IN (${confirmedFriendsOf("$1")}) AS yes`,
         [voucherEmail, voucheeEmail]
       );
       if (!friends.yes) {
@@ -953,16 +999,19 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     }
   });
 
-  // Withdraws the caller's own vouch.
+  // Withdraws the caller's own vouch for voucheeUserId.
   app.delete("/api/vouches", async (req: Request, res: Response) => {
     try {
       if (namesSomeoneElse(req.body?.voucherEmail, req.caller!.email, true)) {
         return res.status(403).json({ error: "You can only withdraw your own vouch" });
       }
-      await query(
-        "DELETE FROM vouches WHERE voucher_email = $1 AND vouchee_email = $2",
-        [req.caller!.email, String(req.body?.voucheeEmail ?? "").trim().toLowerCase()]
-      );
+      const voucheeEmail = await emailOfUser(req.body?.voucheeUserId);
+      if (voucheeEmail) {
+        await query(
+          "DELETE FROM vouches WHERE voucher_email = $1 AND vouchee_email = $2",
+          [req.caller!.email, voucheeEmail]
+        );
+      }
       return res.json({ success: true });
     } catch (err) {
       console.error("DELETE /api/vouches", err);
@@ -972,45 +1021,40 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
 
   // ─── TRUST INFO ───────────────────────────────────────────────────────────────
 
-  // How the caller is connected to :targetEmail, counting only confirmed
-  // friendships. :viewerEmail must be the caller, or this would reveal
-  // anyone's friend graph.
-  app.get("/api/trust/:viewerEmail/:targetEmail", async (req: Request, res: Response) => {
+  // How the caller is connected to the student :userId, counting only
+  // confirmed friendships. Always about the caller, so it can't reveal anyone
+  // else's friend graph; people come back as id + name, never email.
+  app.get("/api/trust/:userId", async (req: Request, res: Response) => {
     try {
       const viewerEmail = req.caller!.email;
-      if (namesSomeoneElse(req.params.viewerEmail, viewerEmail, true)) {
-        return res.status(403).json({ error: "You can only see your own connections" });
-      }
-      const targetEmail = String(req.params.targetEmail).trim().toLowerCase();
+      const [target] = await query<{ email: string; organizations: string[] | null }>(
+        "SELECT lower(email) AS email, organizations FROM users WHERE id = $1",
+        [String(req.params.userId)]
+      );
 
-      if (viewerEmail === targetEmail) {
+      if (target?.email === viewerEmail) {
         return res.json({ degree: 1, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
       }
+      // An unknown id runs the same queries as a stranger and finds nothing.
+      const targetEmail = target?.email ?? "";
 
-      // No early return for a target without an account: every query below is
-      // keyed by email and simply finds nothing, so the answer (and the work
-      // done) is the same as for a registered stranger.
       const [viewer] = await query<{ organizations: string[] | null }>(
         "SELECT organizations FROM users WHERE lower(email) = $1", [viewerEmail]
       );
-      const [target] = await query<{ organizations: string[] | null }>(
-        "SELECT organizations FROM users WHERE lower(email) = $1", [targetEmail]
-      );
-
       const sharedOrgs = (viewer?.organizations || []).filter(
         (org: string) => (target?.organizations || []).includes(org)
       );
       // A vouch counts only while the voucher is still the target's confirmed
       // friend, so a lapsed friendship can't keep vouching.
-      const vouchesFrom = (voucherFilter: string) =>
-        query<{ name: string; email: string }>(
-          `SELECT u.name, u.email FROM vouches v
+      const vouchesFrom = async (voucherFilter: string) =>
+        (await query<PersonRow>(
+          `SELECT u.id, u.name, u.avatar_color FROM vouches v
            JOIN users u ON lower(u.email) = v.voucher_email
            WHERE v.vouchee_email = $1
              AND v.voucher_email IN (${confirmedFriendsOf("$1")})
              ${voucherFilter}`,
           voucherFilter ? [targetEmail, viewerEmail] : [targetEmail]
-        );
+        )).map(row => ({ id: row.id, name: row.name }));
 
       const [direct] = await query<{ friends: boolean }>(
         `SELECT $2 IN (${confirmedFriendsOf("$1")}) AS friends`,
@@ -1020,13 +1064,13 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         return res.json({ degree: 1, mutualFriends: [], vouchedBy: await vouchesFrom(""), sharedOrgs });
       }
 
-      const mutualFriends = await query<{ name: string; email: string; avatar_color: string }>(
-        `SELECT u.name, u.email, u.avatar_color
+      const mutualFriends = (await query<PersonRow>(
+        `SELECT u.id, u.name, u.avatar_color
          FROM users u
          WHERE lower(u.email) IN (${confirmedFriendsOf("$1")})
            AND lower(u.email) IN (${confirmedFriendsOf("$2")})`,
         [viewerEmail, targetEmail]
-      );
+      )).map(toPerson);
 
       // Second degree: only vouches from people who are friends with both.
       const vouchedBy = mutualFriends.length > 0

@@ -425,7 +425,6 @@ export default function PostSubleaseScreen() {
       id: postId,
       userId: currentUser?.id || "guest",
       userName: currentUser?.name || "Anonymous",
-      userEmail: currentUser?.email || "student@illinois.edu",
       buildingName: buildingName.trim(),
       address: address.trim(),
       leaseType,

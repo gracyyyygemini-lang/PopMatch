@@ -108,7 +108,7 @@ function ListingPin({ post, index }: { post: SubleasePost; index: number }) {
             </View>
             <View>
               <Text style={styles.pinPoster}>{post.userName}</Text>
-              <Text style={styles.pinEmail}>{post.userEmail}</Text>
+              <Text style={styles.pinRole}>{post.listingType === "roommate" ? "Current resident" : "Subleasing"}</Text>
             </View>
           </View>
         </View>
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   pinAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   pinAvatarText: { fontFamily: "Nunito_700Bold", fontSize: 10, color: Colors.white },
   pinPoster: { fontFamily: "Nunito_700Bold", fontSize: 12, color: Colors.charcoal },
-  pinEmail: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
+  pinRole: { fontFamily: "Nunito_400Regular", fontSize: 11, color: Colors.textMuted },
   userCard: {
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: Colors.cardBg, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.borderSoft, padding: 12,
