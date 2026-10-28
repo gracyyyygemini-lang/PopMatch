@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   Platform, KeyboardAvoidingView, Image, Alert, useWindowDimensions
@@ -9,6 +9,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
+import { showError } from "@/lib/alert";
 import {
   useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType,
   KitchenType, BathroomType, CleaningFrequency, ShoePolicy, Amenities, DEFAULT_AMENITIES
@@ -133,6 +134,10 @@ const TOTAL_STEPS = 4;
 export default function PostSubleaseScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, addSublease, setCurrentUser } = useApp();
+  // One id per listing, kept across retries, so a second tap after a failed
+  // publish reuses the uploaded photos and can't create a duplicate.
+  const postId = useRef(Date.now().toString() + Math.random().toString(36).substr(2, 6)).current;
+  const [publishing, setPublishing] = useState(false);
   const params = useLocalSearchParams<{ mode?: string; gateway?: string }>();
   const isHostMode = params.mode === "host";
   const isSublessorMode = params.mode === "sublessor";
@@ -408,8 +413,7 @@ export default function PostSubleaseScreen() {
   );
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (!canSubmit || publishing) return;
 
     const finalCategory = isShortTerm ? "short_term"
       : leaseType === "summer_sublease" ? "summer"
@@ -418,7 +422,7 @@ export default function PostSubleaseScreen() {
       : "full_year";
 
     const post: SubleasePost = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+      id: postId,
       userId: currentUser?.id || "guest",
       userName: currentUser?.name || "Anonymous",
       userEmail: currentUser?.email || "student@illinois.edu",
@@ -455,7 +459,20 @@ export default function PostSubleaseScreen() {
       hasParking: isSummer ? hasParking : undefined,
     };
 
-    await addSublease(post);
+    setPublishing(true);
+    try {
+      await addSublease(post);
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showError(
+        "Your listing wasn't published",
+        `${error instanceof Error ? error.message : String(error)}\n\nNothing was lost — tap Publish to try again.`
+      );
+      return;
+    } finally {
+      setPublishing(false);
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     if (currentUser) {
       await setCurrentUser({
@@ -973,10 +990,10 @@ export default function PostSubleaseScreen() {
           <TouchableOpacity
             style={[styles.submitBtn, canSubmit ? { backgroundColor: Colors.coral } : { backgroundColor: DISABLED_BG, elevation: 0, shadowOpacity: 0 }]}
             onPress={handleSubmit}
-            disabled={!canSubmit}
+            disabled={!canSubmit || publishing}
           >
             <Ionicons name="sparkles" size={20} color={canSubmit ? Colors.white : DISABLED_TEXT} />
-            <Text style={[styles.submitBtnText, !canSubmit && { color: DISABLED_TEXT }]}>Publish Listing ✨</Text>
+            <Text style={[styles.submitBtnText, !canSubmit && { color: DISABLED_TEXT }]}>{publishing ? "Publishing…" : "Publish Listing ✨"}</Text>
           </TouchableOpacity>
         )}
       </View>

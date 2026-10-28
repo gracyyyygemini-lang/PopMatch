@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable, TouchableOpacity, Platform,
   Modal, TextInput, KeyboardAvoidingView, ScrollView, useWindowDimensions, Image,
@@ -14,8 +14,12 @@ import { useApp, CrashPost, CrashVibe, CrashCurrency, Zone } from "@/context/App
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
 import { showError } from "@/lib/alert";
+import { usePolling } from "@/hooks/usePolling";
+import { PostsSyncBanner } from "@/components/PostsSyncBanner";
 
 const DARK_TEAL = "#2C555C";
+/** Other students' new posts show up within this long while the screen is open. */
+const POSTS_POLL_MS = 30000;
 const SUBTITLE_GREY = "#6B8A8F";
 const SCREEN_BG = "#FBFBF9";
 const CORAL_FAB = "#FF8C69";
@@ -245,7 +249,7 @@ function NewPostSheet({
     vibe: CrashVibe; story: string; dates: string; targetDate: number;
     zone: Zone; currency: CrashCurrency; currencyLabel: string; imageUrl: string;
     approxLocation?: string;
-  }) => void;
+  }) => Promise<boolean>;
 }) {
   const [vibe, setVibe] = useState<CrashVibe>("sos");
   const [story, setStory] = useState("");
@@ -274,12 +278,15 @@ function NewPostSheet({
   const isDateValid = selectedDateIdx !== null && next10[selectedDateIdx].ts <= maxDate;
   const isFormComplete = !!story.trim() && isDateValid && !!imageUri;
 
-  const handleSubmit = () => {
-    if (!isFormComplete) return;
+  const [posting, setPosting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!isFormComplete || posting) return;
     const currOpt = CURRENCY_OPTIONS.find(c => c.key === currency);
     const label = customCurrencyLabel.trim() || `${currOpt?.emoji} ${currOpt?.label}`;
     const dateInfo = next10[selectedDateIdx!];
-    onSubmit({
+    setPosting(true);
+    const posted = await onSubmit({
       vibe,
       story: story.trim(),
       dates: dateInfo.label,
@@ -289,7 +296,9 @@ function NewPostSheet({
       currencyLabel: label,
       imageUrl: imageUri,
       approxLocation: approxLocation.trim() || undefined,
-    });
+    }).finally(() => setPosting(false));
+    // On failure the form keeps everything so the student can just try again.
+    if (!posted) return;
     setStory("");
     setSelectedDateIdx(null);
     setApproxLocation("");
@@ -401,9 +410,9 @@ function NewPostSheet({
               <TouchableOpacity
                 style={[np.submitBtn, !isFormComplete && { backgroundColor: DISABLED_BG }]}
                 onPress={handleSubmit}
-                disabled={!isFormComplete}
+                disabled={!isFormComplete || posting}
               >
-                <Text style={[np.submitBtnText, !isFormComplete && { color: DISABLED_TEXT }]}>Post to Feed ✨</Text>
+                <Text style={[np.submitBtnText, !isFormComplete && { color: DISABLED_TEXT }]}>{posting ? "Posting…" : "Post to Feed ✨"}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -489,7 +498,10 @@ const np = StyleSheet.create({
 export default function CrashCashScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const { crashPosts, addCrashPost, updateCrashPost, currentUser, startConversation } = useApp();
+  const { crashPosts, addCrashPost, completeCrashPost, currentUser, startConversation, refreshPosts } = useApp();
+  usePolling(refreshPosts, POSTS_POLL_MS);
+  // Kept until a post goes through, so retries reuse the uploaded photo and can't double-post.
+  const pendingPostId = useRef<string | null>(null);
   const { isDesktop, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
   const [showNewPost, setShowNewPost] = useState(false);
@@ -521,23 +533,28 @@ export default function CrashCashScreen() {
         {
           text: "Mark Filled",
           style: "destructive",
-          onPress: () => {
-            updateCrashPost(postId, { status: "completed" });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          onPress: async () => {
+            try {
+              await completeCrashPost(postId);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (error) {
+              showError("Couldn't mark it filled", error instanceof Error ? error.message : String(error));
+            }
           },
         },
       ]
     );
   };
 
-  const handleNewPost = (data: {
+  const handleNewPost = async (data: {
     vibe: CrashVibe; story: string; dates: string; targetDate: number;
     zone: Zone; currency: CrashCurrency; currencyLabel: string; imageUrl: string;
     approxLocation?: string;
-  }) => {
-    if (!currentUser) return;
+  }): Promise<boolean> => {
+    if (!currentUser) return false;
+    pendingPostId.current ??= Date.now().toString() + Math.random().toString(36).substr(2, 9);
     const post: CrashPost = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      id: pendingPostId.current,
       userId: currentUser.id,
       userName: currentUser.name,
       userEmail: currentUser.email,
@@ -546,9 +563,17 @@ export default function CrashCashScreen() {
       timestamp: Date.now(),
       status: "active",
     };
-    addCrashPost(post);
+    try {
+      await addCrashPost(post);
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showError("Your post wasn't published", error instanceof Error ? error.message : String(error));
+      return false;
+    }
+    pendingPostId.current = null;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setShowNewPost(false);
+    return true;
   };
 
   const isHost = currentUser?.intent === "host";
@@ -580,6 +605,8 @@ export default function CrashCashScreen() {
           <Text style={styles.headerSub}>Rent your couch. Get paid in cash, boba, or Red Lion cover.</Text>
         </View>
       </View>
+
+      <PostsSyncBanner />
 
       <SegmentedToggle value={vibeFilter} onChange={setVibeFilter} />
 

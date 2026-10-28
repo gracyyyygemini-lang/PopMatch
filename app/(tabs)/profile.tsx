@@ -300,7 +300,7 @@ export default function ProfileScreen() {
             await AsyncStorage.multiRemove([
               "@popmatch_user", "@popmatch_onboarded", "@popmatch_matches",
               "@popmatch_liked", "@popmatch_passed", "@popmatch_scam",
-              "@popmatch_subleases", "@popmatch_breaks", "@popmatch_friends"
+              "@popmatch_subleases", "@popmatch_listings_cache", "@popmatch_crash", "@popmatch_crash_posts_cache", "@popmatch_breaks", "@popmatch_friends"
             ]);
             await setCurrentUser(null);
             await setIsOnboarded(false);

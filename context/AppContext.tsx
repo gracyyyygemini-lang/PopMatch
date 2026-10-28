@@ -3,6 +3,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchUserProfile, fetchUsers, mergeProfile, saveUserProfile } from "@/lib/users";
 import { fetchMutualMatches, saveLike } from "@/lib/likes";
 import { apiErrorMessage, fetchConversations, fetchMessages, openConversation, postMessage } from "@/lib/messages";
+import {
+  completeCrashPost as completeCrashPostOnServer, createCrashPost, createListing,
+  fetchCrashPosts, fetchListings, markListingLeased,
+} from "@/lib/listings";
+import { uploadPostPhoto } from "@/lib/uploads";
 
 export type LeaseType = "full_year" | "fall_sublease" | "spring_sublease" | "summer_sublease";
 export type GenderPref = "girls_only" | "boys_only" | "mixed";
@@ -391,12 +396,21 @@ interface AppContextValue {
   addLiked: (id: string) => void;
   addPassed: (id: string) => void;
   computeScore: (a: UserProfile, b: UserProfile) => number;
+  /** From the listings table; the device copy is only a cache for first paint. */
   subleases: SubleasePost[];
-  addSublease: (post: SubleasePost) => void;
-  removeSublease: (id: string) => void;
+  /** Uploads the photos, then saves. Throws with a user-facing message; safe to call again with the same post. */
+  addSublease: (post: SubleasePost) => Promise<SubleasePost>;
+  /** Marks it leased on the server. Throws with a user-facing message. */
+  removeSublease: (id: string) => Promise<void>;
+  /** From the crash_posts table; the device copy is only a cache for first paint. */
   crashPosts: CrashPost[];
-  addCrashPost: (post: CrashPost) => void;
-  updateCrashPost: (id: string, updates: Partial<CrashPost>) => void;
+  /** Uploads the photo, then saves. Throws with a user-facing message; safe to call again with the same post. */
+  addCrashPost: (post: CrashPost) => Promise<CrashPost>;
+  /** "Mark as filled". Throws with a user-facing message. */
+  completeCrashPost: (id: string) => Promise<void>;
+  refreshPosts: () => Promise<void>;
+  /** Why listings or crash posts couldn't be loaded; null once they are. */
+  postsError: string | null;
   friends: FriendRecord[];
   addFriend: (friend: Omit<FriendRecord, "vouchedByMe" | "timestamp">) => Promise<void>;
   removeFriend: (email: string) => Promise<void>;
@@ -432,6 +446,10 @@ const SYNC_RETRY_MS = 30000;
 const CONVERSATIONS_KEY = "@popmatch_conversations";
 const CHAT_MESSAGES_KEY = "@popmatch_chatmessages";
 const MESSAGE_RETRY_MS = 5000;
+/** New keys: the old @popmatch_subleases / @popmatch_crash held device-only posts that never reached the server. */
+const LISTINGS_KEY = "@popmatch_listings_cache";
+const CRASH_POSTS_KEY = "@popmatch_crash_posts_cache";
+const POSTS_RETRY_MS = 15000;
 
 /** Server rows win; unsent local ones (status set) are kept until the server has them. */
 function mergeMessages(local: ChatMessage[], server: ChatMessage[], conversationId: string): ChatMessage[] {
@@ -547,8 +565,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [scamBannerDismissed, setScamBannerDismissed] = useState(false);
   const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
   const [passedUserIds, setPassedUserIds] = useState<string[]>([]);
-  const [subleases, setSubleases] = useState<SubleasePost[]>(DEMO_POSTS);
-  const [crashPosts, setCrashPosts] = useState<CrashPost[]>(DEMO_CRASH);
+  const [subleases, setSubleases] = useState<SubleasePost[]>(USE_MOCK_USERS ? DEMO_POSTS : []);
+  const [crashPosts, setCrashPosts] = useState<CrashPost[]>(USE_MOCK_USERS ? DEMO_CRASH : []);
+  const [postsError, setPostsError] = useState<string | null>(null);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -556,7 +575,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** The users.id the server confirmed for this email. Messaging uses only this, never a locally generated id. */
   const serverIdRef = useRef<{ email: string; id: string } | null>(null);
   /** No cache writes until the cache has been read, or an empty first render would wipe it. */
-  const messagingHydrated = useRef(false);
+  const cacheHydrated = useRef(false);
   const sendingIds = useRef(new Set<string>());
 
   useEffect(() => {
@@ -568,8 +587,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const storedLiked = await AsyncStorage.getItem("@popmatch_liked");
         const storedPassed = await AsyncStorage.getItem("@popmatch_passed");
         const scamDismissed = await AsyncStorage.getItem("@popmatch_scam");
-        const storedSubleases = await AsyncStorage.getItem("@popmatch_subleases");
-        const storedCrash = await AsyncStorage.getItem("@popmatch_crash");
+        const storedSubleases = await AsyncStorage.getItem(LISTINGS_KEY);
+        const storedCrash = await AsyncStorage.getItem(CRASH_POSTS_KEY);
         const storedFriends = await AsyncStorage.getItem("@popmatch_friends");
         const storedConvos = await AsyncStorage.getItem(CONVERSATIONS_KEY);
         const storedChatMsgs = await AsyncStorage.getItem(CHAT_MESSAGES_KEY);
@@ -584,8 +603,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (storedLiked) setLikedUserIds(JSON.parse(storedLiked));
         if (storedPassed) setPassedUserIds(JSON.parse(storedPassed));
         if (scamDismissed === "true") setScamBannerDismissed(true);
-        if (storedSubleases) setSubleases(JSON.parse(storedSubleases));
-        if (storedCrash) setCrashPosts(JSON.parse(storedCrash));
+        // Cache only, as for conversations below: a fetch that already landed wins.
+        if (storedSubleases && !USE_MOCK_USERS) {
+          const cached: SubleasePost[] = JSON.parse(storedSubleases);
+          setSubleases(prev => (prev.length ? prev : cached));
+        }
+        if (storedCrash && !USE_MOCK_USERS) {
+          const cached: CrashPost[] = JSON.parse(storedCrash);
+          setCrashPosts(prev => (prev.length ? prev : cached));
+        }
         if (storedFriends) setFriends(JSON.parse(storedFriends));
         // Cache only: anything already fetched from the server wins. A send
         // the app was closed in the middle of is unconfirmed, so it's retried.
@@ -606,22 +632,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error("Couldn't read the device cache:", error);
       } finally {
-        messagingHydrated.current = true;
+        cacheHydrated.current = true;
       }
     })();
   }, []);
 
   useEffect(() => {
-    if (!messagingHydrated.current) return;
+    if (!cacheHydrated.current) return;
     AsyncStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations)).catch(error =>
       console.error("Couldn't cache conversations:", error));
   }, [conversations]);
 
   useEffect(() => {
-    if (!messagingHydrated.current) return;
+    if (!cacheHydrated.current) return;
     AsyncStorage.setItem(CHAT_MESSAGES_KEY, JSON.stringify(chatMessages)).catch(error =>
       console.error("Couldn't cache messages:", error));
   }, [chatMessages]);
+
+  useEffect(() => {
+    if (!cacheHydrated.current || USE_MOCK_USERS) return;
+    AsyncStorage.setItem(LISTINGS_KEY, JSON.stringify(subleases)).catch(error =>
+      console.error("Couldn't cache listings:", error));
+  }, [subleases]);
+
+  useEffect(() => {
+    if (!cacheHydrated.current || USE_MOCK_USERS) return;
+    AsyncStorage.setItem(CRASH_POSTS_KEY, JSON.stringify(crashPosts)).catch(error =>
+      console.error("Couldn't cache crash posts:", error));
+  }, [crashPosts]);
 
   const cacheUser = async (user: UserProfile | null) => {
     if (user) await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -763,28 +801,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem("@popmatch_passed", JSON.stringify(updated));
   };
 
-  const addSublease = async (post: SubleasePost) => {
-    const updated = [post, ...subleases];
-    setSubleases(updated);
-    await AsyncStorage.setItem("@popmatch_subleases", JSON.stringify(updated));
+  /** Loads both feeds. console.error plus postsError, so the screens can say so. */
+  const refreshPosts = async () => {
+    if (USE_MOCK_USERS) return;
+    try {
+      const [listings, crash] = await Promise.all([fetchListings(), fetchCrashPosts()]);
+      setSubleases(listings);
+      setCrashPosts(crash);
+      setPostsError(null);
+    } catch (error) {
+      console.error("[posts] Couldn't load listings and crash posts; showing the cached copy:", error);
+      setPostsError(apiErrorMessage(error));
+    }
+  };
+
+  useEffect(() => {
+    refreshPosts();
+  }, []);
+
+  // Keep trying while the feeds are stale, like the profile sync does.
+  useEffect(() => {
+    if (!postsError) return;
+    const timer = setInterval(refreshPosts, POSTS_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [postsError]);
+
+  /**
+   * Photos are required, so an upload failure fails the whole post. Uploads go
+   * to fixed per-slot paths and the save is idempotent per post.id, so calling
+   * this again with the same post finishes the job without duplicates.
+   */
+  const addSublease = async (post: SubleasePost): Promise<SubleasePost> => {
+    try {
+      const userId = await resolveMyId();
+      const images = await Promise.all(
+        (post.images ?? []).map((uri, i) => uploadPostPhoto(userId, post.id, `photo-${i}`, uri))
+      );
+      const floorPlanUrl = post.floorPlanUrl
+        ? await uploadPostPhoto(userId, post.id, "floor-plan", post.floorPlanUrl)
+        : undefined;
+      const saved = await createListing({ ...post, userId, images, floorPlanUrl });
+      setSubleases(prev => [saved, ...prev.filter(s => s.id !== saved.id)]);
+      return saved;
+    } catch (error) {
+      console.error("[posts] Couldn't save the listing:", error);
+      throw new Error(apiErrorMessage(error));
+    }
   };
 
   const removeSublease = async (id: string) => {
-    const updated = subleases.filter(s => s.id !== id);
-    setSubleases(updated);
-    await AsyncStorage.setItem("@popmatch_subleases", JSON.stringify(updated));
+    try {
+      await markListingLeased(id);
+      setSubleases(prev => prev.filter(s => s.id !== id));
+    } catch (error) {
+      console.error("[posts] Couldn't mark the listing leased:", error);
+      throw new Error(apiErrorMessage(error));
+    }
   };
 
-  const addCrashPost = async (post: CrashPost) => {
-    const updated = [post, ...crashPosts];
-    setCrashPosts(updated);
-    await AsyncStorage.setItem("@popmatch_crash", JSON.stringify(updated));
+  /** The new-post form requires a photo, so like listings a failed upload fails the post. */
+  const addCrashPost = async (post: CrashPost): Promise<CrashPost> => {
+    try {
+      const userId = await resolveMyId();
+      const imageUrl = post.imageUrl
+        ? await uploadPostPhoto(userId, post.id, "photo-0", post.imageUrl)
+        : "";
+      const saved = await createCrashPost({ ...post, userId, imageUrl });
+      setCrashPosts(prev => [saved, ...prev.filter(p => p.id !== saved.id)]);
+      return saved;
+    } catch (error) {
+      console.error("[posts] Couldn't save the crash post:", error);
+      throw new Error(apiErrorMessage(error));
+    }
   };
 
-  const updateCrashPost = async (id: string, updates: Partial<CrashPost>) => {
-    const updated = crashPosts.map(p => p.id === id ? { ...p, ...updates } : p);
-    setCrashPosts(updated);
-    await AsyncStorage.setItem("@popmatch_crash", JSON.stringify(updated));
+  const completeCrashPost = async (id: string) => {
+    try {
+      await completeCrashPostOnServer(id);
+      setCrashPosts(prev => prev.filter(p => p.id !== id));
+    } catch (error) {
+      console.error("[posts] Couldn't mark the crash post filled:", error);
+      throw new Error(apiErrorMessage(error));
+    }
   };
 
   const addFriend = async (friendData: Omit<FriendRecord, "vouchedByMe" | "timestamp">) => {
@@ -1061,14 +1159,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     users, refreshUsers, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
     subleases, addSublease, removeSublease,
-    crashPosts, addCrashPost, updateCrashPost,
+    crashPosts, addCrashPost, completeCrashPost, refreshPosts, postsError,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
     conversations, startConversation, startMatchConversation, sendMessage, retryMessage, getMessages,
     refreshConversations, refreshMessages, messagingError,
     likeUser,
   }), [
     currentUser, profileSyncError, users, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
-    likedUserIds, passedUserIds, subleases, crashPosts, friends,
+    likedUserIds, passedUserIds, subleases, crashPosts, postsError, friends,
     conversations, chatMessages, messagingError
   ]);
 

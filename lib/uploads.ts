@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -56,23 +57,20 @@ function extensionFor(contentType: string): string {
 }
 
 /**
- * Uploads a locally-picked image to Supabase Storage and returns a public URL
- * that works on any device. Without this, ImagePicker's file:// URI only
- * resolves on the phone that picked it.
+ * Reads a local image and stores it in `bucket` at the path `pathFor` builds
+ * from its content type; returns the public URL.
  */
-export async function uploadProfileImage(
-  userId: string,
-  localUri: string
+async function uploadToBucket(
+  bucket: string,
+  localUri: string,
+  pathFor: (contentType: string) => string,
 ): Promise<string> {
-  // Already uploaded (re-saving an unchanged profile) — nothing to do.
-  if (/^https?:\/\//i.test(localUri)) return localUri;
-
   const response = await fetch(localUri);
   if (!response.ok) throw new Error("Could not read the selected image.");
 
   const blob = await response.blob();
-  const contentType = blob.type || "image/jpeg";
-  const path = `${userId}/avatar-${Date.now()}.${extensionFor(contentType)}`;
+  const type = blob.type || "image/jpeg";
+  const path = pathFor(type);
 
   // Web accepts the Blob directly; React Native needs raw bytes.
   let body: Blob | Uint8Array;
@@ -84,11 +82,62 @@ export async function uploadProfileImage(
   }
 
   const { error } = await supabase.storage
-    .from(AVATAR_BUCKET)
-    .upload(path, body, { contentType, upsert: true });
+    .from(bucket)
+    .upload(path, body, { contentType: type, upsert: true });
 
   if (error) throw new Error(error.message);
 
-  const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
+}
+
+/**
+ * Uploads a locally-picked image to Supabase Storage and returns a public URL
+ * that works on any device. Without this, ImagePicker's file:// URI only
+ * resolves on the phone that picked it.
+ */
+export async function uploadProfileImage(
+  userId: string,
+  localUri: string
+): Promise<string> {
+  // Already uploaded (re-saving an unchanged profile) — nothing to do.
+  if (/^https?:\/\//i.test(localUri)) return localUri;
+
+  return uploadToBucket(AVATAR_BUCKET, localUri, type => `${userId}/avatar-${Date.now()}.${extensionFor(type)}`);
+}
+
+/** Public bucket for listing and crash post photos (see supabase/schema.sql). */
+export const LISTING_PHOTO_BUCKET = "listing-photos";
+
+/** Phone photos are 3-12MB; this keeps one to a few hundred KB. */
+const MAX_PHOTO_EDGE = 1600;
+const PHOTO_JPEG_QUALITY = 0.7;
+
+/** Caps the long edge at MAX_PHOTO_EDGE and re-encodes as JPEG. Returns a local URI. */
+async function downscale(localUri: string): Promise<string> {
+  const original = await ImageManipulator.manipulate(localUri).renderAsync();
+  const longEdge = Math.max(original.width, original.height);
+  const image = longEdge > MAX_PHOTO_EDGE
+    ? await ImageManipulator.manipulate(original)
+        .resize(original.width >= original.height ? { width: MAX_PHOTO_EDGE } : { height: MAX_PHOTO_EDGE })
+        .renderAsync()
+    : original;
+  const saved = await image.saveAsync({ compress: PHOTO_JPEG_QUALITY, format: SaveFormat.JPEG });
+  return saved.uri;
+}
+
+/**
+ * Uploads one photo of a post to `<userId>/<postId>/<slot>.jpg`. The path is
+ * fixed per slot, so retrying a failed post overwrites rather than piling up
+ * copies, and one user's uploads can't land on another's.
+ */
+export async function uploadPostPhoto(
+  userId: string,
+  postId: string,
+  slot: string,
+  localUri: string
+): Promise<string> {
+  if (/^https?:\/\//i.test(localUri)) return localUri;
+  const small = await downscale(localUri);
+  return uploadToBucket(LISTING_PHOTO_BUCKET, small, () => `${userId}/${postId}/${slot}.jpg`);
 }

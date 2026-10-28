@@ -58,13 +58,51 @@ CREATE TABLE IF NOT EXISTS listings (
   available_during_breaks BOOLEAN DEFAULT FALSE,
   break_types TEXT[] DEFAULT '{}',
   description TEXT DEFAULT '',
-  event_name VARCHAR DEFAULT '',
-  start_date VARCHAR DEFAULT '',
-  end_date VARCHAR DEFAULT '',
+  event_name VARCHAR DEFAULT '',     -- short-term listings' event (eventTag)
+  start_date TIMESTAMPTZ,            -- move-in
+  end_date TIMESTAMPTZ,              -- move-out
   leased BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  -- Fields with no column (photos, amenities, unit type, ...). The server's
+  -- toListingDetails is the schema for this; anything filtered or sorted on
+  -- server-side belongs in a real column instead.
+  details JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+-- Databases created before details / timestamped dates existed.
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS details JSONB NOT NULL DEFAULT '{}'::jsonb;
+DO $$
+BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+      WHERE table_name = 'listings' AND column_name = 'start_date') = 'character varying' THEN
+    ALTER TABLE listings
+      ALTER COLUMN start_date DROP DEFAULT,
+      ALTER COLUMN start_date TYPE TIMESTAMPTZ USING NULLIF(start_date, '')::timestamptz,
+      ALTER COLUMN end_date DROP DEFAULT,
+      ALTER COLUMN end_date TYPE TIMESTAMPTZ USING NULLIF(end_date, '')::timestamptz;
+  END IF;
+END
+$$;
+
+-- Crash & Cash posts: a floor, couch or room for a night or a few days.
+CREATE TABLE IF NOT EXISTS crash_posts (
+  id VARCHAR PRIMARY KEY,
+  user_id VARCHAR NOT NULL,
+  vibe VARCHAR NOT NULL,                      -- sos | offering
+  story TEXT NOT NULL DEFAULT '',
+  image_url VARCHAR NOT NULL DEFAULT '',      -- uploaded URL or empty, never file://
+  dates VARCHAR NOT NULL DEFAULT '',          -- the poster's label, e.g. "Tonight only"
+  target_date TIMESTAMPTZ NOT NULL,
+  zone VARCHAR NOT NULL DEFAULT 'campustown',
+  currency VARCHAR NOT NULL,
+  currency_label VARCHAR NOT NULL DEFAULT '',
+  approx_location VARCHAR NOT NULL DEFAULT '',
+  status VARCHAR NOT NULL DEFAULT 'active',   -- active | completed
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- UNUSED: nothing in the app or API reads or writes this table yet. Crash &
+-- Cash posts live in crash_posts, not here.
 CREATE TABLE IF NOT EXISTS break_posts (
   id VARCHAR PRIMARY KEY,
   user_id VARCHAR NOT NULL,
@@ -128,6 +166,7 @@ CREATE INDEX IF NOT EXISTS idx_listings_category ON listings (category);
 CREATE INDEX IF NOT EXISTS idx_listings_zone ON listings (zone);
 CREATE INDEX IF NOT EXISTS idx_listings_leased ON listings (leased);
 CREATE INDEX IF NOT EXISTS idx_listings_user ON listings (user_id);
+CREATE INDEX IF NOT EXISTS idx_crash_posts_feed ON crash_posts (status, target_date);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages (conversation_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_p1 ON conversations (participant1_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_p2 ON conversations (participant2_id);
@@ -167,6 +206,7 @@ ALTER TABLE stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crash_posts ENABLE ROW LEVEL SECURITY;
 
 -- ─── Avatar storage ─────────────────────────────────────────────────────────
 -- Creates the public "avatars" bucket that lib/uploads.ts writes to, so you
@@ -204,5 +244,44 @@ BEGIN
     USING (bucket_id = 'avatars');
 
   RAISE NOTICE 'Avatar bucket ready.';
+END
+$$;
+
+-- ─── Listing photo storage ──────────────────────────────────────────────────
+-- Public bucket for listing and crash post photos, written by
+-- uploadPostPhoto in lib/uploads.ts at <userId>/<postId>/<slot>.jpg. Policies
+-- mirror avatars. The app downscales to 1600px JPEG (a few hundred KB), so
+-- the 2 MB cap only stops a full-size original slipping through.
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'storage') THEN
+    RAISE NOTICE 'No storage schema here — skipping listing photo bucket setup.';
+    RETURN;
+  END IF;
+
+  INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  VALUES ('listing-photos', 'listing-photos', TRUE, 2097152, ARRAY['image/jpeg'])
+  ON CONFLICT (id) DO UPDATE SET
+    public = TRUE, file_size_limit = 2097152, allowed_mime_types = ARRAY['image/jpeg'];
+
+  DROP POLICY IF EXISTS "Listing photos are publicly readable" ON storage.objects;
+  CREATE POLICY "Listing photos are publicly readable"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'listing-photos');
+
+  DROP POLICY IF EXISTS "Signed-in users can upload listing photos" ON storage.objects;
+  CREATE POLICY "Signed-in users can upload listing photos"
+    ON storage.objects FOR INSERT
+    TO authenticated
+    WITH CHECK (bucket_id = 'listing-photos');
+
+  DROP POLICY IF EXISTS "Signed-in users can replace listing photos" ON storage.objects;
+  CREATE POLICY "Signed-in users can replace listing photos"
+    ON storage.objects FOR UPDATE
+    TO authenticated
+    USING (bucket_id = 'listing-photos');
+
+  RAISE NOTICE 'Listing photo bucket ready.';
 END
 $$;

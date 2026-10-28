@@ -12,7 +12,9 @@ import { useCallback } from "react";
 import FacePile from "@/components/FacePile";
 import MicroFeedback from "@/components/MicroFeedback";
 import ZonePicker from "@/components/ZonePicker";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
+import { usePolling } from "@/hooks/usePolling";
+import { PostsSyncBanner } from "@/components/PostsSyncBanner";
 import { useResponsive } from "@/hooks/useResponsive";
 import { showError } from "@/lib/alert";
 
@@ -79,6 +81,8 @@ const LEASE_LABELS: Record<string, string> = {
 type CategoryFilter = "all" | "roommate_openings" | "summer_only" | "august_gap" | "semester_takeover" | "short_term";
 
 const DARK_TEAL = "#2C555C";
+/** Other students' new listings show up within this long while the screen is open. */
+const POSTS_POLL_MS = 30000;
 const CHIP_BORDER = "#E0E8E9";
 const CHIP_SEAFOAM = "#D0F0E0";
 
@@ -600,7 +604,8 @@ function SubleaseCard({ post, onMarkLeased }: {
 export default function MarketplaceScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category?: string; zone?: string; subFilter?: string }>();
-  const { subleases, removeSublease, currentUser } = useApp();
+  const { subleases, removeSublease, currentUser, refreshPosts } = useApp();
+  usePolling(refreshPosts, POSTS_POLL_MS);
   const { isDesktop, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 67) : insets.top;
 
@@ -710,18 +715,16 @@ export default function MarketplaceScreen() {
   const headerCatColor = activeFilter !== "all" ? CATEGORY_COLORS[activeFilter] : Colors.ocean;
 
   const handleMarkLeased = async (post: SubleasePost) => {
-    setLeasedPost(post);
-    await removeSublease(post.id);
     try {
-      const delUrl = new URL(`/api/listings/${post.id}`, getApiUrl()).toString();
-      await fetch(delUrl, { method: "DELETE" });
-      const incUrl = new URL("/api/stats/increment", getApiUrl()).toString();
-      await fetch(incUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: "successful_subleases" }),
-      });
-    } catch {}
+      await removeSublease(post.id);
+    } catch (error) {
+      showError("Couldn't mark it leased", error instanceof Error ? error.message : String(error));
+      return;
+    }
+    setLeasedPost(post);
+    // A missed count only skews the admin stats; the listing itself is done.
+    apiRequest("POST", "/api/stats/increment", { key: "successful_subleases" })
+      .catch(error => console.error("Couldn't count the sublease:", error));
     setShowCongrats(true);
   };
 
@@ -751,6 +754,7 @@ export default function MarketplaceScreen() {
           <Text style={styles.postBtnText}>Post</Text>
         </TouchableOpacity>
       </View>
+      <PostsSyncBanner />
 
       <ZonePicker selected={zoneFilter} onSelect={setZoneFilter} />
 

@@ -65,12 +65,34 @@ async function initDb() {
       break_types TEXT[] DEFAULT '{}',
       description TEXT DEFAULT '',
       event_name VARCHAR DEFAULT '',
-      start_date VARCHAR DEFAULT '',
-      end_date VARCHAR DEFAULT '',
+      start_date TIMESTAMPTZ,
+      end_date TIMESTAMPTZ,
       leased BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      details JSONB NOT NULL DEFAULT '{}'::jsonb
     )
   `);
+
+  // Everything a listing has that no column covers. toListingDetails decides
+  // what goes in; nothing the server filters or sorts on belongs here.
+  await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS details JSONB NOT NULL DEFAULT '{}'::jsonb`);
+  // start_date/end_date began as VARCHAR and were never written. They hold
+  // the move-in and move-out instants, so make them timestamps.
+  await query(`
+    DO $$
+    BEGIN
+      IF (SELECT data_type FROM information_schema.columns
+          WHERE table_name = 'listings' AND column_name = 'start_date') = 'character varying' THEN
+        ALTER TABLE listings
+          ALTER COLUMN start_date DROP DEFAULT,
+          ALTER COLUMN start_date TYPE TIMESTAMPTZ USING NULLIF(start_date, '')::timestamptz,
+          ALTER COLUMN end_date DROP DEFAULT,
+          ALTER COLUMN end_date TYPE TIMESTAMPTZ USING NULLIF(end_date, '')::timestamptz;
+      END IF;
+    END
+    $$
+  `);
+  await query(`ALTER TABLE listings ENABLE ROW LEVEL SECURITY`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS break_posts (
@@ -88,6 +110,26 @@ async function initDb() {
   await query(`
     ALTER TABLE listings ADD COLUMN IF NOT EXISTS leased BOOLEAN DEFAULT FALSE
   `).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS crash_posts (
+      id VARCHAR PRIMARY KEY,
+      user_id VARCHAR NOT NULL,
+      vibe VARCHAR NOT NULL,
+      story TEXT NOT NULL DEFAULT '',
+      image_url VARCHAR NOT NULL DEFAULT '',
+      dates VARCHAR NOT NULL DEFAULT '',
+      target_date TIMESTAMPTZ NOT NULL,
+      zone VARCHAR NOT NULL DEFAULT 'campustown',
+      currency VARCHAR NOT NULL,
+      currency_label VARCHAR NOT NULL DEFAULT '',
+      approx_location VARCHAR NOT NULL DEFAULT '',
+      status VARCHAR NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_crash_posts_feed ON crash_posts (status, target_date)`);
+  await query(`ALTER TABLE crash_posts ENABLE ROW LEVEL SECURITY`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS feedback (
@@ -285,6 +327,144 @@ const MESSAGE_SELECT = `
   SELECT m.*, u.name AS sender_name, u.avatar_color AS sender_avatar
   FROM messages m
   LEFT JOIN users u ON m.sender_id = u.id`;
+
+const isHttpUrl = (v: unknown): v is string => typeof v === "string" && /^https?:\/\//i.test(v);
+const asString = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+const asNumber = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+const asBoolean = (v: unknown) => (typeof v === "boolean" ? v : undefined);
+const asUrl = (v: unknown) => (isHttpUrl(v) ? v : undefined);
+const asUrls = (v: unknown) => (Array.isArray(v) ? v.filter(isHttpUrl) : undefined);
+const asFlags = (v: unknown) =>
+  v && typeof v === "object" && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v).filter(([, flag]) => typeof flag === "boolean")) as Record<string, boolean>
+    : undefined;
+
+/**
+ * The only fields stored in listings.details, each with the check its value
+ * must pass. JSONB has no schema, so this list is the schema: a key that
+ * isn't here is neither written nor read back.
+ */
+const LISTING_DETAILS = {
+  listingType: asString,
+  kitchenType: asString,
+  bathroomType: asString,
+  unitType: asString,
+  isPrivateBedroom: asBoolean,
+  isPrivateBathroom: asBoolean,
+  floorPlanUrl: asUrl,
+  roomsAvailable: asNumber,
+  currentResidentBio: asString,
+  roommatePreference: asString,
+  amenities: asFlags,
+  cleaningFrequency: asString,
+  shoePolicy: asString,
+  images: asUrls,
+  subCategory: asString,
+  hasParking: asBoolean,
+};
+
+type ListingDetails = {
+  [K in keyof typeof LISTING_DETAILS]?: NonNullable<ReturnType<(typeof LISTING_DETAILS)[K]>>;
+};
+
+/** Used both ways: on a request body before saving, and on details when reading. */
+function toListingDetails(source: unknown): ListingDetails {
+  const record = (source && typeof source === "object" ? source : {}) as Record<string, unknown>;
+  const details: Record<string, unknown> = {};
+  for (const [key, check] of Object.entries(LISTING_DETAILS)) {
+    const value = check(record[key]);
+    if (value !== undefined) details[key] = value;
+  }
+  return details as ListingDetails;
+}
+
+type ListingRow = {
+  id: string; user_id: string; building_name: string; address: string | null;
+  category: string | null; lease_type: string | null; price_per_month: number | null;
+  landlord: string | null; zone: string | null; available_during_breaks: boolean | null;
+  break_types: string[] | null; description: string | null; event_name: string | null;
+  start_date: Date | string | null; end_date: Date | string | null;
+  created_at: Date | string; details: unknown;
+  user_name: string | null; user_email: string | null; user_avatar: string | null;
+};
+
+/** Poster's name, email and color come from users, so they can't drift from the profile. */
+const LISTING_SELECT = `
+  SELECT l.*, u.name AS user_name, u.email AS user_email, u.avatar_color AS user_avatar
+  FROM listings l
+  LEFT JOIN users u ON l.user_id = u.id`;
+
+const toIso = (value: Date | string | null) => (value ? new Date(value).toISOString() : undefined);
+
+/** Same idea as toUserProfile: the SubleasePost shape the app uses, in camelCase. */
+function toListing(row: ListingRow) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userName: row.user_name ?? "",
+    userEmail: row.user_email ?? "",
+    avatarColor: row.user_avatar ?? "#005F73",
+    buildingName: row.building_name,
+    address: row.address ?? "",
+    category: row.category ?? "semester_takeover",
+    leaseType: row.lease_type ?? "full_year",
+    pricePerMonth: row.price_per_month ?? 0,
+    landlords: parseLandlords(row.landlord),
+    zone: row.zone ?? "campustown",
+    availableDuringBreaks: row.available_during_breaks ?? false,
+    breakTypes: row.break_types ?? [],
+    description: row.description ?? "",
+    ...(row.event_name ? { eventTag: row.event_name } : {}),
+    ...(row.start_date ? { moveInDate: toIso(row.start_date) } : {}),
+    ...(row.end_date ? { moveOutDate: toIso(row.end_date) } : {}),
+    timestamp: new Date(row.created_at).getTime(),
+    ...toListingDetails(row.details),
+  };
+}
+
+type CrashPostRow = {
+  id: string; user_id: string; vibe: string; story: string; image_url: string;
+  dates: string; target_date: Date | string; zone: string; currency: string;
+  currency_label: string; approx_location: string; status: string; created_at: Date | string;
+  user_name: string | null; user_email: string | null; user_avatar: string | null;
+};
+
+const CRASH_POST_SELECT = `
+  SELECT p.*, u.name AS user_name, u.email AS user_email, u.avatar_color AS user_avatar
+  FROM crash_posts p
+  LEFT JOIN users u ON p.user_id = u.id`;
+
+const CRASH_VIBES = ["sos", "offering"];
+const CRASH_CURRENCIES = ["cash", "boba", "lion_cover", "food", "favor"];
+
+/** Timestamps are TIMESTAMPTZ in the table and epoch ms in the app. */
+function toCrashPost(row: CrashPostRow) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userName: row.user_name ?? "",
+    userEmail: row.user_email ?? "",
+    avatarColor: row.user_avatar ?? "#005F73",
+    vibe: row.vibe,
+    story: row.story,
+    imageUrl: row.image_url,
+    dates: row.dates,
+    targetDate: new Date(row.target_date).getTime(),
+    zone: row.zone,
+    currency: row.currency,
+    currencyLabel: row.currency_label,
+    timestamp: new Date(row.created_at).getTime(),
+    status: row.status,
+    ...(row.approx_location ? { approxLocation: row.approx_location } : {}),
+  };
+}
+
+/** A post's author must be a saved profile, or nobody could see who posted it or reply. */
+async function userExists(id: unknown): Promise<boolean> {
+  if (typeof id !== "string" || !id) return false;
+  const rows = await query<{ id: string }>("SELECT id FROM users WHERE id = $1", [id]);
+  return rows.length > 0;
+}
 
 function toChatMessage(row: MessageRow) {
   return {
@@ -605,20 +785,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ─── LISTINGS ────────────────────────────────────────────────────────────────
+  // All filtering beyond ?category happens in the app over this list, which is
+  // fine at campus scale. A field the server ever filters on needs a real
+  // column, not a key in details.
 
   app.get("/api/listings", async (req: Request, res: Response) => {
     try {
       const { category } = req.query;
-      const sql = category
-        ? `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
-           FROM listings l LEFT JOIN users u ON l.user_id = u.id
-           WHERE l.category = $1 AND l.leased = FALSE ORDER BY l.created_at DESC`
-        : `SELECT l.*, u.name as user_name, u.avatar_color as user_avatar
-           FROM listings l LEFT JOIN users u ON l.user_id = u.id
-           WHERE l.leased = FALSE ORDER BY l.created_at DESC`;
-      const params = category ? [category] : [];
-      const rows = await query(sql, params);
-      return res.json(rows);
+      const rows = await query<ListingRow>(
+        `${LISTING_SELECT}
+         WHERE l.leased = FALSE ${category ? "AND l.category = $1" : ""}
+         ORDER BY l.created_at DESC`,
+        category ? [category] : []
+      );
+      return res.json(rows.map(toListing));
     } catch (err) {
       console.error("GET /api/listings", err);
       return res.status(500).json({ error: "Failed to fetch listings" });
@@ -631,25 +811,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id, userId, buildingName, address = "", category = "semester_takeover",
         leaseType = "full_year", pricePerMonth = 0, landlords = ["other"],
         zone = "campustown", availableDuringBreaks = false, breakTypes = [],
-        description = "", eventName = "", startDate = "", endDate = "",
+        description = "", eventTag = "", moveInDate, moveOutDate,
       } = req.body;
 
       if (!id || !userId || !buildingName) {
         return res.status(400).json({ error: "id, userId, and buildingName are required" });
       }
+      // A file:// path saved here looks fine to the poster and is broken for
+      // everyone else, so anything that isn't an uploaded URL is refused.
+      const { images, floorPlanUrl } = req.body;
+      if (images !== undefined && (!Array.isArray(images) || !images.every(isHttpUrl))) {
+        return res.status(400).json({ error: "Photos must be uploaded (http/https URLs) before posting" });
+      }
+      if (floorPlanUrl && !isHttpUrl(floorPlanUrl)) {
+        return res.status(400).json({ error: "The floor plan must be uploaded (http/https URL) before posting" });
+      }
+      const startDate = moveInDate ? new Date(moveInDate) : null;
+      const endDate = moveOutDate ? new Date(moveOutDate) : null;
+      if ((startDate && isNaN(startDate.getTime())) || (endDate && isNaN(endDate.getTime()))) {
+        return res.status(400).json({ error: "moveInDate and moveOutDate must be ISO dates" });
+      }
+      if (!(await userExists(userId))) {
+        return res.status(404).json({ error: "Your profile isn't saved on the server yet" });
+      }
 
       const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
+      // ON CONFLICT: retrying a post whose response was lost is a no-op.
       await query(
         `INSERT INTO listings (id, user_id, building_name, address, category, lease_type,
           price_per_month, landlord, zone, available_during_breaks, break_types,
-          description, event_name, start_date, end_date)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          description, event_name, start_date, end_date, details)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
          ON CONFLICT (id) DO NOTHING`,
         [id, userId, buildingName, address, category, leaseType, pricePerMonth,
           landlordJson, zone, availableDuringBreaks, breakTypes, description,
-          eventName, startDate, endDate]
+          eventTag, startDate, endDate, JSON.stringify(toListingDetails(req.body))]
       );
-      return res.json({ success: true });
+
+      const [row] = await query<ListingRow>(`${LISTING_SELECT} WHERE l.id = $1`, [id]);
+      if (row.user_id !== userId) {
+        return res.status(409).json({ error: "Listing id already in use" });
+      }
+      return res.json(toListing(row));
     } catch (err) {
       console.error("POST /api/listings", err);
       return res.status(500).json({ error: "Failed to save listing" });
@@ -659,11 +862,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/listings/:id", async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      await query("UPDATE listings SET leased = TRUE WHERE id = $1", [id]);
+      const rows = await query("UPDATE listings SET leased = TRUE WHERE id = $1 RETURNING id", [id]);
+      if (rows.length === 0) return res.status(404).json({ error: "Listing not found" });
       return res.json({ success: true });
     } catch (err) {
       console.error("DELETE /api/listings/:id", err);
       return res.status(500).json({ error: "Failed to mark listing as leased" });
+    }
+  });
+
+  // ─── CRASH POSTS ─────────────────────────────────────────────────────────────
+
+  // Active posts whose date hasn't passed; the app narrows the window further.
+  app.get("/api/crash-posts", async (_req: Request, res: Response) => {
+    try {
+      const rows = await query<CrashPostRow>(
+        `${CRASH_POST_SELECT}
+         WHERE p.status = 'active' AND p.target_date >= NOW()
+         ORDER BY p.created_at DESC`
+      );
+      return res.json(rows.map(toCrashPost));
+    } catch (err) {
+      console.error("GET /api/crash-posts", err);
+      return res.status(500).json({ error: "Failed to fetch crash posts" });
+    }
+  });
+
+  app.post("/api/crash-posts", async (req: Request, res: Response) => {
+    try {
+      const {
+        id, userId, vibe, story = "", imageUrl = "", dates = "", targetDate,
+        zone = "campustown", currency, currencyLabel = "", approxLocation = "",
+      } = req.body;
+
+      if (!id || !userId) {
+        return res.status(400).json({ error: "id and userId are required" });
+      }
+      if (!CRASH_VIBES.includes(vibe)) {
+        return res.status(400).json({ error: `vibe must be one of ${CRASH_VIBES.join(", ")}` });
+      }
+      if (!CRASH_CURRENCIES.includes(currency)) {
+        return res.status(400).json({ error: `currency must be one of ${CRASH_CURRENCIES.join(", ")}` });
+      }
+      if (typeof targetDate !== "number" || !Number.isFinite(targetDate)) {
+        return res.status(400).json({ error: "targetDate must be a timestamp in milliseconds" });
+      }
+      if (imageUrl && !isHttpUrl(imageUrl)) {
+        return res.status(400).json({ error: "The photo must be uploaded (http/https URL) before posting" });
+      }
+      if (!(await userExists(userId))) {
+        return res.status(404).json({ error: "Your profile isn't saved on the server yet" });
+      }
+
+      await query(
+        `INSERT INTO crash_posts (id, user_id, vibe, story, image_url, dates, target_date,
+          zone, currency, currency_label, approx_location)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         ON CONFLICT (id) DO NOTHING`,
+        [id, userId, vibe, story, imageUrl, dates, new Date(targetDate), zone,
+          currency, currencyLabel, approxLocation]
+      );
+
+      const [row] = await query<CrashPostRow>(`${CRASH_POST_SELECT} WHERE p.id = $1`, [id]);
+      if (row.user_id !== userId) {
+        return res.status(409).json({ error: "Post id already in use" });
+      }
+      return res.json(toCrashPost(row));
+    } catch (err) {
+      console.error("POST /api/crash-posts", err);
+      return res.status(500).json({ error: "Failed to save crash post" });
+    }
+  });
+
+  // "Mark as filled": kept for history, gone from the feed.
+  app.delete("/api/crash-posts/:id", async (req: Request, res: Response) => {
+    try {
+      const rows = await query(
+        "UPDATE crash_posts SET status = 'completed' WHERE id = $1 RETURNING id",
+        [req.params.id]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: "Post not found" });
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("DELETE /api/crash-posts/:id", err);
+      return res.status(500).json({ error: "Failed to mark post as filled" });
     }
   });
 
