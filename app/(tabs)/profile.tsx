@@ -207,10 +207,11 @@ function BreakBadgeRow({
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, matches, likedUserIds, subleases, friends, setCurrentUser, setIsOnboarded } = useApp();
+  const { currentUser, matches, likedUserIds, subleases, crashPosts, setCurrentUser, setIsOnboarded } = useApp();
   const { isDesktop, contentMaxWidth } = useResponsive();
   const topPadding = Platform.OS === "web" ? (isDesktop ? 24 : 32) : insets.top;
   const mySubleases = subleases.filter(s => s.userId === currentUser?.id);
+  const myCrashPosts = crashPosts.filter(p => p.userId === currentUser?.id && p.status === "active");
   const [versionTaps, setVersionTaps] = useState(0);
   const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -591,10 +592,11 @@ export default function ProfileScreen() {
           </Pressable>
 
           <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statNum}>{friends.length}</Text>
-              <Text style={styles.statLabel}>Circle</Text>
-            </View>
+            <Pressable style={styles.statBox} onPress={() => router.push("/my-listings")}
+              accessibilityRole="button" accessibilityLabel={`${mySubleases.length} of your sublets`}>
+              <Text style={styles.statNum}>{mySubleases.length}</Text>
+              <Text style={styles.statLabel}>Your sublets</Text>
+            </Pressable>
             <Pressable style={[styles.statBox, styles.statBoxMid]} onPress={() => openSheet("budget")}>
               {({ pressed }) => (
                 <View style={[styles.statBox, styles.statBoxMid, pressed && { backgroundColor: SEAFOAM_BG }]}>
@@ -604,10 +606,11 @@ export default function ProfileScreen() {
                 </View>
               )}
             </Pressable>
-            <View style={styles.statBox}>
-              <Text style={styles.statNum}>{mySubleases.length}</Text>
-              <Text style={styles.statLabel}>Listings</Text>
-            </View>
+            <Pressable style={styles.statBox} onPress={() => router.push("/my-listings")}
+              accessibilityRole="button" accessibilityLabel={`${myCrashPosts.length} of your active crash posts`}>
+              <Text style={styles.statNum}>{myCrashPosts.length}</Text>
+              <Text style={styles.statLabel}>Crash posts</Text>
+            </Pressable>
           </View>
         </View>
 

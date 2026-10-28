@@ -38,7 +38,7 @@ export default function HomeScreen() {
       : `New conversation with ${latest.otherUserName || "someone"}`
     : "No conversations yet";
   const mine = currentUser
-    ? subleases.filter(s => s.userId === currentUser.id).length + crashPosts.filter(p => p.userId === currentUser.id).length
+    ? subleases.filter(s => s.userId === currentUser.id).length + crashPosts.filter(p => p.userId === currentUser.id && p.status === "active").length
     : 0;
 
   return (
