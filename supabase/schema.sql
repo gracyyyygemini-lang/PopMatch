@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS intent VARCHAR;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS vibe_profile JSONB;
 
--- UNUSED since friends became mutual-add (friend_adds below). Kept, empty,
--- so nothing referencing it breaks; safe to drop.
+-- UNUSED: superseded by friend_adds (mutual-add, keyed by email). Nothing in
+-- the app or API reads or writes this table any more.
 CREATE TABLE IF NOT EXISTS friendships (
   id SERIAL PRIMARY KEY,
   user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
@@ -47,13 +47,26 @@ CREATE TABLE IF NOT EXISTS friendships (
   UNIQUE (user_id, friend_id)
 );
 
+-- Keyed by email like friend_adds; a vouch counts only between confirmed
+-- friends. voucher_id / vouchee_id are legacy (no longer written).
 CREATE TABLE IF NOT EXISTS vouches (
   id SERIAL PRIMARY KEY,
   voucher_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
   vouchee_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
   message TEXT DEFAULT '',
-  UNIQUE (voucher_id, vouchee_id)
+  UNIQUE (voucher_id, vouchee_id),
+  voucher_email VARCHAR,
+  vouchee_email VARCHAR
 );
+
+-- Databases created before vouches were keyed by email.
+ALTER TABLE vouches ADD COLUMN IF NOT EXISTS voucher_email VARCHAR;
+ALTER TABLE vouches ADD COLUMN IF NOT EXISTS vouchee_email VARCHAR;
+UPDATE vouches v SET voucher_email = lower(u.email)
+  FROM users u WHERE v.voucher_email IS NULL AND u.id = v.voucher_id;
+UPDATE vouches v SET vouchee_email = lower(u.email)
+  FROM users u WHERE v.vouchee_email IS NULL AND u.id = v.vouchee_id;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_vouches_emails ON vouches (voucher_email, vouchee_email);
 
 CREATE TABLE IF NOT EXISTS listings (
   id VARCHAR PRIMARY KEY,

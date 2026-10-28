@@ -59,6 +59,20 @@ async function initDb() {
       UNIQUE(voucher_id, vouchee_id)
     )
   `);
+  // Vouches are keyed by email like friend_adds (voucher_id / vouchee_id are
+  // legacy and no longer written). Existing rows get their emails filled in.
+  await query(`ALTER TABLE vouches ADD COLUMN IF NOT EXISTS voucher_email VARCHAR`);
+  await query(`ALTER TABLE vouches ADD COLUMN IF NOT EXISTS vouchee_email VARCHAR`);
+  await query(`
+    UPDATE vouches v SET voucher_email = lower(u.email)
+    FROM users u WHERE v.voucher_email IS NULL AND u.id = v.voucher_id
+  `);
+  await query(`
+    UPDATE vouches v SET vouchee_email = lower(u.email)
+    FROM users u WHERE v.vouchee_email IS NULL AND u.id = v.vouchee_id
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_vouches_emails ON vouches (voucher_email, vouchee_email)`);
+  await query(`ALTER TABLE vouches ENABLE ROW LEVEL SECURITY`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS listings (
@@ -904,35 +918,33 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
 
   // ─── VOUCHES ─────────────────────────────────────────────────────────────────
 
-  // The caller vouches for a confirmed friend.
+  // The caller vouches for a confirmed friend. Keyed by email and never
+  // touches users, so whether the vouchee has a profile can't change the
+  // answer: only the friendship does, and both sides already know that.
   app.post("/api/vouches", async (req: Request, res: Response) => {
     try {
-      if (namesSomeoneElse(req.body?.voucherEmail, req.caller!.email, true)) {
+      const voucherEmail = req.caller!.email;
+      if (namesSomeoneElse(req.body?.voucherEmail, voucherEmail, true)) {
         return res.status(403).json({ error: "You can only vouch as yourself" });
       }
-      const voucherId = callerUserId(req, res);
-      if (!voucherId) return;
       const { message = "" } = req.body;
       const voucheeEmail = String(req.body?.voucheeEmail ?? "").trim().toLowerCase();
       if (!voucheeEmail) {
         return res.status(400).json({ error: "voucheeEmail is required" });
       }
 
-      // Same answer for "not friends yet" and "no such student", so a vouch
-      // can't be used to probe who added you or who's on the app.
-      const [vouchee] = await query<{ id: string }>(
-        `SELECT u.id FROM users u
-         WHERE lower(u.email) = $2 AND $2 IN (${confirmedFriendsOf("$1")})`,
-        [req.caller!.email, voucheeEmail]
+      const [friends] = await query<{ yes: boolean }>(
+        `SELECT $2 IN (${confirmedFriendsOf("$1")}) AS yes`,
+        [voucherEmail, voucheeEmail]
       );
-      if (!vouchee) {
+      if (!friends.yes) {
         return res.status(403).json({ error: "You can only vouch for friends who've added you back" });
       }
 
       await query(
-        `INSERT INTO vouches (voucher_id, vouchee_id, message) VALUES ($1, $2, $3)
-         ON CONFLICT (voucher_id, vouchee_id) DO UPDATE SET message = EXCLUDED.message`,
-        [voucherId, vouchee.id, message]
+        `INSERT INTO vouches (voucher_email, vouchee_email, message) VALUES ($1, $2, $3)
+         ON CONFLICT (voucher_email, vouchee_email) DO UPDATE SET message = EXCLUDED.message`,
+        [voucherEmail, voucheeEmail, message]
       );
       return res.json({ success: true });
     } catch (err) {
@@ -947,13 +959,9 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (namesSomeoneElse(req.body?.voucherEmail, req.caller!.email, true)) {
         return res.status(403).json({ error: "You can only withdraw your own vouch" });
       }
-      const voucherId = callerUserId(req, res);
-      if (!voucherId) return;
       await query(
-        `DELETE FROM vouches
-         WHERE voucher_id = $1
-           AND vouchee_id IN (SELECT id FROM users WHERE lower(email) = $2)`,
-        [voucherId, String(req.body?.voucheeEmail ?? "").trim().toLowerCase()]
+        "DELETE FROM vouches WHERE voucher_email = $1 AND vouchee_email = $2",
+        [req.caller!.email, String(req.body?.voucheeEmail ?? "").trim().toLowerCase()]
       );
       return res.json({ success: true });
     } catch (err) {
@@ -979,30 +987,29 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         return res.json({ degree: 1, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
       }
 
-      const [viewer] = await query<{ id: string; organizations: string[] }>(
-        "SELECT id, organizations FROM users WHERE lower(email) = $1", [viewerEmail]
+      // No early return for a target without an account: every query below is
+      // keyed by email and simply finds nothing, so the answer (and the work
+      // done) is the same as for a registered stranger.
+      const [viewer] = await query<{ organizations: string[] | null }>(
+        "SELECT organizations FROM users WHERE lower(email) = $1", [viewerEmail]
       );
-      const [target] = await query<{ id: string; organizations: string[] }>(
-        "SELECT id, organizations FROM users WHERE lower(email) = $1", [targetEmail]
+      const [target] = await query<{ organizations: string[] | null }>(
+        "SELECT organizations FROM users WHERE lower(email) = $1", [targetEmail]
       );
 
-      if (!viewer || !target) {
-        return res.json({ degree: null, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
-      }
-
-      const sharedOrgs = (viewer.organizations || []).filter(
-        (org: string) => (target.organizations || []).includes(org)
+      const sharedOrgs = (viewer?.organizations || []).filter(
+        (org: string) => (target?.organizations || []).includes(org)
       );
       // A vouch counts only while the voucher is still the target's confirmed
       // friend, so a lapsed friendship can't keep vouching.
       const vouchesFrom = (voucherFilter: string) =>
         query<{ name: string; email: string }>(
           `SELECT u.name, u.email FROM vouches v
-           JOIN users u ON v.voucher_id = u.id
-           WHERE v.vouchee_id = $1
-             AND lower(u.email) IN (${confirmedFriendsOf("$2")})
+           JOIN users u ON lower(u.email) = v.voucher_email
+           WHERE v.vouchee_email = $1
+             AND v.voucher_email IN (${confirmedFriendsOf("$1")})
              ${voucherFilter}`,
-          voucherFilter ? [target.id, targetEmail, viewerEmail] : [target.id, targetEmail]
+          voucherFilter ? [targetEmail, viewerEmail] : [targetEmail]
         );
 
       const [direct] = await query<{ friends: boolean }>(
@@ -1023,7 +1030,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
 
       // Second degree: only vouches from people who are friends with both.
       const vouchedBy = mutualFriends.length > 0
-        ? await vouchesFrom(`AND lower(u.email) IN (${confirmedFriendsOf("$3")})`)
+        ? await vouchesFrom(`AND v.voucher_email IN (${confirmedFriendsOf("$2")})`)
         : [];
 
       const degree = mutualFriends.length > 0 ? 2 : null;
