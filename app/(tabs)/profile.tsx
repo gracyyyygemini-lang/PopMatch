@@ -17,6 +17,7 @@ import { showError } from "@/lib/alert";
 import { useResponsive } from "@/hooks/useResponsive";
 import BottomSheetModal from "@/components/BottomSheetModal";
 import CustomAvatar from "@/components/CustomAvatar";
+import { Group, Row } from "@/components/ui/Grouped";
 import type { LeaseType, Zone, Landlord, GenderPref, UserProfile } from "@/context/AppContext";
 import { font } from "@/constants/typography";
 
@@ -763,6 +764,11 @@ ${message}`)
             )}
           </Pressable>
         </View>
+
+        <Group style={{ marginBottom: 12 }}>
+          <Row icon="hand-left" tile={Colors.earth} title="Blocked students"
+            subtitle="See who you've blocked, and unblock" onPress={() => router.push("/blocked")} />
+        </Group>
 
         <TouchableOpacity style={styles.signOutFullBtn} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={15} color={Colors.ocean} />

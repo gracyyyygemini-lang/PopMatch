@@ -11,6 +11,7 @@ import Colors from "@/constants/colors";
 import { useApp, ChatMessage } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
+import SafetyMenu from "@/components/SafetyMenu";
 import { usePolling } from "@/hooks/usePolling";
 import { font } from "@/constants/typography";
 
@@ -122,6 +123,7 @@ export default function ChatScreen() {
     refreshMessages, refreshConversations, messagingError,
   } = useApp();
   const [text, setText] = useState("");
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const source = params.source || "sublease";
   const activeChips = source === "crash_cash" ? CRASH_CASH_CHIPS
     : source === "coseeker" ? COSEEKER_CHIPS
@@ -189,7 +191,24 @@ export default function ChatScreen() {
           <Text style={styles.headerName} numberOfLines={1}>{convo.otherUserName}</Text>
           <Text style={styles.headerContext} numberOfLines={1}>{contextLabel}</Text>
         </View>
+        {convo.otherUserId ? (
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => setSafetyOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`More options for ${convo.otherUserName || "this person"}`}
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={DARK_TEAL} />
+          </TouchableOpacity>
+        ) : null}
       </View>
+
+      <SafetyMenu
+        visible={safetyOpen}
+        onClose={() => setSafetyOpen(false)}
+        person={convo.otherUserId ? { id: convo.otherUserId, name: convo.otherUserName || "This person" } : null}
+        onBlocked={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/inbox"))}
+      />
 
       {messagingError && (
         <View style={styles.errorBanner}>

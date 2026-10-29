@@ -342,6 +342,7 @@ Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
    DELETE FROM friend_adds WHERE adder_email IN (SELECT email FROM target) OR added_email IN (SELECT email FROM target);
    DELETE FROM vouches WHERE voucher_email IN (SELECT email FROM target) OR vouchee_email IN (SELECT email FROM target)
                           OR voucher_id IN (SELECT id FROM target) OR vouchee_id IN (SELECT id FROM target);
+   DELETE FROM blocks WHERE blocker_email IN (SELECT email FROM target) OR blocked_email IN (SELECT email FROM target);
    DELETE FROM feedback WHERE lower(user_email) IN (SELECT email FROM target);
    -- The profile itself, last: everything above looks people up through it.
    DELETE FROM users WHERE id IN (SELECT id FROM target);
@@ -356,6 +357,7 @@ Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
      + (SELECT count(*) FROM passes x, target t WHERE t.email IN (x.passer_email, x.passed_email))
      + (SELECT count(*) FROM friend_adds x, target t WHERE t.email IN (x.adder_email, x.added_email))
      + (SELECT count(*) FROM vouches x, target t WHERE t.email IN (x.voucher_email, x.vouchee_email))
+     + (SELECT count(*) FROM blocks x, target t WHERE t.email IN (x.blocker_email, x.blocked_email))
      + (SELECT count(*) FROM feedback f, target t WHERE lower(f.user_email) = t.email)
      AS rows_left;
    COMMIT;
@@ -365,7 +367,7 @@ Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
 
    **Covered:** `users`, `conversations` and every message in them (the other
    person's side of the thread too), `messages`, `listings`, `crash_posts`,
-   `likes`, `passes`, `friend_adds`, `vouches`, `feedback`.
+   `likes`, `passes`, `friend_adds`, `vouches`, `blocks`, `feedback`.
 
    **Deliberately skipped:**
    - `stats` holds only totals (subleases, matches), nothing per person.

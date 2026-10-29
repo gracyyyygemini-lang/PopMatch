@@ -8,6 +8,7 @@ import {
   fetchCrashPosts, fetchListings, markListingLeased,
 } from "@/lib/listings";
 import { uploadPostPhoto } from "@/lib/uploads";
+import { blockUser as blockOnServer, unblockUser as unblockOnServer } from "@/lib/blocks";
 
 export type LeaseType = "full_year" | "fall_sublease" | "spring_sublease" | "summer_sublease";
 export type GenderPref = "girls_only" | "boys_only" | "mixed";
@@ -443,6 +444,14 @@ interface AppContextValue {
   likeUser: (user: PublicProfile) => Promise<boolean>;
   /** Hides them here at once and records the pass on the server (retried until it lands). */
   passUser: (user: PublicProfile) => Promise<void>;
+  /**
+   * Blocks them on the server, then drops them from every list here at once
+   * (the server leaves them out of every later fetch). Throws if the server
+   * didn't record it.
+   */
+  blockUser: (userId: string) => Promise<void>;
+  /** Removes your block and reloads, so they can reappear. */
+  unblockUser: (userId: string) => Promise<void>;
 }
 
 /** MOCK_USERS who "already liked you" — only consulted when USE_MOCK_USERS is on. */
@@ -1158,6 +1167,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const blockUser = async (userId: string) => {
+    await blockOnServer(userId);
+    setUsers(prev => prev.filter(u => u.id !== userId));
+    setDeck(prev => prev.filter(u => u.id !== userId));
+    setSubleases(prev => prev.filter(s => s.userId !== userId));
+    setCrashPosts(prev => prev.filter(p => p.userId !== userId));
+    setConversations(prev => prev.filter(c => c.otherUserId !== userId));
+  };
+
+  const unblockUser = async (userId: string) => {
+    await unblockOnServer(userId);
+    await Promise.all([refreshUsers(), refreshDeck(), refreshPosts(), refreshConversations()]);
+  };
+
   const passUser = async (user: PublicProfile) => {
     await addPassed(user.id);
     if (USE_MOCK_USERS) return;
@@ -1247,7 +1270,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
     conversations, startConversation, startMatchConversation, sendMessage, retryMessage, getMessages,
     refreshConversations, refreshMessages, messagingError,
-    likeUser, passUser,
+    likeUser, passUser, blockUser, unblockUser,
   }), [
     currentUser, profileSyncError, users, deck, isOnboarded, otpVerifiedEmail, matches, scamBannerDismissed,
     likedUserIds, passedUserIds, subleases, crashPosts, postsError, friends,

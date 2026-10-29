@@ -42,6 +42,21 @@ async function initDb() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS intent VARCHAR`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vibe_profile JSONB`);
 
+  // One row per block, keyed by email like likes. Blocking is mutual in
+  // effect: either row hides the two people from each other everywhere.
+  await query(`
+    CREATE TABLE IF NOT EXISTS blocks (
+      id SERIAL PRIMARY KEY,
+      blocker_email VARCHAR NOT NULL,
+      blocked_email VARCHAR NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (blocker_email, blocked_email),
+      CHECK (blocker_email <> blocked_email)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks (blocked_email)`);
+  await query(`ALTER TABLE blocks ENABLE ROW LEVEL SECURITY`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS vouches (
       id SERIAL PRIMARY KEY,
@@ -285,6 +300,25 @@ type UserRow = {
 };
 
 const INTENTS = ["host", "joiner", "co_seeker", "sublessor", "sublessee"];
+
+/**
+ * SQL that's true when either of two people (lowercased-email expressions)
+ * has blocked the other. Every read that shows one student to another, and
+ * every way of contacting someone, is gated on NOT this.
+ */
+const blockedBetween = (a: string, b: string) => `EXISTS (
+  SELECT 1 FROM blocks bl
+  WHERE (bl.blocker_email = ${a} AND bl.blocked_email = ${b})
+     OR (bl.blocker_email = ${b} AND bl.blocked_email = ${a}))`;
+
+/** Whether the caller and the student with users.id `otherId` are blocked either way. */
+async function isBlockedWith(callerEmail: string, otherId: string): Promise<boolean> {
+  const [row] = await query<{ blocked: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM users ou WHERE ou.id = $2 AND ${blockedBetween("$1", "lower(ou.email)")}) AS blocked`,
+    [callerEmail, otherId]
+  );
+  return !!row?.blocked;
+}
 
 /**
  * APP REVIEW ONLY. REVIEW_EMAIL is the one non-.edu address allowed a
@@ -613,9 +647,13 @@ function priceParam(value: unknown): number | null {
  * conditions onto it, so a search can narrow what the marketplace shows but
  * never reveal anything it wouldn't.
  */
-function listingFilter(q: Request["query"]): { where: string; params: unknown[] } | { error: string } {
-  const conditions = ["l.leased = FALSE"];
-  const params: unknown[] = [];
+function listingFilter(q: Request["query"], callerEmail: string): { where: string; params: unknown[] } | { error: string } {
+  // Never listings by someone the caller blocked or who blocked the caller.
+  const params: unknown[] = [callerEmail];
+  const conditions = [
+    "l.leased = FALSE",
+    `NOT EXISTS (SELECT 1 FROM users bu WHERE bu.id = l.user_id AND ${blockedBetween("$1", "lower(bu.email)")})`,
+  ];
   const add = (sql: (n: string) => string, value: unknown) => {
     params.push(value);
     conditions.push(sql(`$${params.length}`));
@@ -849,6 +887,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       const rows = await query<UserRow>(
         `SELECT * FROM users u
          WHERE lower(u.email) <> $1
+           AND NOT ${blockedBetween("$1", "lower(u.email)")}
            ${deck ? `AND NOT EXISTS (
              SELECT 1 FROM passes p WHERE p.passer_email = $1 AND p.passed_email = lower(u.email)
            )` : ""}
@@ -876,7 +915,8 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         return res.status(400).json({ error: "likedUserId is required" });
       }
       const likedEmail = await emailOfUser(req.body.likedUserId);
-      if (!likedEmail) {
+      // Blocked either way looks the same as not existing.
+      if (!likedEmail || await isBlockedWith(likerEmail, String(req.body.likedUserId))) {
         return res.status(404).json({ error: "Student not found" });
       }
       if (likerEmail === likedEmail) {
@@ -942,6 +982,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
           AND theirs.liked_email = mine.liker_email
          JOIN users u ON lower(u.email) = mine.liked_email
          WHERE mine.liker_email = $1
+           AND NOT ${blockedBetween("$1", "mine.liked_email")}
          ORDER BY matched_at DESC`,
         [email]
       );
@@ -965,7 +1006,8 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     SELECT mine.added_email FROM friend_adds mine
     JOIN friend_adds theirs
       ON theirs.adder_email = mine.added_email AND theirs.added_email = mine.adder_email
-    WHERE mine.adder_email = ${param}`;
+    WHERE mine.adder_email = ${param}
+      AND NOT ${blockedBetween("mine.adder_email", "mine.added_email")}`;
 
   // The caller's confirmed friends. :email must be the caller.
   app.get("/api/friends/:email", async (req: Request, res: Response) => {
@@ -1005,11 +1047,18 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         return res.status(400).json({ error: "Cannot friend yourself" });
       }
 
-      await query(
-        `INSERT INTO friend_adds (adder_email, added_email) VALUES ($1, $2)
-         ON CONFLICT (adder_email, added_email) DO NOTHING`,
-        [adderEmail, addedEmail]
+      // Blocked either way: record nothing, but answer the same, so this
+      // can't be used to find out about a block.
+      const [{ blocked }] = await query<{ blocked: boolean }>(
+        `SELECT ${blockedBetween("$1", "$2")} AS blocked`, [adderEmail, addedEmail]
       );
+      if (!blocked) {
+        await query(
+          `INSERT INTO friend_adds (adder_email, added_email) VALUES ($1, $2)
+           ON CONFLICT (adder_email, added_email) DO NOTHING`,
+          [adderEmail, addedEmail]
+        );
+      }
       return res.json({ success: true });
     } catch (err) {
       console.error("POST /api/friends", err);
@@ -1039,6 +1088,61 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     } catch (err) {
       console.error("DELETE /api/friends", err);
       return res.status(500).json({ error: "Failed to remove friend" });
+    }
+  });
+
+  // ─── BLOCKS ──────────────────────────────────────────────────────────────────
+  // The caller blocks userId. From then on neither sees the other anywhere
+  // (blockedBetween) and neither can message the other. The blocked student
+  // is never told.
+
+  app.post("/api/blocks", async (req: Request, res: Response) => {
+    try {
+      const blockerEmail = req.caller!.email;
+      const blockedEmail = await emailOfUser(req.body?.userId);
+      if (!blockedEmail) return res.status(404).json({ error: "Student not found" });
+      if (blockedEmail === blockerEmail) return res.status(400).json({ error: "You can't block yourself" });
+      await query(
+        `INSERT INTO blocks (blocker_email, blocked_email) VALUES ($1, $2)
+         ON CONFLICT (blocker_email, blocked_email) DO NOTHING`,
+        [blockerEmail, blockedEmail]
+      );
+      return res.json({ blocked: true });
+    } catch (err) {
+      console.error("POST /api/blocks", err);
+      return res.status(500).json({ error: "Failed to block" });
+    }
+  });
+
+  // Undoes the caller's own block. A block the other person made stays.
+  app.delete("/api/blocks", async (req: Request, res: Response) => {
+    try {
+      const blockedEmail = await emailOfUser(req.body?.userId);
+      if (blockedEmail) {
+        await query("DELETE FROM blocks WHERE blocker_email = $1 AND blocked_email = $2", [req.caller!.email, blockedEmail]);
+      }
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("DELETE /api/blocks", err);
+      return res.status(500).json({ error: "Failed to unblock" });
+    }
+  });
+
+  // Who the caller has blocked, newest first (for unblocking). Never who
+  // blocked the caller.
+  app.get("/api/blocks", async (req: Request, res: Response) => {
+    try {
+      const rows = await query<PersonRow>(
+        `SELECT u.id, u.name, u.avatar_color FROM blocks b
+         JOIN users u ON lower(u.email) = b.blocked_email
+         WHERE b.blocker_email = $1
+         ORDER BY b.created_at DESC`,
+        [req.caller!.email]
+      );
+      return res.json(rows.map(toPerson));
+    } catch (err) {
+      console.error("GET /api/blocks", err);
+      return res.status(500).json({ error: "Failed to fetch blocked students" });
     }
   });
 
@@ -1116,6 +1220,10 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       }
       // An unknown id runs the same queries as a stranger and finds nothing.
       const targetEmail = target?.email ?? "";
+      // Blocked either way: the same answer as for a stranger.
+      if (targetEmail && await isBlockedWith(viewerEmail, String(req.params.userId))) {
+        return res.json({ degree: null, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
+      }
 
       const [viewer] = await query<{ organizations: string[] | null }>(
         "SELECT organizations FROM users WHERE lower(email) = $1", [viewerEmail]
@@ -1176,7 +1284,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
   // listingFilter), and keeps working once listings outgrow one download.
   app.get("/api/listings", async (req: Request, res: Response) => {
     try {
-      const filter = listingFilter(req.query);
+      const filter = listingFilter(req.query, req.caller!.email);
       if ("error" in filter) return res.status(400).json({ error: filter.error });
       const rows = await query<ListingRow>(
         `${LISTING_SELECT}
@@ -1290,9 +1398,10 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       const rows = await query<CrashPostRow>(
         `${CRASH_POST_SELECT}
          WHERE p.status = 'active' AND p.target_date >= NOW()
-           ${text ? `AND (p.story ILIKE $1 ESCAPE '\\' OR p.dates ILIKE $1 ESCAPE '\\')` : ""}
+           AND NOT EXISTS (SELECT 1 FROM users bu WHERE bu.id = p.user_id AND ${blockedBetween("$1", "lower(bu.email)")})
+           ${text ? `AND (p.story ILIKE $2 ESCAPE '\\' OR p.dates ILIKE $2 ESCAPE '\\')` : ""}
          ORDER BY p.created_at DESC`,
-        text ? [containsPattern(text)] : []
+        text ? [req.caller!.email, containsPattern(text)] : [req.caller!.email]
       );
       return res.json(rows.map(toCrashPost));
     } catch (err) {
@@ -1525,6 +1634,9 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (known.length === 0) {
         return res.status(404).json({ error: "That person isn't on PopMatch yet" });
       }
+      if (await isBlockedWith(req.caller!.email, participant2Id)) {
+        return res.status(403).json({ error: "You can't message this person" });
+      }
 
       const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       // uniq_conversations_pair_listing makes this a no-op when either side
@@ -1560,9 +1672,13 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (!userId) return;
       const rows = await query<ConversationRow>(
         `${CONVERSATION_SELECT}
-         WHERE c.participant1_id = $1 OR c.participant2_id = $1
+         WHERE (c.participant1_id = $1 OR c.participant2_id = $1)
+           AND NOT EXISTS (
+             SELECT 1 FROM users ou
+             WHERE ou.id = CASE WHEN c.participant1_id = $1 THEN c.participant2_id ELSE c.participant1_id END
+               AND ${blockedBetween("$2", "lower(ou.email)")})
          ORDER BY COALESCE(last.created_at, c.created_at) DESC`,
-        [userId]
+        [userId, req.caller!.email]
       );
       return res.json(rows.map(row => toConversation(row, userId)));
     } catch (err) {
@@ -1589,6 +1705,10 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (!participants) return res.status(404).json({ error: "Conversation not found" });
       if (!participants.includes(senderId)) {
         return res.status(403).json({ error: "You're not in this conversation" });
+      }
+      const otherId = participants.find(id => id !== senderId) ?? senderId;
+      if (await isBlockedWith(req.caller!.email, otherId)) {
+        return res.status(403).json({ error: "You can't message this person" });
       }
 
       // The client sends its own id so a retry after a lost response can't
@@ -1623,6 +1743,10 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (!participants) return res.status(404).json({ error: "Conversation not found" });
       if (!participants.includes(userId)) {
         return res.status(403).json({ error: "You're not in this conversation" });
+      }
+      const otherId = participants.find(id => id !== userId) ?? userId;
+      if (await isBlockedWith(req.caller!.email, otherId)) {
+        return res.status(403).json({ error: "This conversation isn't available" });
       }
       const rows = await query<MessageRow>(
         `${MESSAGE_SELECT}

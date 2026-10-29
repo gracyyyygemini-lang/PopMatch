@@ -78,6 +78,7 @@ const DELETE_ROWS: [string, "id" | "email" | "both"][] = [
   [`DELETE FROM friend_adds WHERE $1::varchar IN (adder_email, added_email)`, "email"],
   [`DELETE FROM vouches WHERE $2::varchar IN (voucher_email, vouchee_email)
      OR $1::varchar IN (voucher_id, vouchee_id)`, "both"],
+  [`DELETE FROM blocks WHERE $1::varchar IN (blocker_email, blocked_email)`, "email"],
   [`DELETE FROM feedback WHERE lower(user_email) = $1::varchar`, "email"],
   [`DELETE FROM users WHERE id = $1::varchar OR lower(email) = $2::varchar`, "both"],
 ];

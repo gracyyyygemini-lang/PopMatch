@@ -12,6 +12,7 @@ import Animated, { FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
 import Colors, { avatarColor as paletteAvatar } from "@/constants/colors";
 import { useApp, PublicProfile, VibeProfile } from "@/context/AppContext";
 import CustomAvatar from "@/components/CustomAvatar";
+import SafetyMenu from "@/components/SafetyMenu";
 import { showError } from "@/lib/alert";
 import { usePolling } from "@/hooks/usePolling";
 import { font } from "@/constants/typography";
@@ -279,6 +280,8 @@ export default function MatchmakerScreen() {
 
   const [matchModalUser, setMatchModalUser] = useState<PublicProfile | null>(null);
   const [matchConvoId, setMatchConvoId] = useState<string>("");
+  // The "⋯" sheet acts on whoever is on top when it opens.
+  const [safetyFor, setSafetyFor] = useState<PublicProfile | null>(null);
 
   const isDesktopMm = Platform.OS === "web" && screenWidth >= 1024;
   const topPadding = Platform.OS === "web" ? (isDesktopMm ? 24 : 32) : insets.top;
@@ -361,6 +364,16 @@ export default function MatchmakerScreen() {
           <Ionicons name="heart" size={12} color={Colors.grassGreen} />
           <Text style={[styles.matchBadgeText, { color: Colors.grassGreen }]}>{likedUserIds.length}</Text>
         </View>
+        {remaining.length > 0 && (
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => setSafetyFor(remaining[0])}
+            accessibilityRole="button"
+            accessibilityLabel={`More options for ${remaining[0].name}`}
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={Colors.ocean} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.deckArea} onLayout={e => setDeckHeight(e.nativeEvent.layout.height)}>
@@ -406,6 +419,12 @@ export default function MatchmakerScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      <SafetyMenu
+        visible={!!safetyFor}
+        onClose={() => setSafetyFor(null)}
+        person={safetyFor}
+      />
 
       <MatchModal
         visible={!!matchModalUser}

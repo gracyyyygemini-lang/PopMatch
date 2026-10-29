@@ -57,6 +57,10 @@ function RootLayoutNav() {
         name="admin"
         options={{ headerShown: false, presentation: "card" }}
       />
+      <Stack.Screen
+        name="blocked"
+        options={{ headerShown: false, presentation: "card" }}
+      />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

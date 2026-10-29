@@ -188,6 +188,18 @@ CREATE TABLE IF NOT EXISTS friend_adds (
   CHECK (adder_email <> added_email)
 );
 
+-- One row per block, keyed by email like likes. Blocking is mutual in effect:
+-- either row hides the two people from each other everywhere (the deck,
+-- listings, Crash & Cash, matches, friends, conversations and messages).
+CREATE TABLE IF NOT EXISTS blocks (
+  id SERIAL PRIMARY KEY,
+  blocker_email VARCHAR NOT NULL,
+  blocked_email VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (blocker_email, blocked_email),
+  CHECK (blocker_email <> blocked_email)
+);
+
 -- ─── Indexes ────────────────────────────────────────────────────────────────
 -- The app filters listings constantly; these keep the marketplace fast as the
 -- table grows past a few hundred rows.
@@ -218,6 +230,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 -- covers the reverse lookup "who liked me".
 CREATE INDEX IF NOT EXISTS idx_likes_liked ON likes (liked_email);
 CREATE INDEX IF NOT EXISTS idx_friend_adds_added ON friend_adds (added_email);
+CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks (blocked_email);
 
 -- ─── Seed rows ──────────────────────────────────────────────────────────────
 
@@ -247,6 +260,7 @@ ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE passes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE friend_adds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crash_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blocks ENABLE ROW LEVEL SECURITY;
 
 -- ─── Avatar storage ─────────────────────────────────────────────────────────
 -- Creates the public "avatars" bucket that lib/uploads.ts writes to, so you
