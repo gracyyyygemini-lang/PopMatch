@@ -8,6 +8,7 @@ import Colors from "@/constants/colors";
 import { font } from "@/constants/typography";
 import { useApp } from "@/context/AppContext";
 import { ScamBanner } from "@/components/ScamBanner";
+import { ListingDraftBanner } from "@/components/ListingDraftBanner";
 import { useResponsive } from "@/hooks/useResponsive";
 import { Group, GroupHeading, Row, ScreenTitle } from "@/components/ui/Grouped";
 
@@ -58,6 +59,8 @@ export default function HomeScreen() {
           <Ionicons name="shield-checkmark" size={15} color={Colors.prairie} />
           <Text style={styles.trustText}>Everyone here signed in with a verified .edu email.</Text>
         </View>
+
+        <ListingDraftBanner />
 
         <ScamBanner />
 

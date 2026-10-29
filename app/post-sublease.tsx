@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   Platform, KeyboardAvoidingView, Image, Alert, useWindowDimensions
@@ -15,6 +15,7 @@ import {
   KitchenType, BathroomType, CleaningFrequency, ShoePolicy, Amenities, DEFAULT_AMENITIES
 } from "@/context/AppContext";
 import { font } from "@/constants/typography";
+import { loadListingDraft, saveListingDraft, clearListingDraft } from "@/lib/listingDraft";
 
 const LEASE_OPTIONS: { key: LeaseType; label: string; desc: string }[] = [
   { key: "full_year", label: "Full Year", desc: "Aug – Jul (12 months)" },
@@ -133,10 +134,10 @@ const TOTAL_STEPS = 4;
 
 export default function PostSubleaseScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, addSublease, setCurrentUser } = useApp();
-  // One id per listing, kept across retries, so a second tap after a failed
-  // publish reuses the uploaded photos and can't create a duplicate.
-  const postId = useRef(Date.now().toString() + Math.random().toString(36).substr(2, 6)).current;
+  const { currentUser, addSublease, setCurrentUser, setIsOnboarded } = useApp();
+  // One id per listing, kept across retries (and in the draft), so a second
+  // tap after a failed publish reuses the uploaded photos and can't create a duplicate.
+  const postIdRef = useRef(Date.now().toString() + Math.random().toString(36).substr(2, 6));
   const [publishing, setPublishing] = useState(false);
   const params = useLocalSearchParams<{ mode?: string; gateway?: string }>();
   const isHostMode = params.mode === "host";
@@ -403,16 +404,13 @@ export default function PostSubleaseScreen() {
   // Whole dollars: price_per_month is an INT, so 850.50 can't be saved.
   const priceValid = /^\d+$/.test(price.trim()) && Number(price) > 0;
 
+  // Only what a listing can't go live without: building, price, lease type
+  // (always set) and landlord. Photos, dates and the rest can be added later.
   const canSubmit = !!(
     buildingName.trim() &&
     priceValid &&
-    zone &&
     landlords.length > 0 &&
-    hasAtLeastOnePhoto &&
-    moveInDate !== null && moveOutDate !== null &&
-    (!isShortTerm || eventTag) &&
-    (!isSummer || subCategory) &&
-    roommatePreference
+    (!isShortTerm || eventTag)
   );
 
   const handleSubmit = async () => {
@@ -425,7 +423,7 @@ export default function PostSubleaseScreen() {
       : "full_year";
 
     const post: SubleasePost = {
-      id: postId,
+      id: postIdRef.current,
       userId: currentUser?.id || "guest",
       userName: currentUser?.name || "Anonymous",
       buildingName: buildingName.trim(),
@@ -450,8 +448,8 @@ export default function PostSubleaseScreen() {
       currentResidentBio: isHostMode && currentResidentBio.trim() ? currentResidentBio.trim() : undefined,
       roommatePreference: roommatePreference || undefined,
       listingType: isHostMode ? "roommate" : "sublease",
-      moveInDate: moveInDate!.toISOString(),
-      moveOutDate: moveOutDate!.toISOString(),
+      moveInDate: moveInDate?.toISOString(),
+      moveOutDate: moveOutDate?.toISOString(),
       amenities,
       cleaningFrequency,
       shoePolicy,
@@ -475,6 +473,7 @@ export default function PostSubleaseScreen() {
       setPublishing(false);
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    await clearListingDraft(currentUser?.email);
 
     if (currentUser) {
       await setCurrentUser({
@@ -484,16 +483,88 @@ export default function PostSubleaseScreen() {
       });
     }
 
-    if (isHostMode) {
-      router.replace("/marketplace?category=roommate_openings");
-    } else if (finalCategory === "short_term") {
-      router.replace("/marketplace?category=short_term");
-    } else if (finalCategory === "summer") {
-      router.replace(`/marketplace?category=summer_only${subCategory ? `&subFilter=${subCategory}` : ""}`);
-    } else {
-      router.replace(`/marketplace?category=semester_takeover`);
-    }
+    const destination = isHostMode ? "/marketplace?category=roommate_openings"
+      : finalCategory === "short_term" ? "/marketplace?category=short_term"
+      : finalCategory === "summer" ? `/marketplace?category=summer_only${subCategory ? `&subFilter=${subCategory}` : ""}`
+      : "/marketplace?category=semester_takeover";
+    if (isGateway) await finishOnboarding(destination);
+    else router.replace(destination as any);
   };
+
+  // Onboarding sends Hosts and Sublessors here before marking them onboarded,
+  // with the role step still underneath. Publishing or skipping finishes it.
+  async function finishOnboarding(href: string) {
+    await setIsOnboarded(true);
+    if (router.canDismiss()) router.dismissAll();
+    router.replace(href as any);
+  }
+
+  const handleSkip = async () => {
+    Haptics.selectionAsync();
+    // Kept even if untouched, so Home can offer "Finish your listing".
+    await saveListingDraft(currentUser?.email, currentDraft());
+    await finishOnboarding("/(tabs)");
+  };
+
+  // Draft autosave: every field change and step change, per student.
+  const draftFields = {
+    buildingName, address, leaseType, price, landlords, zone, availableDuringBreaks, selectedBreaks,
+    description, kitchenType, bathroomType, unitType, isPrivateBedroom, isPrivateBathroom, images,
+    floorPlanImage, roomsAvailable, currentResidentBio, roommatePreference, amenities, eventTag,
+    subCategory, hasParking, cleaningFrequency, shoePolicy,
+    moveInDate: moveInDate?.toISOString() ?? null,
+    moveOutDate: moveOutDate?.toISOString() ?? null,
+  };
+  const currentDraft = () => ({
+    mode: params.mode, step, postId: postIdRef.current, fields: draftFields, updatedAt: Date.now(),
+  });
+
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  // The first run after restoring would just echo the draft back, or store an
+  // empty one for someone who only opened the wizard to look.
+  const skipNextSave = useRef(true);
+
+  useEffect(() => {
+    let active = true;
+    loadListingDraft(currentUser?.email).then(draft => {
+      if (!active) return;
+      // A Host draft shouldn't resume as a sublease, or the other way round.
+      if (draft && draft.mode === params.mode) {
+        const f = draft.fields as any;
+        postIdRef.current = draft.postId || postIdRef.current;
+        setBuildingName(f.buildingName ?? ""); setAddress(f.address ?? "");
+        if (f.leaseType) setLeaseType(f.leaseType);
+        setPrice(f.price ?? ""); setLandlords(f.landlords ?? []);
+        if (f.zone) setZone(f.zone);
+        setAvailableDuringBreaks(!!f.availableDuringBreaks); setSelectedBreaks(f.selectedBreaks ?? []);
+        setDescription(f.description ?? "");
+        if (f.kitchenType) setKitchenType(f.kitchenType);
+        if (f.bathroomType) setBathroomType(f.bathroomType);
+        setUnitType(f.unitType ?? "");
+        setIsPrivateBedroom(f.isPrivateBedroom ?? true); setIsPrivateBathroom(f.isPrivateBathroom ?? true);
+        if (Array.isArray(f.images)) setImages(f.images);
+        setFloorPlanImage(f.floorPlanImage ?? null);
+        setRoomsAvailable(f.roomsAvailable ?? "1"); setCurrentResidentBio(f.currentResidentBio ?? "");
+        setRoommatePreference(f.roommatePreference ?? "");
+        if (f.amenities) setAmenities({ ...DEFAULT_AMENITIES, ...f.amenities });
+        setEventTag(f.eventTag ?? ""); setSubCategory(f.subCategory ?? ""); setHasParking(!!f.hasParking);
+        if (f.cleaningFrequency) setCleaningFrequency(f.cleaningFrequency);
+        if (f.shoePolicy) setShoePolicy(f.shoePolicy);
+        setMoveInDate(f.moveInDate ? new Date(f.moveInDate) : null);
+        setMoveOutDate(f.moveOutDate ? new Date(f.moveOutDate) : null);
+        setStep(Math.min(Math.max(draft.step ?? 0, 0), TOTAL_STEPS - 1));
+      }
+      setDraftLoaded(true);
+    });
+    return () => { active = false; };
+  }, [currentUser?.email]);
+
+  const draftSnapshot = JSON.stringify(draftFields) + step;
+  useEffect(() => {
+    if (!draftLoaded || publishing) return;
+    if (skipNextSave.current) { skipNextSave.current = false; return; }
+    saveListingDraft(currentUser?.email, currentDraft());
+  }, [draftSnapshot, draftLoaded]);
 
   const { width: winWidth } = useWindowDimensions();
   const isDesktopPs = Platform.OS === "web" && winWidth >= 1024;
@@ -506,22 +577,16 @@ export default function PostSubleaseScreen() {
   };
   const goBack = () => {
     if (step === 0) {
-      if (isGateway) return;
-      router.canGoBack() ? router.back() : router.replace("/(tabs)");
+      // From onboarding, back is "What brings you here?" with the role still selectable.
+      if (router.canGoBack()) router.back();
+      else router.replace(isGateway ? "/onboarding" : "/(tabs)");
       return;
     }
     setStep(s => s - 1);
   };
 
   const stepValid = (s: number) => {
-    if (s === 0) return !!(buildingName.trim() && priceValid && landlords.length > 0 && roommatePreference);
-    if (s === 1) {
-      if (!hasAtLeastOnePhoto) return false;
-      if (isHostMode && !unitType.trim()) return false;
-      return true;
-    }
-    if (s === 2) return true;
-    if (s === 3) return moveInDate !== null && moveOutDate !== null;
+    if (s === 0) return !!(buildingName.trim() && priceValid && landlords.length > 0);
     return true;
   };
 
@@ -529,16 +594,12 @@ export default function PostSubleaseScreen() {
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: Colors.warmCream }, isDesktopPs && { maxWidth: contentMaxWidthPs, alignSelf: "center" as const, width: "100%" }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
-        {isGateway && step === 0 ? (
-          <View style={styles.backBtn} />
-        ) : (
-          <TouchableOpacity style={styles.backBtn} onPress={goBack}>
-            <Ionicons name={step === 0 ? "close" : "arrow-back"} size={20} color={Colors.darkTeal} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={styles.backBtn} onPress={goBack} accessibilityLabel="Back">
+          <Ionicons name={step === 0 && !isGateway ? "close" : "arrow-back"} size={20} color={Colors.darkTeal} />
+        </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>{isHostMode ? "Post My Apartment" : "Post My Sublease"}</Text>
-          <Text style={styles.headerSub}>Step {step + 1} of {TOTAL_STEPS}{isGateway ? " — complete to continue" : ""}</Text>
+          <Text style={styles.headerSub}>Step {step + 1} of {TOTAL_STEPS}</Text>
         </View>
         <View style={styles.stepDots}>
           {Array.from({ length: TOTAL_STEPS }, (_, i) => (
@@ -553,9 +614,9 @@ export default function PostSubleaseScreen() {
 
         {isGateway && step === 0 && (
           <View style={styles.gatewayBanner}>
-            <Ionicons name="lock-closed-outline" size={16} color={Colors.darkTeal} />
+            <Ionicons name="information-circle-outline" size={16} color={Colors.darkTeal} />
             <Text style={styles.gatewayBannerText}>
-              Complete your listing to unlock PopMatch. All fields marked * are required.
+              Only fields marked * are needed to publish. Progress saves as you go, so you can skip and finish later.
             </Text>
           </View>
         )}
@@ -607,7 +668,7 @@ export default function PostSubleaseScreen() {
 
               {leaseType === "summer_sublease" && (
                 <View style={styles.summerSubmenu}>
-                  <Text style={[styles.label, { marginBottom: 8 }]}>Summer Timeline *</Text>
+                  <Text style={[styles.label, { marginBottom: 8 }]}>Summer Timeline</Text>
                   {SUMMER_TIMELINE_OPTIONS.map(opt => (
                     <TouchableOpacity key={opt.key}
                       style={[styles.optionCard, subCategory === opt.key && styles.optionCardActive]}
@@ -662,7 +723,7 @@ export default function PostSubleaseScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Zone / Area *</Text>
+              <Text style={styles.label}>Zone / Area</Text>
               <View style={styles.chipRow}>
                 {ZONE_OPTIONS.map(opt => (
                   <TouchableOpacity key={opt.key} style={[styles.chip, zone === opt.key && styles.chipActive]}
@@ -705,7 +766,7 @@ export default function PostSubleaseScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Roommate Preference <Text style={{ color: Colors.error }}>*</Text></Text>
+              <Text style={styles.label}>Roommate Preference</Text>
               <View style={styles.chipRow}>
                 {["Girls Only", "Guys Only", "Co-ed", "Grainger Grind"].map(pref => (
                   <TouchableOpacity key={pref} style={[styles.chip, roommatePreference === pref && styles.chipActive]}
@@ -720,7 +781,7 @@ export default function PostSubleaseScreen() {
             {isHostMode && (
               <>
                 <View style={styles.field}>
-                  <Text style={styles.label}>Spots Available *</Text>
+                  <Text style={styles.label}>Spots Available</Text>
                   <View style={styles.chipRow}>
                     {["1", "2", "3", "4"].map(n => (
                       <TouchableOpacity key={n} style={[styles.chip, roomsAvailable === n && styles.chipActive]}
@@ -798,7 +859,7 @@ export default function PostSubleaseScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Kitchen Type *</Text>
+              <Text style={styles.label}>Kitchen Type</Text>
               <View style={styles.chipRow}>
                 {(["private", "communal"] as KitchenType[]).map(k => (
                   <TouchableOpacity key={k} style={[styles.chip, kitchenType === k && styles.chipActive]}
@@ -814,7 +875,7 @@ export default function PostSubleaseScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Upload Photos * (at least 1 required)</Text>
+              <Text style={styles.label}>Upload Photos (Optional, add later)</Text>
               <View style={styles.photoGrid}>
                 {imageLabels.map((label, idx) => (
                   <TouchableOpacity key={label} style={styles.photoSlot} onPress={() => pickImage(idx)}>
@@ -835,12 +896,12 @@ export default function PostSubleaseScreen() {
                 ))}
               </View>
               {!hasAtLeastOnePhoto && (
-                <Text style={styles.photoHint}>Tap a slot to upload. At least 1 photo is required.</Text>
+                <Text style={styles.photoHint}>Tap a slot to upload, now or later.</Text>
               )}
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Floor Plan (Optional)</Text>
+              <Text style={styles.label}>Floor Plan (Optional, add later)</Text>
               <TouchableOpacity style={styles.floorPlanSlot} onPress={pickFloorPlan}>
                 {floorPlanImage ? (
                   <Image source={{ uri: floorPlanImage }} style={styles.floorPlanImage} />
@@ -924,7 +985,7 @@ export default function PostSubleaseScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Move-In Date *</Text>
+              <Text style={styles.label}>Move-In Date</Text>
               <TouchableOpacity style={styles.datePickerBtn} onPress={() => { setShowMoveInPicker(!showMoveInPicker); setShowMoveOutPicker(false); }}>
                 <Ionicons name="calendar-outline" size={18} color={moveInDate ? Colors.ocean : Colors.textLight} />
                 <Text style={[styles.datePickerText, !moveInDate && { color: Colors.textLight }]}>
@@ -948,7 +1009,7 @@ export default function PostSubleaseScreen() {
             )}
 
             <View style={styles.field}>
-              <Text style={styles.label}>Move-Out Date *</Text>
+              <Text style={styles.label}>Move-Out Date</Text>
               <TouchableOpacity style={styles.datePickerBtn} onPress={() => { setShowMoveOutPicker(!showMoveOutPicker); setShowMoveInPicker(false); }}>
                 <Ionicons name="calendar-outline" size={18} color={moveOutDate ? Colors.ocean : Colors.textLight} />
                 <Text style={[styles.datePickerText, !moveOutDate && { color: Colors.textLight }]}>
@@ -999,6 +1060,11 @@ export default function PostSubleaseScreen() {
           >
             <Ionicons name="sparkles" size={20} color={canSubmit ? Colors.onOrange : DISABLED_TEXT} />
             <Text style={[styles.submitBtnText, !canSubmit && { color: DISABLED_TEXT }]}>{publishing ? "Publishing…" : "Publish Listing ✨"}</Text>
+          </TouchableOpacity>
+        )}
+        {isGateway && (
+          <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} disabled={publishing}>
+            <Text style={styles.skipBtnText}>Skip for now</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1203,6 +1269,8 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.ocean, borderRadius: 14, paddingVertical: 14,
   },
+  skipBtn: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 20 },
+  skipBtnText: { ...font.semibold, fontSize: 14, color: Colors.textMuted },
   nextBtnText: { ...font.heavy, fontSize: 16, color: Colors.white },   // on the navy Next button
   submitBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,

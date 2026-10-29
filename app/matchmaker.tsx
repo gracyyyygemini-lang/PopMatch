@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, Dimensions,
   TouchableOpacity, Platform, useWindowDimensions, Image, Modal,
@@ -16,6 +16,7 @@ import SafetyMenu from "@/components/SafetyMenu";
 import { showError } from "@/lib/alert";
 import { usePolling } from "@/hooks/usePolling";
 import { font } from "@/constants/typography";
+import { listingWizardHref } from "@/lib/listingDraft";
 
 /** New students show up in the deck within this long while it's open. */
 const DECK_REFRESH_MS = 60000;
@@ -294,14 +295,10 @@ export default function MatchmakerScreen() {
   const [deckHeight, setDeckHeight] = useState(0);
   const cardHeight = Math.min(screenHeight * 0.72, 620, deckHeight ? deckHeight - 16 : Infinity);
 
-  useEffect(() => {
-    if (currentUser?.intent === "host" || currentUser?.intent === "sublessor") {
-      const hasListing = subleases.some(s => s.userId === currentUser.id);
-      if (!hasListing) {
-        router.replace("/link-listing");
-      }
-    }
-  }, [currentUser?.intent]);
+  // Hosts and Sublessors can browse the deck before their listing is live;
+  // only liking (which offers people their place) waits for it.
+  const isSupplySide = currentUser?.intent === "host" || currentUser?.intent === "sublessor";
+  const needsListing = isSupplySide && !subleases.some(s => s.userId === currentUser?.id);
 
   // Server-side the deck leaves out everyone passed on from any device;
   // passedUserIds below still hides a pass the instant it's made.
@@ -398,6 +395,16 @@ export default function MatchmakerScreen() {
         )}
       </View>
 
+      {remaining.length > 0 && needsListing && (
+        <View style={styles.listingGate}>
+          <Ionicons name="home-outline" size={14} color={Colors.ocean} />
+          <Text style={styles.listingGateText}>Liking needs a live listing. </Text>
+          <TouchableOpacity onPress={() => router.push(listingWizardHref(currentUser?.intent))} accessibilityRole="link">
+            <Text style={styles.listingGateLink}>Finish your listing</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {remaining.length > 0 && (
         <View style={[styles.actionRow, { paddingBottom: bottomPadding + 12 }]}>
           <TouchableOpacity
@@ -411,8 +418,10 @@ export default function MatchmakerScreen() {
             <Text style={styles.countText}>{remaining.length} left</Text>
           </View>
           <TouchableOpacity
-            style={[styles.actionBtn, styles.likeBtn]}
+            style={[styles.actionBtn, styles.likeBtn, needsListing && { opacity: 0.4 }]}
             onPress={() => handleLike(remaining[0])}
+            disabled={needsListing}
+            accessibilityState={{ disabled: needsListing }}
             activeOpacity={0.7}
           >
             <Text style={styles.actionEmoji}>💚</Text>
@@ -482,4 +491,7 @@ const styles = StyleSheet.create({
   emptySub: { ...font.regular, fontSize: 14, color: Colors.textSecondaryOnBg, textAlign: "center" },
   goMatchesBtn: { backgroundColor: Colors.ocean, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14, marginTop: 8 },
   goMatchesBtnText: { ...font.bold, fontSize: 15, color: Colors.white },
+  listingGate: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 16, paddingTop: 4 },
+  listingGateText: { ...font.regular, fontSize: 13, color: Colors.textSecondaryOnBg },
+  listingGateLink: { ...font.bold, fontSize: 13, color: Colors.ocean, textDecorationLine: "underline" },
 });

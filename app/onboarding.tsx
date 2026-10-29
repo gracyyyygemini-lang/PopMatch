@@ -150,6 +150,11 @@ export default function OnboardingScreen() {
   // flips it to true, and that must not re-run the redirect below.
   const alreadyOnboarded = useRef(isOnboarded);
   alreadyOnboarded.current = isOnboarded;
+  // Set once this screen saves the profile. Hosts and Sublessors then carry on
+  // to their listing with this screen still mounted, and the profile check
+  // below (re-run on every auth event, token refreshes included) mustn't
+  // mistake their new profile for a returning student's and send them home.
+  const savedProfileHere = useRef(false);
 
   const [step, setStep] = useState(0);
 
@@ -201,7 +206,7 @@ export default function OnboardingScreen() {
       if (sessionUser.email) {
         fetchUserProfile(sessionUser.email)
           .then(async (existing) => {
-            if (!existing || alreadyOnboarded.current) return;
+            if (!existing || alreadyOnboarded.current || savedProfileHere.current) return;
             await setCurrentUser(existing);
             await setIsOnboarded(true);
             router.replace("/(tabs)");
@@ -376,25 +381,30 @@ export default function OnboardingScreen() {
     // Saves to the users table (and caches on the device). If the API is
     // unreachable the profile stays cached, flagged unsynced, and is retried
     // on next launch — onboarding carries on either way.
+    savedProfileHere.current = true;
     const saved = await setCurrentUser(user);
     if (!saved) {
       console.warn("Profile not saved to the server yet; continuing with the cached copy.");
     }
-    await setIsOnboarded(true);
     setSavingProfile(false);
 
+    // Hosts and Sublessors go on to their listing with this screen kept
+    // underneath, parked on the role step, so the wizard's back button returns
+    // here. The wizard marks them onboarded when they publish or skip.
+    if (isSupplySide) {
+      setStep(1);
+      router.push(`/post-sublease?mode=${intent}&gateway=1`);
+      return;
+    }
+
+    await setIsOnboarded(true);
+
     switch (intent) {
-      case "host":
-        router.replace("/post-sublease?mode=host&gateway=1");
-        break;
       case "joiner":
         router.replace("/marketplace?category=roommate_openings");
         break;
       case "co_seeker":
         router.replace("/compatibility-setup");
-        break;
-      case "sublessor":
-        router.replace("/post-sublease?mode=sublessor&gateway=1");
         break;
       case "sublessee": {
         const sublesseeRoutes: Record<string, string> = {
