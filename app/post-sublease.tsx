@@ -9,7 +9,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import Colors, { AVATAR_COLORS } from "@/constants/colors";
-import { showError } from "@/lib/alert";
+import { showError, confirmAction } from "@/lib/alert";
+import { CATEGORY_LABELS, marketplaceTab } from "@/lib/marketplaceTabs";
 import {
   useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType,
   KitchenType, BathroomType, CleaningFrequency, ShoePolicy, Amenities, DEFAULT_AMENITIES
@@ -134,12 +135,18 @@ const TOTAL_STEPS = 4;
 
 export default function PostSubleaseScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, addSublease, setCurrentUser, setIsOnboarded } = useApp();
+  const { currentUser, subleases, addSublease, updateSublease, setCurrentUser, setIsOnboarded } = useApp();
   // One id per listing, kept across retries (and in the draft), so a second
   // tap after a failed publish reuses the uploaded photos and can't create a duplicate.
   const postIdRef = useRef(Date.now().toString() + Math.random().toString(36).substr(2, 6));
   const [publishing, setPublishing] = useState(false);
-  const params = useLocalSearchParams<{ mode?: string; gateway?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; gateway?: string; edit?: string; step?: string }>();
+  // ?edit=<listing id> reopens one of your published listings to fill in or change.
+  const editId = params.edit;
+  const editingPost = editId
+    ? subleases.find(s => s.id === editId && s.userId === currentUser?.id)
+    : undefined;
+  const [prefilled, setPrefilled] = useState(false);
   const isHostMode = params.mode === "host";
   const isSublessorMode = params.mode === "sublessor";
   const isGateway = params.gateway === "1";
@@ -410,7 +417,9 @@ export default function PostSubleaseScreen() {
     buildingName.trim() &&
     priceValid &&
     landlords.length > 0 &&
-    (!isShortTerm || eventTag)
+    (!isShortTerm || eventTag) &&
+    // Editing: not before the listing has loaded into the form.
+    (!editId || prefilled)
   );
 
   const handleSubmit = async () => {
@@ -421,6 +430,22 @@ export default function PostSubleaseScreen() {
       : leaseType === "spring_sublease" ? "spring"
       : leaseType === "fall_sublease" ? "fall"
       : "full_year";
+
+    // An edit can move the listing to another marketplace tab; ask first.
+    if (editingPost) {
+      const listingType = isHostMode ? "roommate" : "sublease";
+      const fromTab = marketplaceTab(editingPost);
+      const toTab = marketplaceTab({ listingType, category: finalCategory });
+      if (fromTab !== toTab) {
+        const ok = await confirmAction(
+          "Move your listing?",
+          `This moves your listing from ${CATEGORY_LABELS[fromTab] ?? fromTab} to ${CATEGORY_LABELS[toTab] ?? toTab}.`,
+          "Save Changes",
+          false,
+        );
+        if (!ok) return;
+      }
+    }
 
     const post: SubleasePost = {
       id: postIdRef.current,
@@ -461,18 +486,24 @@ export default function PostSubleaseScreen() {
 
     setPublishing(true);
     try {
-      await addSublease(post);
+      if (editId) await updateSublease(post);
+      else await addSublease(post);
     } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showError(
-        "Your listing wasn't published",
-        `${error instanceof Error ? error.message : String(error)}\n\nNothing was lost — tap Publish to try again.`
+        editId ? "Your changes weren't saved" : "Your listing wasn't published",
+        `${error instanceof Error ? error.message : String(error)}\n\nNothing was lost — tap ${editId ? "Save" : "Publish"} to try again.`
       );
       return;
     } finally {
       setPublishing(false);
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    if (editId) {
+      router.canGoBack() ? router.back() : router.replace("/my-listings");
+      return;
+    }
     await clearListingDraft(currentUser?.email);
 
     if (currentUser) {
@@ -524,44 +555,67 @@ export default function PostSubleaseScreen() {
   // empty one for someone who only opened the wizard to look.
   const skipNextSave = useRef(true);
 
+  // Fills the form from a saved draft's fields, or from a listing mapped to that shape.
+  const restoreFields = (f: any, toStep: number) => {
+    setBuildingName(f.buildingName ?? ""); setAddress(f.address ?? "");
+    if (f.leaseType) setLeaseType(f.leaseType);
+    setPrice(f.price ?? ""); setLandlords(f.landlords ?? []);
+    if (f.zone) setZone(f.zone);
+    setAvailableDuringBreaks(!!f.availableDuringBreaks); setSelectedBreaks(f.selectedBreaks ?? []);
+    setDescription(f.description ?? "");
+    if (f.kitchenType) setKitchenType(f.kitchenType);
+    if (f.bathroomType) setBathroomType(f.bathroomType);
+    setUnitType(f.unitType ?? "");
+    setIsPrivateBedroom(f.isPrivateBedroom ?? true); setIsPrivateBathroom(f.isPrivateBathroom ?? true);
+    if (Array.isArray(f.images)) setImages(f.images);
+    setFloorPlanImage(f.floorPlanImage ?? null);
+    setRoomsAvailable(f.roomsAvailable ?? "1"); setCurrentResidentBio(f.currentResidentBio ?? "");
+    setRoommatePreference(f.roommatePreference ?? "");
+    if (f.amenities) setAmenities({ ...DEFAULT_AMENITIES, ...f.amenities });
+    setEventTag(f.eventTag ?? ""); setSubCategory(f.subCategory ?? ""); setHasParking(!!f.hasParking);
+    if (f.cleaningFrequency) setCleaningFrequency(f.cleaningFrequency);
+    if (f.shoePolicy) setShoePolicy(f.shoePolicy);
+    setMoveInDate(f.moveInDate ? new Date(f.moveInDate) : null);
+    setMoveOutDate(f.moveOutDate ? new Date(f.moveOutDate) : null);
+    setStep(Math.min(Math.max(toStep || 0, 0), TOTAL_STEPS - 1));
+  };
+
   useEffect(() => {
+    // Editing loads the listing below and never touches the draft.
+    if (editId) return;
     let active = true;
     loadListingDraft(currentUser?.email).then(draft => {
       if (!active) return;
       // A Host draft shouldn't resume as a sublease, or the other way round.
       if (draft && draft.mode === params.mode) {
-        const f = draft.fields as any;
         postIdRef.current = draft.postId || postIdRef.current;
-        setBuildingName(f.buildingName ?? ""); setAddress(f.address ?? "");
-        if (f.leaseType) setLeaseType(f.leaseType);
-        setPrice(f.price ?? ""); setLandlords(f.landlords ?? []);
-        if (f.zone) setZone(f.zone);
-        setAvailableDuringBreaks(!!f.availableDuringBreaks); setSelectedBreaks(f.selectedBreaks ?? []);
-        setDescription(f.description ?? "");
-        if (f.kitchenType) setKitchenType(f.kitchenType);
-        if (f.bathroomType) setBathroomType(f.bathroomType);
-        setUnitType(f.unitType ?? "");
-        setIsPrivateBedroom(f.isPrivateBedroom ?? true); setIsPrivateBathroom(f.isPrivateBathroom ?? true);
-        if (Array.isArray(f.images)) setImages(f.images);
-        setFloorPlanImage(f.floorPlanImage ?? null);
-        setRoomsAvailable(f.roomsAvailable ?? "1"); setCurrentResidentBio(f.currentResidentBio ?? "");
-        setRoommatePreference(f.roommatePreference ?? "");
-        if (f.amenities) setAmenities({ ...DEFAULT_AMENITIES, ...f.amenities });
-        setEventTag(f.eventTag ?? ""); setSubCategory(f.subCategory ?? ""); setHasParking(!!f.hasParking);
-        if (f.cleaningFrequency) setCleaningFrequency(f.cleaningFrequency);
-        if (f.shoePolicy) setShoePolicy(f.shoePolicy);
-        setMoveInDate(f.moveInDate ? new Date(f.moveInDate) : null);
-        setMoveOutDate(f.moveOutDate ? new Date(f.moveOutDate) : null);
-        setStep(Math.min(Math.max(draft.step ?? 0, 0), TOTAL_STEPS - 1));
+        restoreFields(draft.fields, draft.step ?? 0);
       }
       setDraftLoaded(true);
     });
     return () => { active = false; };
   }, [currentUser?.email]);
 
+  // Editing: prefill once the listing is in the loaded feed, keeping its id so
+  // saving updates it in place.
+  useEffect(() => {
+    if (!editingPost || prefilled) return;
+    const p = editingPost;
+    postIdRef.current = p.id;
+    restoreFields({
+      ...p,
+      price: String(p.pricePerMonth ?? ""),
+      selectedBreaks: p.breakTypes,
+      images: [0, 1, 2].map(i => p.images?.[i] ?? null),
+      floorPlanImage: p.floorPlanUrl ?? null,
+      roomsAvailable: p.roomsAvailable !== undefined ? String(p.roomsAvailable) : undefined,
+    }, Number(params.step) || 0);
+    setPrefilled(true);
+  }, [editingPost?.id]);
+
   const draftSnapshot = JSON.stringify(draftFields) + step;
   useEffect(() => {
-    if (!draftLoaded || publishing) return;
+    if (editId || !draftLoaded || publishing) return;
     if (skipNextSave.current) { skipNextSave.current = false; return; }
     saveListingDraft(currentUser?.email, currentDraft());
   }, [draftSnapshot, draftLoaded]);
@@ -598,7 +652,7 @@ export default function PostSubleaseScreen() {
           <Ionicons name={step === 0 && !isGateway ? "close" : "arrow-back"} size={20} color={Colors.darkTeal} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{isHostMode ? "Post My Apartment" : "Post My Sublease"}</Text>
+          <Text style={styles.headerTitle}>{editId ? "Edit Listing" : isHostMode ? "Post My Apartment" : "Post My Sublease"}</Text>
           <Text style={styles.headerSub}>Step {step + 1} of {TOTAL_STEPS}</Text>
         </View>
         <View style={styles.stepDots}>
@@ -797,7 +851,7 @@ export default function PostSubleaseScreen() {
                   <TextInput style={[styles.input, styles.textArea]} value={currentResidentBio} onChangeText={setCurrentResidentBio}
                     placeholder="e.g. 2 junior CS majors, clean and quiet. We cook together on weekends."
                     placeholderTextColor={Colors.textLight} multiline numberOfLines={3} textAlignVertical="top" />
-                  <Text style={styles.fieldHint}>Help joiners know who they'd be living with</Text>
+                  <Text style={styles.fieldHint}>{"Help joiners know who they'd be living with"}</Text>
                 </View>
               </>
             )}
@@ -1059,7 +1113,7 @@ export default function PostSubleaseScreen() {
             disabled={!canSubmit || publishing}
           >
             <Ionicons name="sparkles" size={20} color={canSubmit ? Colors.onOrange : DISABLED_TEXT} />
-            <Text style={[styles.submitBtnText, !canSubmit && { color: DISABLED_TEXT }]}>{publishing ? "Publishing…" : "Publish Listing ✨"}</Text>
+            <Text style={[styles.submitBtnText, !canSubmit && { color: DISABLED_TEXT }]}>{publishing ? (editId ? "Saving…" : "Publishing…") : editId ? "Save Changes" : "Publish Listing ✨"}</Text>
           </TouchableOpacity>
         )}
         {isGateway && (

@@ -49,6 +49,20 @@ export async function clearListingDraft(email: string | undefined): Promise<void
   await AsyncStorage.removeItem(keyFor(email)).catch(() => {});
 }
 
+/** The wizard step with photo uploads (0-based). */
+export const PHOTOS_STEP = 1;
+
+/**
+ * Reopens the wizard on a published listing (loaded by id, not from the
+ * draft). `step` jumps straight to one, e.g. 1 for photos.
+ */
+export function listingEditHref(post: { id: string; listingType?: string }, step?: number) {
+  const params = new URLSearchParams({ edit: post.id });
+  if (post.listingType === "roommate") params.set("mode", "host");
+  if (step !== undefined) params.set("step", String(step));
+  return `/post-sublease?${params}` as any;
+}
+
 /** Where "Finish your listing" links go: back into the wizard, in the right mode. */
 export function listingWizardHref(mode: string | undefined) {
   return (mode ? `/post-sublease?mode=${mode}` : "/post-sublease") as any;

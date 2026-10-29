@@ -753,6 +753,53 @@ function toCrashPost(row: CrashPostRow) {
  * between checking and changing; the follow-up lookup only decides which
  * error to report.
  */
+/**
+ * Checks a listing body for POST and PUT alike. Returns the values for
+ * columns building_name through details, in table order, or the 400 to send.
+ */
+function parseListingBody(body: any): { error: { error: string } } | { columns: unknown[] } {
+  const {
+    buildingName, address = "", category = "semester_takeover",
+    leaseType = "full_year", pricePerMonth = 0, landlords = ["other"],
+    zone = "campustown", availableDuringBreaks = false, breakTypes = [],
+    description = "", eventTag = "", moveInDate, moveOutDate,
+  } = body ?? {};
+
+  if (!buildingName) return { error: { error: "id and buildingName are required" } };
+  // price_per_month is an INT: 850.5 would fail the insert as a bare 500.
+  if (!Number.isInteger(Number(pricePerMonth)) || Number(pricePerMonth) < 0) {
+    return { error: { error: "pricePerMonth must be whole dollars, 0 or more" } };
+  }
+  // A file:// path saved here looks fine to the poster and is broken for
+  // everyone else, so anything that isn't an uploaded URL is refused.
+  const { images, floorPlanUrl } = body;
+  if (images !== undefined && (!Array.isArray(images) || !images.every(isHttpUrl))) {
+    return { error: { error: "Photos must be uploaded (http/https URLs) before posting" } };
+  }
+  if (floorPlanUrl && !isHttpUrl(floorPlanUrl)) {
+    return { error: { error: "The floor plan must be uploaded (http/https URL) before posting" } };
+  }
+  const listingDetails = toListingDetails(body);
+  const badListingField = objectionableField({
+    "listing title": buildingName, address, "listing description": description, "event name": eventTag,
+    "unit type": listingDetails.unitType, "resident bio": listingDetails.currentResidentBio,
+    "roommate preference": listingDetails.roommatePreference, "summer timing": listingDetails.subCategory,
+  });
+  if (badListingField) return { error: filteredError(badListingField) };
+  const startDate = moveInDate ? new Date(moveInDate) : null;
+  const endDate = moveOutDate ? new Date(moveOutDate) : null;
+  if ((startDate && isNaN(startDate.getTime())) || (endDate && isNaN(endDate.getTime()))) {
+    return { error: { error: "moveInDate and moveOutDate must be ISO dates" } };
+  }
+
+  const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
+  return {
+    columns: [buildingName, address, category, leaseType, pricePerMonth,
+      landlordJson, zone, availableDuringBreaks, breakTypes, description,
+      eventTag, startDate, endDate, JSON.stringify(listingDetails)],
+  };
+}
+
 async function updateOwnRow(
   updateSql: string, existsSql: string, id: string, userId: string,
 ): Promise<"updated" | "missing" | "not_owner"> {
@@ -1458,43 +1505,11 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       }
       const userId = callerUserId(req, res);
       if (!userId) return;
-      const {
-        id, buildingName, address = "", category = "semester_takeover",
-        leaseType = "full_year", pricePerMonth = 0, landlords = ["other"],
-        zone = "campustown", availableDuringBreaks = false, breakTypes = [],
-        description = "", eventTag = "", moveInDate, moveOutDate,
-      } = req.body;
+      const { id } = req.body;
+      const parsed = parseListingBody(req.body);
+      if ("error" in parsed) return res.status(400).json(parsed.error);
+      if (!id) return res.status(400).json({ error: "id and buildingName are required" });
 
-      if (!id || !buildingName) {
-        return res.status(400).json({ error: "id and buildingName are required" });
-      }
-      // price_per_month is an INT: 850.5 would fail the insert as a bare 500.
-      if (!Number.isInteger(Number(pricePerMonth)) || Number(pricePerMonth) < 0) {
-        return res.status(400).json({ error: "pricePerMonth must be whole dollars, 0 or more" });
-      }
-      // A file:// path saved here looks fine to the poster and is broken for
-      // everyone else, so anything that isn't an uploaded URL is refused.
-      const { images, floorPlanUrl } = req.body;
-      if (images !== undefined && (!Array.isArray(images) || !images.every(isHttpUrl))) {
-        return res.status(400).json({ error: "Photos must be uploaded (http/https URLs) before posting" });
-      }
-      if (floorPlanUrl && !isHttpUrl(floorPlanUrl)) {
-        return res.status(400).json({ error: "The floor plan must be uploaded (http/https URL) before posting" });
-      }
-      const listingDetails = toListingDetails(req.body);
-      const badListingField = objectionableField({
-        "listing title": buildingName, address, "listing description": description, "event name": eventTag,
-        "unit type": listingDetails.unitType, "resident bio": listingDetails.currentResidentBio,
-        "roommate preference": listingDetails.roommatePreference, "summer timing": listingDetails.subCategory,
-      });
-      if (badListingField) return res.status(400).json(filteredError(badListingField));
-      const startDate = moveInDate ? new Date(moveInDate) : null;
-      const endDate = moveOutDate ? new Date(moveOutDate) : null;
-      if ((startDate && isNaN(startDate.getTime())) || (endDate && isNaN(endDate.getTime()))) {
-        return res.status(400).json({ error: "moveInDate and moveOutDate must be ISO dates" });
-      }
-
-      const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
       // ON CONFLICT: retrying a post whose response was lost is a no-op.
       await query(
         `INSERT INTO listings (id, user_id, building_name, address, category, lease_type,
@@ -1502,9 +1517,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
           description, event_name, start_date, end_date, details)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
          ON CONFLICT (id) DO NOTHING`,
-        [id, userId, buildingName, address, category, leaseType, pricePerMonth,
-          landlordJson, zone, availableDuringBreaks, breakTypes, description,
-          eventTag, startDate, endDate, JSON.stringify(listingDetails)]
+        [id, userId, ...parsed.columns]
       );
 
       const [row] = await query<ListingRow>(`${LISTING_SELECT} WHERE l.id = $1`, [id]);
@@ -1515,6 +1528,42 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     } catch (err) {
       console.error("POST /api/listings", err);
       return res.status(500).json({ error: "Failed to save listing" });
+    }
+  });
+
+  // Replaces the caller's own listing in place: same id, so editing never
+  // makes a second copy. Validated exactly as a new post is.
+  app.put("/api/listings/:id", async (req: Request, res: Response) => {
+    try {
+      if (namesSomeoneElse(req.body?.userId, req.caller!.userId ?? "")) {
+        return res.status(403).json({ error: "You can only change your own listings" });
+      }
+      const userId = callerUserId(req, res);
+      if (!userId) return;
+      const parsed = parseListingBody(req.body);
+      if ("error" in parsed) return res.status(400).json(parsed.error);
+
+      const id = String(req.params.id);
+      const updated = await query(
+        `UPDATE listings SET building_name = $3, address = $4, category = $5, lease_type = $6,
+          price_per_month = $7, landlord = $8, zone = $9, available_during_breaks = $10,
+          break_types = $11, description = $12, event_name = $13, start_date = $14,
+          end_date = $15, details = $16
+         WHERE id = $1 AND user_id = $2 RETURNING id`,
+        [id, userId, ...parsed.columns]
+      );
+      if (updated.length === 0) {
+        const exists = await query("SELECT 1 FROM listings WHERE id = $1", [id]);
+        return exists.length > 0
+          ? res.status(403).json({ error: "You can only change your own listings" })
+          : res.status(404).json({ error: "Listing not found" });
+      }
+
+      const [row] = await query<ListingRow>(`${LISTING_SELECT} WHERE l.id = $1`, [id]);
+      return res.json(toListing(row));
+    } catch (err) {
+      console.error("PUT /api/listings/:id", err);
+      return res.status(500).json({ error: "Failed to update listing" });
     }
   });
 

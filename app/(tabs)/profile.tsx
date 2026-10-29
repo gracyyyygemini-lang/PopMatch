@@ -809,7 +809,7 @@ ${message}`)
       <BottomSheetModal visible={algoModalVisible} title="How PopMatch Finds Your Roommate" onClose={() => setAlgoModalVisible(false)} maxHeight={0.85}>
         <ScrollView showsVerticalScrollIndicator={false}>
           <Text style={sh.algoModalBody}>
-            We use a Weighted Euclidean Distance formula to calculate how compatible two students are. Think of it like measuring "distance" between your preferences — the closer you are, the better the match!
+            We use a Weighted Euclidean Distance formula to calculate how compatible two students are. Think of it like measuring &ldquo;distance&rdquo; between your preferences — the closer you are, the better the match!
           </Text>
           <View style={sh.algoModalSection}>
             <Text style={sh.algoModalSubtitle}>Weight Breakdown</Text>

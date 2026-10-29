@@ -218,7 +218,7 @@ function MatchModal({
       <View style={mm.overlay}>
         <Animated.View entering={ZoomIn.duration(400)} style={mm.card}>
           <Text style={mm.emoji}>🎉</Text>
-          <Text style={mm.title}>It's a Match!</Text>
+          <Text style={mm.title}>{"It's a Match!"}</Text>
           <Text style={mm.subtitle}>You and {matchedUser.name} liked each other</Text>
 
           <View style={mm.avatarRow}>

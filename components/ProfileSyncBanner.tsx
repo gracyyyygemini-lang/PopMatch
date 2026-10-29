@@ -38,7 +38,7 @@ export function ProfileSyncBanner() {
     <View style={[styles.banner, { paddingTop: (Platform.OS === "web" ? 0 : insets.top) + 10 }]}>
       <Ionicons name="cloud-offline-outline" size={18} color={Colors.alertRed} />
       <View style={styles.content}>
-        <Text style={styles.title}>Your profile isn't saved yet</Text>
+        <Text style={styles.title}>{"Your profile isn't saved yet"}</Text>
         <Text style={styles.body}>
           {filtered
             ? `${apiErrorMessage(new Error(profileSyncError))} Edit it on your Profile to save.`
