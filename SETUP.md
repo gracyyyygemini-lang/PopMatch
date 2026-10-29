@@ -369,10 +369,6 @@ Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
 
    **Deliberately skipped:**
    - `stats` holds only totals (subleases, matches), nothing per person.
-   - `break_posts` and `friendships` are unused. Nothing in the app or API
-     writes to them, both are empty, and `friendships` rows would go with the
-     `users` row anyway (`ON DELETE CASCADE`). Naming them here would break
-     this script the day they're dropped.
    - Photos in Storage (`avatars`, `listing-photos`). Delete the folder named
      after the user's auth id in each bucket, under **Storage**. The SQL
      editor can't remove the files themselves.

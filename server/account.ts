@@ -11,9 +11,7 @@ import getPool from "./db";
  *
  * If a step fails the request fails and the client says so; running it again
  * picks up where it stopped (each step skips what's already gone). The table
- * list matches the review-account cleanup SQL in SETUP.md. The unused
- * break_posts and friendships tables are left out on purpose: nothing writes
- * them, and naming them would break this the day they're dropped.
+ * list matches the review-account cleanup SQL in SETUP.md.
  */
 
 export const PHOTO_BUCKETS = ["avatars", "listing-photos"];

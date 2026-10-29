@@ -43,15 +43,6 @@ async function initDb() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vibe_profile JSONB`);
 
   await query(`
-    CREATE TABLE IF NOT EXISTS friendships (
-      id SERIAL PRIMARY KEY,
-      user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
-      friend_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
-      UNIQUE(user_id, friend_id)
-    )
-  `);
-
-  await query(`
     CREATE TABLE IF NOT EXISTS vouches (
       id SERIAL PRIMARY KEY,
       voucher_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
@@ -118,19 +109,6 @@ async function initDb() {
     $$
   `);
   await query(`ALTER TABLE listings ENABLE ROW LEVEL SECURITY`);
-
-  await query(`
-    CREATE TABLE IF NOT EXISTS break_posts (
-      id VARCHAR PRIMARY KEY,
-      user_id VARCHAR NOT NULL,
-      break_type VARCHAR NOT NULL,
-      role VARCHAR NOT NULL,
-      price_per_week INT DEFAULT 0,
-      zone VARCHAR DEFAULT 'campustown',
-      description TEXT DEFAULT '',
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
 
   await query(`
     ALTER TABLE listings ADD COLUMN IF NOT EXISTS leased BOOLEAN DEFAULT FALSE

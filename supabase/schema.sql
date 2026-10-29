@@ -38,14 +38,11 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS intent VARCHAR;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS vibe_profile JSONB;
 
--- UNUSED: superseded by friend_adds (mutual-add, keyed by email). Nothing in
--- the app or API reads or writes this table any more.
-CREATE TABLE IF NOT EXISTS friendships (
-  id SERIAL PRIMARY KEY,
-  user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
-  friend_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
-  UNIQUE (user_id, friend_id)
-);
+-- Two tables nothing ever used: friendships (superseded by friend_adds) and
+-- break_posts (Crash & Cash lives in crash_posts). Dropped from databases
+-- created before they were removed; both were empty.
+DROP TABLE IF EXISTS friendships;
+DROP TABLE IF EXISTS break_posts;
 
 -- Keyed by email like friend_adds; a vouch counts only between confirmed
 -- friends. voucher_id / vouchee_id are legacy (no longer written).
@@ -121,19 +118,6 @@ CREATE TABLE IF NOT EXISTS crash_posts (
   currency_label VARCHAR NOT NULL DEFAULT '',
   approx_location VARCHAR NOT NULL DEFAULT '',
   status VARCHAR NOT NULL DEFAULT 'active',   -- active | completed
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- UNUSED: nothing in the app or API reads or writes this table yet. Crash &
--- Cash posts live in crash_posts, not here.
-CREATE TABLE IF NOT EXISTS break_posts (
-  id VARCHAR PRIMARY KEY,
-  user_id VARCHAR NOT NULL,
-  break_type VARCHAR NOT NULL,
-  role VARCHAR NOT NULL,
-  price_per_week INT DEFAULT 0,
-  zone VARCHAR DEFAULT 'campustown',
-  description TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -253,10 +237,8 @@ INSERT INTO stats (key, value) VALUES ('total_matches', 0)
 -- nothing.
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vouches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE listings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE break_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
