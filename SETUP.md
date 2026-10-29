@@ -286,21 +286,68 @@ reads the bundle.
 1. Supabase → **Authentication** → **Users** → find the address → **⋯** →
    **Delete user**. That ends sign-in; existing sessions stop working once
    their token expires (1 hour by default).
-2. Delete its PopMatch data too. The `users` row and anything it posted live in
-   the app's tables, not Supabase Auth. In the SQL Editor, with the address in
-   place of `<review email>`:
+2. Delete its PopMatch data too. The `users` row and everything tied to it
+   live in the app's tables, not Supabase Auth. In the SQL Editor, put the
+   address in place of `<review email>` (once, on the first line) and run the
+   whole script:
    ```sql
-   DELETE FROM messages WHERE sender_id IN (SELECT id FROM users WHERE lower(email) = '<review email>');
-   DELETE FROM conversations WHERE participant1_id IN (SELECT id FROM users WHERE lower(email) = '<review email>')
-                               OR participant2_id IN (SELECT id FROM users WHERE lower(email) = '<review email>');
-   DELETE FROM listings WHERE user_id IN (SELECT id FROM users WHERE lower(email) = '<review email>');
-   DELETE FROM crash_posts WHERE user_id IN (SELECT id FROM users WHERE lower(email) = '<review email>');
-   DELETE FROM likes WHERE '<review email>' IN (liker_email, liked_email);
-   DELETE FROM passes WHERE '<review email>' IN (passer_email, passed_email);
-   DELETE FROM friend_adds WHERE '<review email>' IN (adder_email, added_email);
-   DELETE FROM vouches WHERE '<review email>' IN (voucher_email, vouchee_email);
-   DELETE FROM users WHERE lower(email) = '<review email>';
+   BEGIN;
+   CREATE TEMP TABLE target ON COMMIT DROP AS
+     SELECT id, lower(email) AS email FROM users WHERE lower(email) = lower(trim('<review email>'));
+   DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM target) THEN
+       RAISE EXCEPTION 'No PopMatch profile has that email; nothing was deleted';
+     END IF;
+   END $$;
+   -- Their conversations, and every message in them (both sides).
+   DELETE FROM messages WHERE conversation_id IN (
+     SELECT c.id FROM conversations c, target t WHERE t.id IN (c.participant1_id, c.participant2_id));
+   DELETE FROM messages WHERE sender_id IN (SELECT id FROM target);
+   DELETE FROM conversations WHERE participant1_id IN (SELECT id FROM target)
+                                OR participant2_id IN (SELECT id FROM target);
+   -- What they posted (keyed by users.id).
+   DELETE FROM listings WHERE user_id IN (SELECT id FROM target);
+   DELETE FROM crash_posts WHERE user_id IN (SELECT id FROM target);
+   -- What they did and what was done to them (keyed by email).
+   DELETE FROM likes WHERE liker_email IN (SELECT email FROM target) OR liked_email IN (SELECT email FROM target);
+   DELETE FROM passes WHERE passer_email IN (SELECT email FROM target) OR passed_email IN (SELECT email FROM target);
+   DELETE FROM friend_adds WHERE adder_email IN (SELECT email FROM target) OR added_email IN (SELECT email FROM target);
+   DELETE FROM vouches WHERE voucher_email IN (SELECT email FROM target) OR vouchee_email IN (SELECT email FROM target)
+                          OR voucher_id IN (SELECT id FROM target) OR vouchee_id IN (SELECT id FROM target);
+   DELETE FROM feedback WHERE lower(user_email) IN (SELECT email FROM target);
+   -- The profile itself, last: everything above looks people up through it.
+   DELETE FROM users WHERE id IN (SELECT id FROM target);
+   -- Must print 0. Anything else means a table was missed.
+   SELECT
+     (SELECT count(*) FROM users u, target t WHERE u.id = t.id OR lower(u.email) = t.email)
+     + (SELECT count(*) FROM conversations c, target t WHERE t.id IN (c.participant1_id, c.participant2_id))
+     + (SELECT count(*) FROM messages m, target t WHERE m.sender_id = t.id)
+     + (SELECT count(*) FROM listings l, target t WHERE l.user_id = t.id)
+     + (SELECT count(*) FROM crash_posts p, target t WHERE p.user_id = t.id)
+     + (SELECT count(*) FROM likes x, target t WHERE t.email IN (x.liker_email, x.liked_email))
+     + (SELECT count(*) FROM passes x, target t WHERE t.email IN (x.passer_email, x.passed_email))
+     + (SELECT count(*) FROM friend_adds x, target t WHERE t.email IN (x.adder_email, x.added_email))
+     + (SELECT count(*) FROM vouches x, target t WHERE t.email IN (x.voucher_email, x.vouchee_email))
+     + (SELECT count(*) FROM feedback f, target t WHERE lower(f.user_email) = t.email)
+     AS rows_left;
+   COMMIT;
    ```
+   It runs as one transaction: if any statement fails, or the email matches
+   no profile, nothing is deleted, and the editor shows the error.
+
+   **Covered:** `users`, `conversations` and every message in them (the other
+   person's side of the thread too), `messages`, `listings`, `crash_posts`,
+   `likes`, `passes`, `friend_adds`, `vouches`, `feedback`.
+
+   **Deliberately skipped:**
+   - `stats` holds only totals (subleases, matches), nothing per person.
+   - `break_posts` and `friendships` are unused. Nothing in the app or API
+     writes to them, both are empty, and `friendships` rows would go with the
+     `users` row anyway (`ON DELETE CASCADE`). Naming them here would break
+     this script the day they're dropped.
+   - Photos in Storage (`avatars`, `listing-photos`). Delete the folder named
+     after the user's auth id in each bucket, under **Storage**. The SQL
+     editor can't remove the files themselves.
 3. Unset `EXPO_PUBLIC_REVIEW_EMAIL` on EAS and `REVIEW_EMAIL` on the API host,
    so the next build doesn't carry the address.
 
