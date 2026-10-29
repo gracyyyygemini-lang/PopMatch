@@ -471,11 +471,11 @@ export default function OnboardingScreen() {
             {/* Fine print, not a second option: everyone on PopMatch is a
                 verified UIUC student, and this is only for when Microsoft
                 sign-in fails. It's permanent (App Review signs in through it
-                too). The text is small; hitSlop keeps the touch area at 44pt. */}
+                too). The text is small; its invisible padding makes the touch
+                area 44pt on every platform (hitSlop is ignored on web). */}
             {!otpSent && !showEmailFallback && (
               <TouchableOpacity
                 style={styles.fallbackLink}
-                hitSlop={{ top: 13, bottom: 13, left: 12, right: 12 }}
                 onPress={() => {
                   setShowEmailFallback(true);
                   setAuthError(null);
@@ -877,10 +877,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     letterSpacing: 10,
   },
+  // 13 + 18 (line) + 13 = 44pt tall; the text alone is ~360pt wide, so no
+  // horizontal padding (it would only make the line wrap on narrow phones).
   fallbackLink: {
     alignSelf: "center",
-    marginTop: 48,
-    paddingVertical: 2,
+    marginTop: 37,
+    paddingVertical: 13,
   },
   fallbackLinkText: {
     ...font.regular,

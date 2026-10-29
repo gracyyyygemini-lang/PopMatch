@@ -253,7 +253,7 @@ address still gets Supabase's emailed codes.
    HOW TO SIGN IN
    Normal sign-in is through the university's Microsoft accounts, so the "Continue with UIUC" button will not work for you. Please use the demo account instead:
 
-   1. Open the app. On the "Welcome to PopMatch" screen, find the small grey line of text below the "Continue with UIUC" button and its caption, a little way down the screen. It reads: "Can't use Microsoft sign-in? Verify with your @illinois.edu email". Tap it.
+   1. Open the app. On the "Welcome to PopMatch" screen, find the small grey text below the "Continue with UIUC" button and its caption, a little way down the screen. It reads: "Can't use Microsoft sign-in? Verify with your @illinois.edu email". Tap it.
    2. An email field and an "Email me a code" button appear. The field shows "netid@illinois.edu" as an example; type the demo email over it: <review email>
    3. Tap "Email me a code". No email is sent for this demo account.
    4. On the next screen, enter the 6-digit code: <code>
