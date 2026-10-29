@@ -1,7 +1,7 @@
 import React from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, Platform,
-  KeyboardAvoidingView, DimensionValue,
+  KeyboardAvoidingView, useWindowDimensions,
 } from "react-native";
 import Colors from "@/constants/colors";
 import { font } from "@/constants/typography";
@@ -17,8 +17,14 @@ export default function BottomSheetModal({
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  maxHeight?: DimensionValue;
+  /** Fraction of the window height the sheet may take (default 0.75). */
+  maxHeight?: number;
 }) {
+  // In points, not "75%": a percentage resolves against the sheet's parent,
+  // which is only as tall as the sheet, so the sheet always lost a quarter of
+  // its content.
+  const { height: windowHeight } = useWindowDimensions();
+  const cap = windowHeight * (maxHeight ?? 0.75);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity
@@ -34,7 +40,7 @@ export default function BottomSheetModal({
         >
           <TouchableOpacity
             activeOpacity={1}
-            style={[bsStyles.sheet, maxHeight !== undefined ? { maxHeight } : undefined]}
+            style={[bsStyles.sheet, { maxHeight: cap }]}
           >
             <View style={bsStyles.handle} />
             <Text style={bsStyles.title} accessibilityRole="header">{title}</Text>
@@ -52,7 +58,7 @@ const bsStyles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 20, paddingBottom: 36, maxHeight: "75%",
+    padding: 20, paddingBottom: 36,
   },
   handle: {
     width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.borderSoft,

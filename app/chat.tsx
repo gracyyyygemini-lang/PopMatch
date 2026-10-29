@@ -207,6 +207,7 @@ export default function ChatScreen() {
         visible={safetyOpen}
         onClose={() => setSafetyOpen(false)}
         person={convo.otherUserId ? { id: convo.otherUserId, name: convo.otherUserName || "This person" } : null}
+        report={{ type: "conversation", id: convo.id }}
         onBlocked={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/inbox"))}
       />
 

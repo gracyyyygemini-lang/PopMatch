@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { JWTVerifyGetKey } from "jose";
 import { query } from "./db";
 import { adminClient, deleteAccount } from "./account";
+import { sendReportAlert } from "./alerts";
 import {
   callerUserId, namesSomeoneElse, requireAdmin, requireAuth, supabaseSigningKeys,
 } from "./auth";
@@ -56,6 +57,32 @@ async function initDb() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks (blocked_email)`);
   await query(`ALTER TABLE blocks ENABLE ROW LEVEL SECURITY`);
+
+  // Reports of a profile, listing, Crash & Cash post or conversation.
+  // `snapshot` is the content as it was when reported, so the admin can
+  // still judge it after an edit or deletion. One report per reporter per
+  // item; reporting it again updates the report and reopens it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id SERIAL PRIMARY KEY,
+      reporter_email VARCHAR NOT NULL,
+      target_type VARCHAR NOT NULL,
+      target_id VARCHAR NOT NULL,
+      target_user_id VARCHAR NOT NULL,
+      reason VARCHAR NOT NULL,
+      details TEXT NOT NULL DEFAULT '',
+      snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+      status VARCHAR NOT NULL DEFAULT 'open',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      resolved_at TIMESTAMPTZ,
+      resolved_by VARCHAR,
+      resolution_note TEXT,
+      alert_sent BOOLEAN NOT NULL DEFAULT FALSE,
+      UNIQUE (reporter_email, target_type, target_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (status, created_at)`);
+  await query(`ALTER TABLE reports ENABLE ROW LEVEL SECURITY`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS vouches (
@@ -1143,6 +1170,89 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     } catch (err) {
       console.error("GET /api/blocks", err);
       return res.status(500).json({ error: "Failed to fetch blocked students" });
+    }
+  });
+
+  // ─── REPORTS ─────────────────────────────────────────────────────────────────
+  // The caller reports a profile, listing, Crash & Cash post or one of their
+  // own conversations. The server works out whose it is and keeps a copy of
+  // it as it is now, then emails the admins (server/alerts.ts).
+
+  const REPORT_TYPES = ["profile", "listing", "crash_post", "conversation"];
+  const REPORT_REASONS = ["spam", "scam", "harassment", "hate", "sexual", "violence", "impersonation", "other"];
+  const REPORTS_PER_DAY = 20;
+
+  /** The reported thing's owner (users.id), their name, and a copy of it; null if it doesn't exist or isn't the caller's to report. */
+  async function reportTarget(type: string, id: string, caller: { email: string; userId: string | null }) {
+    if (type === "profile") {
+      const [row] = await query<UserRow>("SELECT * FROM users WHERE id = $1", [id]);
+      return row ? { ownerId: row.id, ownerName: row.name, snapshot: toUserProfile(row, "") } : null;
+    }
+    if (type === "listing") {
+      const [row] = await query<ListingRow>(`${LISTING_SELECT} WHERE l.id = $1`, [id]);
+      return row ? { ownerId: row.user_id, ownerName: row.user_name ?? "", snapshot: toListing(row) } : null;
+    }
+    if (type === "crash_post") {
+      const [row] = await query<CrashPostRow>(`${CRASH_POST_SELECT} WHERE p.id = $1`, [id]);
+      return row ? { ownerId: row.user_id, ownerName: row.user_name ?? "", snapshot: toCrashPost(row) } : null;
+    }
+    // A conversation: only its participants can report it, and it's
+    // reported against the other person. The copy is its last 20 messages.
+    const participants = await participantsOf(id);
+    if (!participants || !caller.userId || !participants.includes(caller.userId)) return null;
+    const ownerId = participants.find(p => p !== caller.userId) ?? caller.userId;
+    const [owner] = await query<{ name: string }>("SELECT name FROM users WHERE id = $1", [ownerId]);
+    const recent = await query<MessageRow>(
+      `SELECT * FROM (${MESSAGE_SELECT} WHERE m.conversation_id = $1 ORDER BY m.created_at DESC LIMIT 20) last ORDER BY created_at ASC`,
+      [id]
+    );
+    return { ownerId, ownerName: owner?.name ?? "", snapshot: { conversationId: id, messages: recent.map(toChatMessage) } };
+  }
+
+  app.post("/api/reports", async (req: Request, res: Response) => {
+    try {
+      const caller = req.caller!;
+      const { targetType, targetId, reason } = req.body ?? {};
+      const details = typeof req.body?.details === "string" ? req.body.details.trim().slice(0, 1000) : "";
+      if (!REPORT_TYPES.includes(targetType)) {
+        return res.status(400).json({ error: `targetType must be one of ${REPORT_TYPES.join(", ")}` });
+      }
+      if (!REPORT_REASONS.includes(reason)) {
+        return res.status(400).json({ error: `reason must be one of ${REPORT_REASONS.join(", ")}` });
+      }
+      if (typeof targetId !== "string" || !targetId) {
+        return res.status(400).json({ error: "targetId is required" });
+      }
+      const [{ n: today }] = await query<{ n: number }>(
+        "SELECT count(*)::int AS n FROM reports WHERE reporter_email = $1 AND created_at > NOW() - INTERVAL '1 day'",
+        [caller.email]
+      );
+      if (today >= REPORTS_PER_DAY) {
+        return res.status(429).json({ error: "You've sent a lot of reports today. Please try again tomorrow, or contact us directly." });
+      }
+
+      const target = await reportTarget(targetType, targetId, caller);
+      if (!target) return res.status(404).json({ error: "We couldn't find that to report" });
+      if (target.ownerId === caller.userId) return res.status(400).json({ error: "You can't report your own content" });
+
+      const [saved] = await query<{ id: number }>(
+        `INSERT INTO reports (reporter_email, target_type, target_id, target_user_id, reason, details, snapshot)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (reporter_email, target_type, target_id) DO UPDATE SET
+           reason = EXCLUDED.reason, details = EXCLUDED.details, snapshot = EXCLUDED.snapshot,
+           target_user_id = EXCLUDED.target_user_id, status = 'open', created_at = NOW(),
+           resolved_at = NULL, resolved_by = NULL, resolution_note = NULL, alert_sent = FALSE
+         RETURNING id`,
+        [caller.email, targetType, targetId, target.ownerId, reason, details, JSON.stringify(target.snapshot)]
+      );
+
+      // The report is saved either way; the alert is best-effort and recorded.
+      const sent = await sendReportAlert({ id: saved.id, targetType, reason, details, ownerName: target.ownerName });
+      if (sent) await query("UPDATE reports SET alert_sent = TRUE WHERE id = $1", [saved.id]);
+      return res.status(201).json({ reported: true });
+    } catch (err) {
+      console.error("POST /api/reports", err);
+      return res.status(500).json({ error: "Failed to send the report" });
     }
   });
 

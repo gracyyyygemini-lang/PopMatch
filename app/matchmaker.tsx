@@ -424,6 +424,7 @@ export default function MatchmakerScreen() {
         visible={!!safetyFor}
         onClose={() => setSafetyFor(null)}
         person={safetyFor}
+        report={safetyFor ? { type: "profile", id: safetyFor.id } : undefined}
       />
 
       <MatchModal

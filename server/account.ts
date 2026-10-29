@@ -79,6 +79,9 @@ const DELETE_ROWS: [string, "id" | "email" | "both"][] = [
   [`DELETE FROM vouches WHERE $2::varchar IN (voucher_email, vouchee_email)
      OR $1::varchar IN (voucher_id, vouchee_id)`, "both"],
   [`DELETE FROM blocks WHERE $1::varchar IN (blocker_email, blocked_email)`, "email"],
+  // Reports they filed, and reports about them: both hold their data (an
+  // email, or a copy of what they posted).
+  [`DELETE FROM reports WHERE reporter_email = $2::varchar OR target_user_id = $1::varchar`, "both"],
   [`DELETE FROM feedback WHERE lower(user_email) = $1::varchar`, "email"],
   [`DELETE FROM users WHERE id = $1::varchar OR lower(email) = $2::varchar`, "both"],
 ];

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform,
-  TextInput, FlatList, Animated, Pressable, ActivityIndicator,
+  TextInput, FlatList, Animated, Pressable, ActivityIndicator, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +18,7 @@ import { useResponsive } from "@/hooks/useResponsive";
 import BottomSheetModal from "@/components/BottomSheetModal";
 import CustomAvatar from "@/components/CustomAvatar";
 import { Group, Row } from "@/components/ui/Grouped";
+import { SUPPORT_EMAIL } from "@/lib/reports";
 import type { LeaseType, Zone, Landlord, GenderPref, UserProfile } from "@/context/AppContext";
 import { font } from "@/constants/typography";
 
@@ -768,6 +769,10 @@ ${message}`)
         <Group style={{ marginBottom: 12 }}>
           <Row icon="hand-left" tile={Colors.earth} title="Blocked students"
             subtitle="See who you've blocked, and unblock" onPress={() => router.push("/blocked")} />
+          {SUPPORT_EMAIL ? (
+            <Row icon="mail" tile={Colors.industrial} title="Contact us" subtitle={SUPPORT_EMAIL}
+              onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=PopMatch`)} />
+          ) : null}
         </Group>
 
         <TouchableOpacity style={styles.signOutFullBtn} onPress={handleSignOut}>
@@ -799,7 +804,7 @@ ${message}`)
 
       {renderSheet()}
 
-      <BottomSheetModal visible={algoModalVisible} title="How PopMatch Finds Your Roommate" onClose={() => setAlgoModalVisible(false)} maxHeight="85%">
+      <BottomSheetModal visible={algoModalVisible} title="How PopMatch Finds Your Roommate" onClose={() => setAlgoModalVisible(false)} maxHeight={0.85}>
         <ScrollView showsVerticalScrollIndicator={false}>
           <Text style={sh.algoModalBody}>
             We use a Weighted Euclidean Distance formula to calculate how compatible two students are. Think of it like measuring "distance" between your preferences — the closer you are, the better the match!

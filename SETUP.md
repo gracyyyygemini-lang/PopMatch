@@ -186,6 +186,44 @@ that runs Node works — Render, Railway, Fly.io, a VPS. Set `DATABASE_URL`,
 `EXPO_PUBLIC_DOMAIN` (your public hostname), `ADMIN_EMAILS` and
 `SUPABASE_SERVICE_ROLE_KEY` in the host's environment.
 
+### Reports and alerts
+
+Students can report a profile, a listing, a Crash & Cash post or a
+conversation from the "⋯" menu on each. `POST /api/reports` saves the report
+with a copy of the content as it was, then emails everyone in `ADMIN_EMAILS`
+through [Resend](https://resend.com). App Review expects reports to be acted
+on within 24 hours, so the email is what tells you there's something to do.
+It names what was reported and why, but never the text of a private
+conversation; that's only in the admin queue. If the email can't be sent,
+the report is still saved and marked `alert_sent = false`.
+
+Setting up Resend:
+
+1. Sign up at resend.com.
+2. Pick a sender:
+   - **With a domain you own:** Resend → **Domains** → **Add domain**, then add
+     the DNS records it lists (SPF and DKIM) at your domain registrar and wait
+     for it to show Verified. Use an address on it, e.g.
+     `PopMatch Reports <reports@your-domain>`.
+   - **Without a domain:** Resend's test sender `onboarding@resend.dev` can only
+     send to the email address your Resend account is registered with. That's
+     enough for a one-person team if `ADMIN_EMAILS` is that same address. It
+     stops working for anyone else, so move to your own domain before adding
+     a second admin.
+3. **API Keys** → **Create API key**, with **Sending access** (limited to that
+   domain if you added one).
+4. On the API host (and in `.env` to try it locally): `RESEND_API_KEY`,
+   `REPORTS_FROM_EMAIL` (the sender above) and `ADMIN_EMAILS`.
+
+Cost: Resend's free plan covers 3,000 emails a month (100 a day) and one
+domain, which is far beyond the handful of reports a campus app gets, since
+it's one email per report. The paid plan starts at $20/month for 50,000.
+Check resend.com/pricing in case those numbers have changed.
+
+Also set `EXPO_PUBLIC_SUPPORT_EMAIL` (in EAS for builds, `.env` locally). It's
+the "Contact us" row on Profile and the address on the report confirmation,
+App Review's "published contact information". Unset, both are hidden.
+
 ### Account deletion
 
 Profile → **Delete Account** (App Store guideline 5.1.1(v)) calls
@@ -343,6 +381,7 @@ Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
    DELETE FROM vouches WHERE voucher_email IN (SELECT email FROM target) OR vouchee_email IN (SELECT email FROM target)
                           OR voucher_id IN (SELECT id FROM target) OR vouchee_id IN (SELECT id FROM target);
    DELETE FROM blocks WHERE blocker_email IN (SELECT email FROM target) OR blocked_email IN (SELECT email FROM target);
+   DELETE FROM reports WHERE reporter_email IN (SELECT email FROM target) OR target_user_id IN (SELECT id FROM target);
    DELETE FROM feedback WHERE lower(user_email) IN (SELECT email FROM target);
    -- The profile itself, last: everything above looks people up through it.
    DELETE FROM users WHERE id IN (SELECT id FROM target);
@@ -358,6 +397,7 @@ Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
      + (SELECT count(*) FROM friend_adds x, target t WHERE t.email IN (x.adder_email, x.added_email))
      + (SELECT count(*) FROM vouches x, target t WHERE t.email IN (x.voucher_email, x.vouchee_email))
      + (SELECT count(*) FROM blocks x, target t WHERE t.email IN (x.blocker_email, x.blocked_email))
+     + (SELECT count(*) FROM reports x, target t WHERE x.reporter_email = t.email OR x.target_user_id = t.id)
      + (SELECT count(*) FROM feedback f, target t WHERE lower(f.user_email) = t.email)
      AS rows_left;
    COMMIT;
@@ -367,7 +407,8 @@ Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
 
    **Covered:** `users`, `conversations` and every message in them (the other
    person's side of the thread too), `messages`, `listings`, `crash_posts`,
-   `likes`, `passes`, `friend_adds`, `vouches`, `blocks`, `feedback`.
+   `likes`, `passes`, `friend_adds`, `vouches`, `blocks`, `reports` (ones
+   they filed and ones about them), `feedback`.
 
    **Deliberately skipped:**
    - `stats` holds only totals (subleases, matches), nothing per person.

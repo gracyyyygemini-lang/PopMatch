@@ -11,6 +11,7 @@ import Colors, { avatarColor as paletteAvatar } from "@/constants/colors";
 import { useApp, SubleasePost, Landlord, Zone } from "@/context/AppContext";
 import { useCallback } from "react";
 import FacePile from "@/components/FacePile";
+import SafetyMenu from "@/components/SafetyMenu";
 import MicroFeedback from "@/components/MicroFeedback";
 import ZonePicker from "@/components/ZonePicker";
 import SearchBar from "@/components/SearchBar";
@@ -452,6 +453,7 @@ function SubleaseCard({ post, onMarkLeased }: {
   const catColor = CATEGORY_COLORS[cat] || Colors.ocean;
   const isOwner = currentUser?.id === post.userId;
   const [galleryVisible, setGalleryVisible] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
 
   const allImages: string[] = [];
   if (post.images) post.images.forEach(img => { if (isValidImageUri(img)) allImages.push(img); });
@@ -473,6 +475,14 @@ function SubleaseCard({ post, onMarkLeased }: {
         onClose={() => setGalleryVisible(false)}
         buildingName={post.buildingName}
       />
+      {!isOwner && (
+        <SafetyMenu
+          visible={safetyOpen}
+          onClose={() => setSafetyOpen(false)}
+          person={{ id: post.userId, name: post.userName || "This student" }}
+          report={{ type: "listing", id: post.id }}
+        />
+      )}
 
       <View style={styles.cardBody}>
         <View style={styles.cardHeader}>
@@ -590,6 +600,16 @@ function SubleaseCard({ post, onMarkLeased }: {
               </View>
             ) : null}
           </View>
+          {!isOwner && (
+            <TouchableOpacity
+              style={styles.posterMore}
+              onPress={() => setSafetyOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Report or block ${post.userName || "this student"}`}
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {!isOwner && (
@@ -1071,6 +1091,8 @@ const styles = StyleSheet.create({
   posterAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   posterInitials: { ...font.bold, fontSize: 12, color: Colors.white },
   posterInfo: { flex: 1 },
+  // 44pt touch target around a small icon.
+  posterMore: { width: 44, height: 44, alignItems: "center", justifyContent: "center", marginRight: -10 },
   posterName: { ...font.bold, fontSize: 13, color: Colors.charcoal },
   posterRole: { ...font.regular, fontSize: 11, color: Colors.textMuted },
   trustChip: {

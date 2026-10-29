@@ -13,6 +13,7 @@ import Colors from "@/constants/colors";
 import { useApp, CrashPost, CrashVibe, CrashCurrency, Zone } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import CustomAvatar from "@/components/CustomAvatar";
+import SafetyMenu from "@/components/SafetyMenu";
 import { showError } from "@/lib/alert";
 import { usePolling } from "@/hooks/usePolling";
 import { PostsSyncBanner } from "@/components/PostsSyncBanner";
@@ -518,6 +519,7 @@ export default function CrashCashScreen() {
   const [showNewPost, setShowNewPost] = useState(false);
   const [vibeFilter, setVibeFilter] = useState<VibeFilter>("all");
   const [selectedPost, setSelectedPost] = useState<CrashPost | null>(null);
+  const [safetyOpen, setSafetyOpen] = useState(false);
 
   const containerWidth = isDesktop ? Math.min(640, screenWidth) : Math.min(screenWidth, contentMaxWidth);
   const cardWidth = (containerWidth - GRID_PAD * 2 - GRID_GAP) / 2;
@@ -723,6 +725,16 @@ export default function CrashCashScreen() {
                   <View style={[dm.tagPill, selectedPost.vibe === "sos" ? dm.tagSos : dm.tagOffer]}>
                     <Text style={dm.tagText}>{selectedPost.vibe === "sos" ? "🚨 NEED" : "🛋️ GOT"}</Text>
                   </View>
+                  {selectedPost.userId !== currentUser?.id && (
+                    <TouchableOpacity
+                      style={dm.moreBtn}
+                      onPress={() => setSafetyOpen(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Report or block ${selectedPost.userName || "this student"}`}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={18} color={Colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 <Text style={dm.storyText}>{selectedPost.story}</Text>
@@ -764,6 +776,14 @@ export default function CrashCashScreen() {
               )}
             </View>
           </View>
+          {/* Inside the detail modal so it opens on top of it. */}
+          <SafetyMenu
+            visible={safetyOpen}
+            onClose={() => setSafetyOpen(false)}
+            person={{ id: selectedPost.userId, name: selectedPost.userName || "This student" }}
+            report={{ type: "crash_post", id: selectedPost.id }}
+            onBlocked={() => setSelectedPost(null)}
+          />
         </Modal>
       )}
 
@@ -794,6 +814,8 @@ const dm = StyleSheet.create({
   },
   body: { paddingHorizontal: 20, paddingTop: 20, gap: 20 },
   userRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  // 44pt touch target around a small icon.
+  moreBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", marginRight: -10 },
   userInfo: { flex: 1 },
   userName: { ...font.bold, fontSize: 18, color: DARK_TEAL },
   userTime: { ...font.regular, fontSize: 13, color: SUBTITLE_GREY },

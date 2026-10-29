@@ -200,6 +200,28 @@ CREATE TABLE IF NOT EXISTS blocks (
   CHECK (blocker_email <> blocked_email)
 );
 
+-- Reports of a profile, listing, Crash & Cash post or conversation.
+-- snapshot is the content as it was when reported, so the admin can still
+-- judge it after an edit or deletion. One report per reporter per item;
+-- reporting it again updates the report and reopens it.
+CREATE TABLE IF NOT EXISTS reports (
+  id SERIAL PRIMARY KEY,
+  reporter_email VARCHAR NOT NULL,
+  target_type VARCHAR NOT NULL,        -- profile | listing | crash_post | conversation
+  target_id VARCHAR NOT NULL,
+  target_user_id VARCHAR NOT NULL,     -- users.id of whoever owns the content
+  reason VARCHAR NOT NULL,             -- spam | scam | harassment | hate | sexual | violence | impersonation | other
+  details TEXT NOT NULL DEFAULT '',
+  snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status VARCHAR NOT NULL DEFAULT 'open', -- open | actioned | dismissed
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  resolved_by VARCHAR,
+  resolution_note TEXT,
+  alert_sent BOOLEAN NOT NULL DEFAULT FALSE,  -- the admin email went out (server/alerts.ts)
+  UNIQUE (reporter_email, target_type, target_id)
+);
+
 -- ─── Indexes ────────────────────────────────────────────────────────────────
 -- The app filters listings constantly; these keep the marketplace fast as the
 -- table grows past a few hundred rows.
@@ -231,6 +253,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 CREATE INDEX IF NOT EXISTS idx_likes_liked ON likes (liked_email);
 CREATE INDEX IF NOT EXISTS idx_friend_adds_added ON friend_adds (added_email);
 CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks (blocked_email);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (status, created_at);
 
 -- ─── Seed rows ──────────────────────────────────────────────────────────────
 
@@ -261,6 +284,7 @@ ALTER TABLE passes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE friend_adds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crash_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 
 -- ─── Avatar storage ─────────────────────────────────────────────────────────
 -- Creates the public "avatars" bucket that lib/uploads.ts writes to, so you
