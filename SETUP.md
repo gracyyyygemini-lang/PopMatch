@@ -196,6 +196,25 @@ None of this has been done yet: PopMatch currently runs locally only.
 Whatever host you pick, add its URL to Supabase → **Authentication** → **URL
 Configuration** → *Site URL* and *Redirect URLs*, or sign-in links will bounce.
 
+### iOS builds (EAS)
+
+`eas.json` has a `preview` profile (internal install on registered devices)
+and a `production` profile (App Store, build number incremented on EAS's
+servers). The app is the existing App Store listing: bundle id
+`app.popmatch`, Apple team `F5M3H379D2`, EAS project
+`6c933431-fa4e-4ad0-83d7-5594a9ba3fd5`. Keep that bundle id — a different one
+is a different app to Apple.
+
+EAS doesn't upload `.env` (it's gitignored), so a build only sees variables
+set on EAS for the profile's environment (`preview` / `production`):
+`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` and
+`EXPO_PUBLIC_API_URL`. Set them with `eas env:create` or on expo.dev →
+Project → Environment variables.
+
+`EXPO_PUBLIC_API_URL` must be the deployed API. Without it a phone build falls
+back to `http://localhost:5000`, which is the phone itself — the app opens
+and nothing loads. Deploy the API first.
+
 ---
 
 ## Known gaps
