@@ -329,30 +329,25 @@ and nothing loads. Deploy the API first.
 ### App Review demo account
 
 Apple's reviewers have no UIUC account, so they can't use Microsoft sign-in.
-They sign in on the email-code screen with one allowlisted address whose
-"code" is really that Supabase user's password. Supabase checks it, so the
-reviewer gets a normal session and nothing secret is in the app. Every other
-address still gets Supabase's emailed codes.
+They sign in on the email-code screen with one fixed address and code, both
+hardcoded (`server/reviewLogin.ts`, and the address in `lib/auth.ts`, each
+commented "App Review only"):
 
-**Set it up before submitting:**
+- email `gracealright@outlook.com`
+- code `223456`
 
-1. Supabase → **Authentication** → **Users** → **Add user** → **Create new
-   user**. Enter the review email, the 6-digit code as the password, and tick
-   **Auto Confirm User**.
-2. Set the same address as both `EXPO_PUBLIC_REVIEW_EMAIL` (the app lets it
-   through) and `REVIEW_EMAIL` (`POST /api/users` accepts a profile without
-   `.edu`), wherever the app and API run:
-   - **Locally:** both in `.env`. Then stop and restart both `npm run
-     expo:dev` and `npm run server:dev`. Saving `.env` isn't enough, and
-     neither is a hot reload: `EXPO_PUBLIC_*` values are fixed into the bundle
-     when Expo starts (a production build inlines them as plain strings), and
-     the API reads `.env` once at startup. If the address still gets "Please
-     use your @illinois.edu email address", the app was started before the
-     variable was set. Restart with `npx expo start --clear`.
-   - **iOS build:** `EXPO_PUBLIC_REVIEW_EMAIL` in the EAS `production`
-     environment. EAS doesn't read `.env`.
-   - **Deployed API:** `REVIEW_EMAIL` in the API host's environment.
-3. Put the address and code in App Store Connect → the version → **App Review
+For that address the app skips sending a code and calls
+`POST /api/auth/review-login` instead. The API checks the email and code,
+creates or resets the Supabase user (confirmed, password = the code) and
+returns a real session, which the app installs with `setSession`. Every other
+address still gets Supabase's emailed codes. No env vars are involved; the
+only requirement is `SUPABASE_SERVICE_ROLE_KEY` on the API host, which the
+deployed API needs anyway (without it this answers 503).
+
+**Before submitting:**
+
+1. Deploy the API and build with `EXPO_PUBLIC_API_URL` pointing at it.
+2. Put the address and code in App Store Connect → the version → **App Review
    Information** → **Sign-in required**, and paste the notes below into
    **Notes** with the real address and code filled in. The notes name the
    exact text the reviewer taps, so update them in the same change whenever
@@ -389,21 +384,16 @@ address still gets Supabase's emailed codes.
    The app is new, so there may be only a few listings and profiles to browse. Everything you do with the demo account is real and saved to our database, and we'll delete the account and its data after review.
    ```
 
-**Password length.** Six digits only just clears Supabase's default minimum
-password length of 6. If the project has a stricter policy (a higher minimum,
-or required letters or symbols, under Authentication → Providers → Email /
-password settings), **Add user** will reject the code. Relax the policy for
-this user's creation, or pick a code the policy accepts and give Apple that.
-
-**Remove it once Apple approves the build.** The address is in every copy of
-the app (anything `EXPO_PUBLIC_` is readable from the bundle), and a 6-digit
-password is weak: one million combinations, with only Supabase's rate limits
-in the way. Left in place, it's a standing way into the app for anyone who
-reads the bundle.
+**Remove it once Apple approves the build.** The address ships in every copy
+of the app and the code is in the public GitHub repo, so anyone can sign in
+as this account, and the endpoint recreates the user on every sign-in, so
+deleting it in Supabase alone doesn't stop that. Delete
+`server/reviewLogin.ts`'s route and constants and the review branch in
+`lib/auth.ts`, then delete the account:
 
 The quickest way: sign in as the review account and tap Profile → **Delete
 Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
-(see "Account deletion" above). Then do step 3. To do it by hand instead:
+(see "Account deletion" above). To do it by hand instead:
 
 1. Supabase → **Authentication** → **Users** → find the address → **⋯** →
    **Delete user**. That ends sign-in; existing sessions stop working once
@@ -474,11 +464,8 @@ Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
    - Photos in Storage (`avatars`, `listing-photos`). Delete the folder named
      after the user's auth id in each bucket, under **Storage**. The SQL
      editor can't remove the files themselves.
-3. Unset `EXPO_PUBLIC_REVIEW_EMAIL` on EAS and `REVIEW_EMAIL` on the API host,
-   so the next build doesn't carry the address.
-
-Apple reviews every update, not just the first version, so repeat the setup
-(with a new code) before each submission and the removal after each approval.
+Apple reviews every update, not just the first version, so put the code back
+before each submission and take it out after each approval.
 
 ---
 

@@ -4,6 +4,7 @@ import type { JWTVerifyGetKey } from "jose";
 import { query } from "./db";
 import { adminClient, deleteAccount } from "./account";
 import { sendReportAlert } from "./alerts";
+import { isReviewEmail, ReviewLoginError, reviewLogin } from "./reviewLogin";
 import { DECISIONS, resolveReport } from "./moderation";
 import { filteredError, objectionableField } from "./contentFilter";
 import {
@@ -368,16 +369,6 @@ async function isCutOffFrom(callerEmail: string, otherId: string): Promise<boole
     [callerEmail, otherId]
   );
   return !!row?.blocked;
-}
-
-/**
- * APP REVIEW ONLY. REVIEW_EMAIL is the one non-.edu address allowed a
- * profile: the App Review demo account (lib/auth.ts, isReviewEmail). It
- * must match the app's EXPO_PUBLIC_REVIEW_EMAIL. Unset means none.
- */
-function isReviewEmail(email: string): boolean {
-  const review = (process.env.REVIEW_EMAIL ?? "").trim().toLowerCase();
-  return review !== "" && email === review;
 }
 
 /** A string from `allowed`, or undefined. */
@@ -802,6 +793,19 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
   if (!supabaseUrl) {
     throw new Error("SUPABASE_URL (or EXPO_PUBLIC_SUPABASE_URL) must be set to verify sign-ins.");
   }
+  // APP REVIEW ONLY, and the one /api route that takes no token: it is how
+  // the review account gets one (server/reviewLogin.ts).
+  app.post("/api/auth/review-login", async (req: Request, res: Response) => {
+    try {
+      const session = await reviewLogin(supabaseUrl, req.body?.email, req.body?.code);
+      return res.json({ access_token: session.access_token, refresh_token: session.refresh_token });
+    } catch (err) {
+      if (err instanceof ReviewLoginError) return res.status(err.status).json({ error: err.message });
+      console.error("POST /api/auth/review-login", err);
+      return res.status(500).json({ error: "Sign-in failed. Please try again." });
+    }
+  });
+
   app.use("/api", requireAuth({
     getKey: options.getKey ?? supabaseSigningKeys(supabaseUrl),
     issuer: new URL("/auth/v1", supabaseUrl).href,

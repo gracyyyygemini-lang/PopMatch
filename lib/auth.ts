@@ -3,6 +3,7 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { getApiUrl } from "@/lib/query-client";
 
 export type { Session, User };
 
@@ -19,25 +20,15 @@ export function normalizeEmail(email: string): string {
 
 /**
  * APP REVIEW ONLY. Apple's reviewers have no UIUC account, so exactly one
- * non-UIUC address may use the email-code screen: EXPO_PUBLIC_REVIEW_EMAIL,
- * a real Supabase user whose password is the 6-digit code given to Apple.
- * Supabase checks that password, so nothing secret is in the app — only this
- * address, which ships in the bundle. Unset means the path is off. Delete the
- * user once the build is approved (SETUP.md, "App Review demo account").
+ * non-UIUC address may use the email-code screen. Its code isn't emailed:
+ * the API checks it (POST /api/auth/review-login, server/reviewLogin.ts)
+ * and hands back a session. Must match REVIEW_EMAIL there. Remove both once
+ * the build is approved.
  */
-const REVIEW_EMAIL = normalizeEmail(process.env.EXPO_PUBLIC_REVIEW_EMAIL ?? "");
-
-// Dev builds only, and console only: in the app the review address gets the
-// same error as any other non-UIUC address, so nothing reveals which one it is.
-if (__DEV__ && !REVIEW_EMAIL) {
-  console.warn(
-    "EXPO_PUBLIC_REVIEW_EMAIL is not set, so the App Review sign-in is off. " +
-      "Set it in .env and restart Expo (see SETUP.md, \"App Review demo account\")."
-  );
-}
+const REVIEW_EMAIL = "gracealright@outlook.com"; // App Review only
 
 export function isReviewEmail(email: string): boolean {
-  return REVIEW_EMAIL !== "" && normalizeEmail(email) === REVIEW_EMAIL;
+  return normalizeEmail(email) === REVIEW_EMAIL;
 }
 
 /** Who may use the email-code screen: UIUC students, plus the review account. */
@@ -94,8 +85,8 @@ export async function sendUiucOtp(email: string): Promise<void> {
     throw new Error("Please use your @illinois.edu email address.");
   }
 
-  // APP REVIEW ONLY: the review account's code is its password, not an
-  // emailed one, so there's nothing to send.
+  // APP REVIEW ONLY: the review account's code is fixed, not emailed, so
+  // there's nothing to send.
   if (isReviewEmail(clean)) return;
 
   const { error } = await supabase.auth.signInWithOtp({
@@ -113,18 +104,9 @@ export async function verifyUiucOtp(
 ): Promise<User> {
   const clean = normalizeEmail(email);
 
-  // APP REVIEW ONLY: a real Supabase sign-in, checked by Supabase, so the
-  // reviewer gets the same session as anyone else. Every other address
-  // goes through verifyOtp below.
-  if (isReviewEmail(clean)) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: clean,
-      password: token.trim(),
-    });
-    if (error) throw new Error(error.message);
-    if (!data.user) throw new Error("Verification failed. Please try again.");
-    return data.user;
-  }
+  // APP REVIEW ONLY: the API checks the code and returns a real Supabase
+  // session. Every other address goes through verifyOtp below.
+  if (isReviewEmail(clean)) return verifyReviewCode(clean, token.trim());
 
   const { data, error } = await supabase.auth.verifyOtp({
     email: clean,
@@ -135,6 +117,30 @@ export async function verifyUiucOtp(
   if (error) throw new Error(error.message);
   if (!data.user) throw new Error("Verification failed. Please try again.");
 
+  return data.user;
+}
+
+/** APP REVIEW ONLY: the code is checked by the API, not Supabase's mailer. */
+async function verifyReviewCode(email: string, code: string): Promise<User> {
+  let res: Response;
+  try {
+    res = await fetch(new URL("/api/auth/review-login", getApiUrl()).toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    });
+  } catch {
+    throw new Error("Couldn't reach PopMatch. Check your connection and try again.");
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Verification failed. Please try again.");
+
+  const { data, error } = await supabase.auth.setSession({
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+  });
+  if (error) throw new Error(error.message);
+  if (!data.user) throw new Error("Verification failed. Please try again.");
   return data.user;
 }
 
