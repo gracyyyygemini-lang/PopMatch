@@ -215,6 +215,63 @@ Project → Environment variables.
 back to `http://localhost:5000`, which is the phone itself — the app opens
 and nothing loads. Deploy the API first.
 
+### App Review demo account
+
+Apple's reviewers have no UIUC account, so they can't use Microsoft sign-in.
+They sign in on the email-code screen with one allowlisted address whose
+"code" is really that Supabase user's password. Supabase checks it, so the
+reviewer gets a normal session and nothing secret is in the app. Every other
+address still gets Supabase's emailed codes.
+
+**Set it up before submitting:**
+
+1. Supabase → **Authentication** → **Users** → **Add user** → **Create new
+   user**. Enter the review email, the 6-digit code as the password, and tick
+   **Auto Confirm User**.
+2. Set the same address in two places:
+   - `EXPO_PUBLIC_REVIEW_EMAIL` in the EAS `production` environment, so the
+     app lets it through. It's compiled into the build.
+   - `REVIEW_EMAIL` on the API host, so `POST /api/users` accepts a profile
+     without `.edu`.
+3. Put the address and code in App Store Connect → the version → **App Review
+   Information** → **Sign-in required**, and in the notes.
+
+**Password length.** Six digits only just clears Supabase's default minimum
+password length of 6. If the project has a stricter policy (a higher minimum,
+or required letters or symbols, under Authentication → Providers → Email /
+password settings), **Add user** will reject the code. Relax the policy for
+this user's creation, or pick a code the policy accepts and give Apple that.
+
+**Remove it once Apple approves the build.** The address is in every copy of
+the app (anything `EXPO_PUBLIC_` is readable from the bundle), and a 6-digit
+password is weak: one million combinations, with only Supabase's rate limits
+in the way. Left in place, it's a standing way into the app for anyone who
+reads the bundle.
+
+1. Supabase → **Authentication** → **Users** → find the address → **⋯** →
+   **Delete user**. That ends sign-in; existing sessions stop working once
+   their token expires (1 hour by default).
+2. Delete its PopMatch data too. The `users` row and anything it posted live in
+   the app's tables, not Supabase Auth. In the SQL Editor, with the address in
+   place of `<review email>`:
+   ```sql
+   DELETE FROM messages WHERE sender_id IN (SELECT id FROM users WHERE lower(email) = '<review email>');
+   DELETE FROM conversations WHERE participant1_id IN (SELECT id FROM users WHERE lower(email) = '<review email>')
+                               OR participant2_id IN (SELECT id FROM users WHERE lower(email) = '<review email>');
+   DELETE FROM listings WHERE user_id IN (SELECT id FROM users WHERE lower(email) = '<review email>');
+   DELETE FROM crash_posts WHERE user_id IN (SELECT id FROM users WHERE lower(email) = '<review email>');
+   DELETE FROM likes WHERE '<review email>' IN (liker_email, liked_email);
+   DELETE FROM passes WHERE '<review email>' IN (passer_email, passed_email);
+   DELETE FROM friend_adds WHERE '<review email>' IN (adder_email, added_email);
+   DELETE FROM vouches WHERE '<review email>' IN (voucher_email, vouchee_email);
+   DELETE FROM users WHERE lower(email) = '<review email>';
+   ```
+3. Unset `EXPO_PUBLIC_REVIEW_EMAIL` on EAS and `REVIEW_EMAIL` on the API host,
+   so the next build doesn't carry the address.
+
+Apple reviews every update, not just the first version, so repeat the setup
+(with a new code) before each submission and the removal after each approval.
+
 ---
 
 ## Known gaps

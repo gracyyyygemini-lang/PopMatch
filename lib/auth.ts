@@ -17,6 +17,25 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * APP REVIEW ONLY. Apple's reviewers have no UIUC account, so exactly one
+ * non-UIUC address may use the email-code screen: EXPO_PUBLIC_REVIEW_EMAIL,
+ * a real Supabase user whose password is the 6-digit code given to Apple.
+ * Supabase checks that password, so nothing secret is in the app — only this
+ * address, which ships in the bundle. Unset means the path is off. Delete the
+ * user once the build is approved (SETUP.md, "App Review demo account").
+ */
+const REVIEW_EMAIL = normalizeEmail(process.env.EXPO_PUBLIC_REVIEW_EMAIL ?? "");
+
+export function isReviewEmail(email: string): boolean {
+  return REVIEW_EMAIL !== "" && normalizeEmail(email) === REVIEW_EMAIL;
+}
+
+/** Who may use the email-code screen: UIUC students, plus the review account. */
+export function canUseEmailCode(email: string): boolean {
+  return isUiucEmail(email) || isReviewEmail(email);
+}
+
 /** The signed-in user, or null. */
 export async function getCurrentUser(): Promise<User | null> {
   const { data, error } = await supabase.auth.getSession();
@@ -62,9 +81,13 @@ export function displayNameOf(user: User | null): string {
 export async function sendUiucOtp(email: string): Promise<void> {
   const clean = normalizeEmail(email);
 
-  if (!isUiucEmail(clean)) {
+  if (!canUseEmailCode(clean)) {
     throw new Error("Please use your @illinois.edu email address.");
   }
+
+  // APP REVIEW ONLY: the review account's code is its password, not an
+  // emailed one, so there's nothing to send.
+  if (isReviewEmail(clean)) return;
 
   const { error } = await supabase.auth.signInWithOtp({
     email: clean,
@@ -80,6 +103,19 @@ export async function verifyUiucOtp(
   token: string
 ): Promise<User> {
   const clean = normalizeEmail(email);
+
+  // APP REVIEW ONLY: a real Supabase sign-in, checked by Supabase, so the
+  // reviewer gets the same session as anyone else. Every other address
+  // goes through verifyOtp below.
+  if (isReviewEmail(clean)) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: clean,
+      password: token.trim(),
+    });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Verification failed. Please try again.");
+    return data.user;
+  }
 
   const { data, error } = await supabase.auth.verifyOtp({
     email: clean,

@@ -307,6 +307,16 @@ type UserRow = {
 
 const INTENTS = ["host", "joiner", "co_seeker", "sublessor", "sublessee"];
 
+/**
+ * APP REVIEW ONLY. REVIEW_EMAIL is the one non-.edu address allowed a
+ * profile: the App Review demo account (lib/auth.ts, isReviewEmail). It
+ * must match the app's EXPO_PUBLIC_REVIEW_EMAIL. Unset means none.
+ */
+function isReviewEmail(email: string): boolean {
+  const review = (process.env.REVIEW_EMAIL ?? "").trim().toLowerCase();
+  return review !== "" && email === review;
+}
+
 /** A string from `allowed`, or undefined. */
 const oneOf = (allowed: readonly string[]) => (v: unknown) =>
   typeof v === "string" && allowed.includes(v) ? v : undefined;
@@ -751,7 +761,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (!id || !name) {
         return res.status(400).json({ error: "id and name are required" });
       }
-      if (!email.endsWith(".edu")) {
+      if (!email.endsWith(".edu") && !isReviewEmail(email)) {
         return res.status(400).json({ error: "Must use a .edu email address" });
       }
       if (rawIntent !== undefined && rawIntent !== null && !INTENTS.includes(rawIntent)) {

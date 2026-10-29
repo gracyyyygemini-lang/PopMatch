@@ -30,8 +30,9 @@ import {
   Intent,
 } from "@/context/AppContext";
 import {
+  canUseEmailCode,
   displayNameOf,
-  isUiucEmail,
+  isReviewEmail,
   onAuthStateChange,
   sendUiucOtp,
   signInWithAzure,
@@ -225,7 +226,7 @@ export default function OnboardingScreen() {
   async function handleSendCode() {
     setAuthError(null);
 
-    if (!isUiucEmail(email)) {
+    if (!canUseEmailCode(email)) {
       setAuthError("Please use your @illinois.edu email address.");
       return;
     }
@@ -436,7 +437,9 @@ export default function OnboardingScreen() {
             <Text style={styles.stepTitle}>Welcome to PopMatch</Text>
             <Text style={styles.stepSubtitle}>
               {otpSent
-                ? `We sent a 6-digit code to ${email}`
+                ? isReviewEmail(email)
+                  ? `Enter the 6-digit code for ${email}`
+                  : `We sent a 6-digit code to ${email}`
                 : "Sign in with your UIUC account to start PopMatch"}
             </Text>
 
@@ -465,15 +468,20 @@ export default function OnboardingScreen() {
               </>
             )}
 
+            {/* A full button, not a text link: it's the only way in without a
+                UIUC Microsoft account, App Review included. */}
             {!otpSent && !showEmailFallback && (
               <TouchableOpacity
+                style={[styles.ssoBtn, popupLoading && { opacity: 0.7 }]}
                 onPress={() => {
                   setShowEmailFallback(true);
                   setAuthError(null);
                 }}
                 disabled={popupLoading}
+                accessibilityRole="button"
               >
-                <Text style={styles.linkText}>Sign in with an email code instead</Text>
+                <Ionicons name="mail-outline" size={16} color={Colors.teal} />
+                <Text style={styles.ssoBtnText}>Sign in with an email code instead</Text>
               </TouchableOpacity>
             )}
 
