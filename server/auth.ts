@@ -10,6 +10,8 @@ import { query } from "./db";
 export interface Caller {
   email: string;
   userId: string | null;
+  /** The Supabase Auth user id (the token's `sub`): their Storage folder, and what account deletion removes. */
+  authId: string | null;
 }
 
 declare global {
@@ -51,6 +53,7 @@ export function requireAuth({ getKey, issuer }: AuthOptions) {
     if (!match) return unauthorized(res, "missing_token", "Sign in to continue");
 
     let email: unknown;
+    let authId: unknown;
     try {
       const { payload } = await jwtVerify(match[1], getKey, {
         issuer,
@@ -58,6 +61,7 @@ export function requireAuth({ getKey, issuer }: AuthOptions) {
         algorithms: ["ES256", "RS256"],
       });
       email = payload.email;
+      authId = payload.sub;
     } catch (err) {
       if (err instanceof errors.JWTExpired) {
         return unauthorized(res, "token_expired", "Your session expired. Sign in again.");
@@ -74,7 +78,7 @@ export function requireAuth({ getKey, issuer }: AuthOptions) {
         "SELECT id FROM users WHERE lower(email) = $1",
         [normalized]
       );
-      req.caller = { email: normalized, userId: row?.id ?? null };
+      req.caller = { email: normalized, userId: row?.id ?? null, authId: typeof authId === "string" && authId ? authId : null };
       return next();
     } catch (err) {
       console.error("auth: resolving caller", err);

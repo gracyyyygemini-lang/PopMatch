@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import type { JWTVerifyGetKey } from "jose";
 import { query } from "./db";
+import { adminClient, deleteAccount } from "./account";
 import {
   callerUserId, namesSomeoneElse, requireAdmin, requireAuth, supabaseSigningKeys,
 } from "./auth";
@@ -816,6 +817,29 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     } catch (err) {
       console.error("POST /api/users", err);
       return res.status(500).json({ error: "Failed to save user" });
+    }
+  });
+
+  // Deletes the caller's account: photos, every row about them, and their
+  // sign-in (server/account.ts). Needs SUPABASE_SERVICE_ROLE_KEY; without it
+  // this refuses up front rather than deleting half and calling it done.
+  app.delete("/api/account", async (req: Request, res: Response) => {
+    const caller = req.caller!;
+    const admin = adminClient(supabaseUrl);
+    if (!admin) {
+      console.error("DELETE /api/account: SUPABASE_SERVICE_ROLE_KEY is not set");
+      return res.status(503).json({ error: "Account deletion isn't available right now. Nothing was deleted. Please try again later." });
+    }
+    if (!caller.authId) {
+      return res.status(401).json({ error: "Your session isn't valid. Sign in again.", code: "invalid_token" });
+    }
+    try {
+      const done = await deleteAccount(admin, { authId: caller.authId, email: caller.email, userId: caller.userId });
+      console.log(`DELETE /api/account: deleted ${done.rows} rows and ${done.photos} photos`);
+      return res.json({ deleted: true });
+    } catch (err) {
+      console.error("DELETE /api/account", err);
+      return res.status(500).json({ error: "Your account couldn't be fully deleted. Please try again — anything already removed stays removed." });
     }
   });
 

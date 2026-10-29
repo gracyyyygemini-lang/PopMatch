@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform,
-  TextInput, FlatList, Animated, Pressable,
+  TextInput, FlatList, Animated, Pressable, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,7 +10,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import Colors, { AVATAR_COLORS } from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
-import { signOut } from "@/lib/auth";
+import { signOut, signOutLocally } from "@/lib/auth";
+import { deleteMyAccount } from "@/lib/users";
+import { apiErrorMessage } from "@/lib/messages";
+import { showError } from "@/lib/alert";
 import { useResponsive } from "@/hooks/useResponsive";
 import BottomSheetModal from "@/components/BottomSheetModal";
 import CustomAvatar from "@/components/CustomAvatar";
@@ -282,30 +285,48 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleReset = () => {
-    Alert.alert(
-      "Reset All Data",
-      "This clears your profile, matches, listings, and connections — everything starts fresh.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Reset Everything",
-          style: "destructive",
-          onPress: async () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            await signOut();
-            await AsyncStorage.multiRemove([
-              "@popmatch_user", "@popmatch_onboarded", "@popmatch_matches",
-              "@popmatch_liked", "@popmatch_passed", "@popmatch_scam",
-              "@popmatch_subleases", "@popmatch_listings_cache", "@popmatch_crash", "@popmatch_crash_posts_cache", "@popmatch_breaks", "@popmatch_friends"
+  const [deleting, setDeleting] = useState(false);
+
+  /**
+   * Deletes the account on the server first, and only then clears this
+   * device. If the server fails, the student stays signed in and is told,
+   * rather than being signed out of an account that still exists.
+   */
+  const handleDeleteAccount = async () => {
+    if (deleting) return;
+    const message =
+      "This permanently deletes your profile, photos, listings, Crash & Cash posts, " +
+      "likes, matches and messages, and your PopMatch sign-in. It can't be undone.";
+    const confirmed =
+      Platform.OS === "web"
+        ? window.confirm(`Delete your account?
+
+${message}`)
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert("Delete your account?", message, [
+              { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+              { text: "Delete Account", style: "destructive", onPress: () => resolve(true) },
             ]);
-            await setCurrentUser(null);
-            await setIsOnboarded(false);
-            router.replace("/onboarding");
-          }
-        }
-      ]
-    );
+          });
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await deleteMyAccount();
+    } catch (error) {
+      setDeleting(false);
+      showError("Your account wasn't deleted", apiErrorMessage(error));
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    await signOutLocally();
+    const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith("@popmatch_"));
+    await AsyncStorage.multiRemove(keys);
+    await setCurrentUser(null);
+    await setIsOnboarded(false);
+    setDeleting(false);
+    showError("Account deleted", "Your PopMatch account and everything in it have been deleted.");
+    router.replace("/onboarding");
   };
 
   if (!currentUser) {
@@ -748,9 +769,19 @@ export default function ProfileScreen() {
           <Text style={styles.signOutFullBtnText}>Sign Out</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.resetFullBtn} onPress={handleReset}>
-          <Ionicons name="trash-outline" size={15} color={Colors.errorRed} />
-          <Text style={styles.resetFullBtnText}>Reset All Data</Text>
+        <TouchableOpacity
+          style={[styles.deleteAccountBtn, deleting && { opacity: 0.6 }]}
+          onPress={handleDeleteAccount}
+          disabled={deleting}
+          accessibilityRole="button"
+          accessibilityLabel="Delete account"
+        >
+          {deleting ? (
+            <ActivityIndicator size="small" color={Colors.errorRed} />
+          ) : (
+            <Ionicons name="trash-outline" size={15} color={Colors.errorRed} />
+          )}
+          <Text style={styles.deleteAccountBtnText}>{deleting ? "Deleting account…" : "Delete Account"}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={handleVersionTap} activeOpacity={1} style={styles.versionLabel}>
@@ -927,12 +958,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.ocean + "30", paddingVertical: 13,
   },
   signOutFullBtnText: { ...font.bold, fontSize: 14, color: Colors.ocean },
-  resetFullBtn: {
+  deleteAccountBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.errorRed + "10", borderRadius: 12, borderWidth: 1.5,
     borderColor: Colors.errorRed + "30", paddingVertical: 13,
   },
-  resetFullBtnText: { ...font.bold, fontSize: 14, color: Colors.errorRed },
+  deleteAccountBtnText: { ...font.bold, fontSize: 14, color: Colors.errorRed },
   noProfile: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   noProfileText: { ...font.regular, fontSize: 14, color: Colors.textMuted },
   versionLabel: { alignItems: "center", paddingVertical: 12 },

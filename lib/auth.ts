@@ -240,3 +240,12 @@ export async function signOut(): Promise<void> {
   const { error } = await supabase.auth.signOut();
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Forgets the session on this device only, without asking Supabase to end
+ * it. For after account deletion: the user no longer exists, so a normal
+ * sign-out would fail.
+ */
+export async function signOutLocally(): Promise<void> {
+  await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+}

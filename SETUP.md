@@ -183,8 +183,32 @@ npm run server:prod              # serves both on $PORT
 `server/index.ts` serves `dist/` *and* `/api` from one process, so any host
 that runs Node works — Render, Railway, Fly.io, a VPS. Set `DATABASE_URL`,
 `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`,
-`EXPO_PUBLIC_DOMAIN` (your public hostname) and `ADMIN_EMAILS` in the host's
-environment.
+`EXPO_PUBLIC_DOMAIN` (your public hostname), `ADMIN_EMAILS` and
+`SUPABASE_SERVICE_ROLE_KEY` in the host's environment.
+
+### Account deletion
+
+Profile → **Delete Account** (App Store guideline 5.1.1(v)) calls
+`DELETE /api/account`, which removes, in this order (`server/account.ts`):
+
+1. the student's photos in the `avatars` and `listing-photos` buckets (their
+   auth-id folder in each);
+2. every row about them, in one transaction: the same tables as the cleanup
+   SQL under "App Review demo account" below;
+3. their Supabase Auth user, so they can't sign back in.
+
+Steps 1 and 3 need `SUPABASE_SERVICE_ROLE_KEY` on the API server (Project
+Settings → API → service_role; server-only, it bypasses every security rule).
+Without it the endpoint answers 503 and deletes nothing, and the app tells
+the student their account wasn't deleted. That includes local development:
+put the key in `.env` to try deletion locally. If a step fails, the request
+fails and the app says so; trying again carries on, because each step skips
+what's already gone. The app clears the device only after the server has
+deleted the account.
+
+A token issued before deletion keeps passing the API's signature check until
+it expires (1 hour by default), so for up to an hour that device could still
+call the API and save a new, empty profile under that email.
 
 Vercel and Netlify are static-only by default and will serve the app but not
 the Express API, so the API needs a Node host of its own. It can't be swapped
@@ -282,6 +306,10 @@ the app (anything `EXPO_PUBLIC_` is readable from the bundle), and a 6-digit
 password is weak: one million combinations, with only Supabase's rate limits
 in the way. Left in place, it's a standing way into the app for anyone who
 reads the bundle.
+
+The quickest way: sign in as the review account and tap Profile → **Delete
+Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
+(see "Account deletion" above). Then do step 3. To do it by hand instead:
 
 1. Supabase → **Authentication** → **Users** → find the address → **⋯** →
    **Delete user**. That ends sign-in; existing sessions stop working once

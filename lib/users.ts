@@ -74,6 +74,15 @@ export async function fetchDeck(): Promise<PublicProfile[]> {
   return (await res.json()) as PublicProfile[];
 }
 
+/**
+ * Permanently deletes your account on the server: photos, profile, posts,
+ * matches, messages and your sign-in. Throws if anything failed; calling it
+ * again resumes. Clearing this device is the caller's job.
+ */
+export async function deleteMyAccount(): Promise<void> {
+  await apiRequest("DELETE", "/api/account");
+}
+
 /** Everyone but you, without emails (see PublicProfile). */
 export async function fetchUsers(): Promise<PublicProfile[]> {
   const res = await apiRequest("GET", "/api/users");
