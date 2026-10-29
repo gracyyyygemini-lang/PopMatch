@@ -27,6 +27,15 @@ export function normalizeEmail(email: string): string {
  */
 const REVIEW_EMAIL = normalizeEmail(process.env.EXPO_PUBLIC_REVIEW_EMAIL ?? "");
 
+// Dev builds only, and console only: in the app the review address gets the
+// same error as any other non-UIUC address, so nothing reveals which one it is.
+if (__DEV__ && !REVIEW_EMAIL) {
+  console.warn(
+    "EXPO_PUBLIC_REVIEW_EMAIL is not set, so the App Review sign-in is off. " +
+      "Set it in .env and restart Expo (see SETUP.md, \"App Review demo account\")."
+  );
+}
+
 export function isReviewEmail(email: string): boolean {
   return REVIEW_EMAIL !== "" && normalizeEmail(email) === REVIEW_EMAIL;
 }

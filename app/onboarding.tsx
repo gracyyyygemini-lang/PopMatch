@@ -468,11 +468,14 @@ export default function OnboardingScreen() {
               </>
             )}
 
-            {/* A full button, not a text link: it's the only way in without a
-                UIUC Microsoft account, App Review included. */}
+            {/* Fine print, not a second option: everyone on PopMatch is a
+                verified UIUC student, and this is only for when Microsoft
+                sign-in fails. It's permanent (App Review signs in through it
+                too). The text is small; hitSlop keeps the touch area at 44pt. */}
             {!otpSent && !showEmailFallback && (
               <TouchableOpacity
-                style={[styles.ssoBtn, popupLoading && { opacity: 0.7 }]}
+                style={styles.fallbackLink}
+                hitSlop={{ top: 13, bottom: 13, left: 12, right: 12 }}
                 onPress={() => {
                   setShowEmailFallback(true);
                   setAuthError(null);
@@ -480,8 +483,9 @@ export default function OnboardingScreen() {
                 disabled={popupLoading}
                 accessibilityRole="button"
               >
-                <Ionicons name="mail-outline" size={16} color={Colors.teal} />
-                <Text style={styles.ssoBtnText}>Sign in with an email code instead</Text>
+                <Text style={styles.fallbackLinkText}>
+                  {"Can't use Microsoft sign-in? Verify with your @illinois.edu email"}
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -872,6 +876,18 @@ const styles = StyleSheet.create({
     ...font.heavy,
     fontSize: 28,
     letterSpacing: 10,
+  },
+  fallbackLink: {
+    alignSelf: "center",
+    marginTop: 48,
+    paddingVertical: 2,
+  },
+  fallbackLinkText: {
+    ...font.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.textLight,
+    textAlign: "center",
   },
   linkText: {
     ...font.semibold,

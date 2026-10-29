@@ -242,7 +242,34 @@ address still gets Supabase's emailed codes.
      environment. EAS doesn't read `.env`.
    - **Deployed API:** `REVIEW_EMAIL` in the API host's environment.
 3. Put the address and code in App Store Connect → the version → **App Review
-   Information** → **Sign-in required**, and in the notes.
+   Information** → **Sign-in required**, and paste the notes below into
+   **Notes** with the real address and code filled in. The notes name the
+   exact text the reviewer taps, so update them in the same change whenever
+   the sign-in screen's wording or layout changes.
+
+   ```
+   PopMatch is a housing app for students at the University of Illinois Urbana-Champaign (UIUC). Students use it to find roommates, find or post sublets (short-term room rentals) near campus, and arrange a place to stay over school breaks.
+
+   HOW TO SIGN IN
+   Normal sign-in is through the university's Microsoft accounts, so the "Continue with UIUC" button will not work for you. Please use the demo account instead:
+
+   1. Open the app. On the "Welcome to PopMatch" screen, find the small grey line of text below the "Continue with UIUC" button and its caption, a little way down the screen. It reads: "Can't use Microsoft sign-in? Verify with your @illinois.edu email". Tap it.
+   2. An email field and an "Email me a code" button appear. The field shows "netid@illinois.edu" as an example; type the demo email over it: <review email>
+   3. Tap "Email me a code". No email is sent for this demo account.
+   4. On the next screen, enter the 6-digit code: <code>
+   5. Tap "Verify & Continue".
+
+   AFTER SIGNING IN
+   The app asks a few setup questions (your name, what you're looking for, and so on). Any answers are fine. Then you'll land on the Home screen, which has three main sections:
+
+   - Find a roommate: a deck of student profiles. Swipe right to like someone and left to pass. When two students like each other, it's a match and they can message each other.
+   - Browse sublets: rooms and apartments near campus that students are subletting. You can search, filter by price, and open a listing to see its photos and details. "Post a sublet" walks through listing a place.
+   - Crash & Cash: short posts from students who need a place to stay for a night or a break, or who are offering one.
+
+   Messages are in the Inbox tab, and your profile is in the Profile tab.
+
+   The app is new, so there may be only a few listings and profiles to browse. Everything you do with the demo account is real and saved to our database, and we'll delete the account and its data after review.
+   ```
 
 **Password length.** Six digits only just clears Supabase's default minimum
 password length of 6. If the project has a stricter policy (a higher minimum,
