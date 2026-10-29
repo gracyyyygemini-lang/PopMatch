@@ -240,6 +240,17 @@ without it the app says so, and you ban them by hand under Authentication →
 Users. Resolving a report also settles any other open reports of the same
 thing. Deleted content can't be restored.
 
+**Word filter.** Saving a profile, listing or Crash & Cash post is refused
+(400, `code: "content_filtered"`, naming the field but not the word) if its
+public text contains a word from the list in `server/contentFilter.ts`:
+slurs, strong profanity, sexual solicitation. Whole words only, after undoing
+accents and swaps like `$h1t`. Words that are also surnames or ordinary words
+are left off on purpose. It doesn't catch letters spaced apart (`f u c k`) or
+stretched (`fuuuck`), and it doesn't look at photos: reports cover those.
+Private messages aren't filtered: guideline 1.2 is about what's posted to the
+app, and reports and blocks cover direct messages. Edit the list in that one
+file.
+
 **Unbanning** (if a ban was a mistake): in the SQL Editor,
 `DELETE FROM bans WHERE email = '<their email>';`. Then lift the sign-in ban
 in Supabase under Authentication → Users, on that user.

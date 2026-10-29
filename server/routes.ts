@@ -5,6 +5,7 @@ import { query } from "./db";
 import { adminClient, deleteAccount } from "./account";
 import { sendReportAlert } from "./alerts";
 import { DECISIONS, resolveReport } from "./moderation";
+import { filteredError, objectionableField } from "./contentFilter";
 import {
   callerUserId, namesSomeoneElse, requireAdmin, requireAuth, supabaseSigningKeys,
 } from "./auth";
@@ -836,6 +837,11 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (rawVibe !== undefined && rawVibe !== null && !vibeProfile) {
         return res.status(400).json({ error: "vibeProfile needs a valid identity and lookingFor" });
       }
+      // Public profile text only; checked before anything is saved.
+      const badProfileField = objectionableField({
+        name, major, bio, college, organizations, "compatibility answers": vibeProfile,
+      });
+      if (badProfileField) return res.status(400).json(filteredError(badProfileField));
 
       const landlordJson = JSON.stringify(Array.isArray(landlords) ? landlords : [landlords]);
       try {
@@ -1458,6 +1464,13 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (floorPlanUrl && !isHttpUrl(floorPlanUrl)) {
         return res.status(400).json({ error: "The floor plan must be uploaded (http/https URL) before posting" });
       }
+      const listingDetails = toListingDetails(req.body);
+      const badListingField = objectionableField({
+        "listing title": buildingName, address, "listing description": description, "event name": eventTag,
+        "unit type": listingDetails.unitType, "resident bio": listingDetails.currentResidentBio,
+        "roommate preference": listingDetails.roommatePreference, "summer timing": listingDetails.subCategory,
+      });
+      if (badListingField) return res.status(400).json(filteredError(badListingField));
       const startDate = moveInDate ? new Date(moveInDate) : null;
       const endDate = moveOutDate ? new Date(moveOutDate) : null;
       if ((startDate && isNaN(startDate.getTime())) || (endDate && isNaN(endDate.getTime()))) {
@@ -1474,7 +1487,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
          ON CONFLICT (id) DO NOTHING`,
         [id, userId, buildingName, address, category, leaseType, pricePerMonth,
           landlordJson, zone, availableDuringBreaks, breakTypes, description,
-          eventTag, startDate, endDate, JSON.stringify(toListingDetails(req.body))]
+          eventTag, startDate, endDate, JSON.stringify(listingDetails)]
       );
 
       const [row] = await query<ListingRow>(`${LISTING_SELECT} WHERE l.id = $1`, [id]);
@@ -1566,6 +1579,8 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (imageUrl && !isHttpUrl(imageUrl)) {
         return res.status(400).json({ error: "The photo must be uploaded (http/https URL) before posting" });
       }
+      const badPostField = objectionableField({ post: story, dates, "payment": currencyLabel, location: approxLocation });
+      if (badPostField) return res.status(400).json(filteredError(badPostField));
 
       await query(
         `INSERT INTO crash_posts (id, user_id, vibe, story, image_url, dates, target_date,

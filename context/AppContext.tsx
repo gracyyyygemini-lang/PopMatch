@@ -773,7 +773,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Until the profile lands, keep trying in the background — reloading the
   // app shouldn't be the only way a failed save ever gets retried.
   useEffect(() => {
-    if (!profileSyncError) return;
+    // Refused for its wording: the same text fails every time until edited.
+    if (!profileSyncError || /content_filtered/.test(profileSyncError)) return;
     const timer = setInterval(retryProfileSync, SYNC_RETRY_MS);
     return () => clearInterval(timer);
   }, [profileSyncError]);

@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
+import { apiErrorMessage } from "@/lib/messages";
 import { font } from "@/constants/typography";
 
 /**
@@ -29,13 +30,19 @@ export function ProfileSyncBanner() {
     }
   };
 
+  // The server refused the text itself (server/contentFilter.ts): retrying
+  // the same words can't help, so say why instead.
+  const filtered = /content_filtered/.test(profileSyncError);
+
   return (
     <View style={[styles.banner, { paddingTop: (Platform.OS === "web" ? 0 : insets.top) + 10 }]}>
       <Ionicons name="cloud-offline-outline" size={18} color={Colors.alertRed} />
       <View style={styles.content}>
         <Text style={styles.title}>Your profile isn't saved yet</Text>
         <Text style={styles.body}>
-          Other students can't see you until it reaches the server. Retrying automatically.
+          {filtered
+            ? `${apiErrorMessage(new Error(profileSyncError))} Edit it on your Profile to save.`
+            : "Other students can't see you until it reaches the server. Retrying automatically."}
         </Text>
         {__DEV__ && <Text style={styles.detail} numberOfLines={3}>{profileSyncError}</Text>}
       </View>
