@@ -228,11 +228,19 @@ address still gets Supabase's emailed codes.
 1. Supabase → **Authentication** → **Users** → **Add user** → **Create new
    user**. Enter the review email, the 6-digit code as the password, and tick
    **Auto Confirm User**.
-2. Set the same address in two places:
-   - `EXPO_PUBLIC_REVIEW_EMAIL` in the EAS `production` environment, so the
-     app lets it through. It's compiled into the build.
-   - `REVIEW_EMAIL` on the API host, so `POST /api/users` accepts a profile
-     without `.edu`.
+2. Set the same address as both `EXPO_PUBLIC_REVIEW_EMAIL` (the app lets it
+   through) and `REVIEW_EMAIL` (`POST /api/users` accepts a profile without
+   `.edu`), wherever the app and API run:
+   - **Locally:** both in `.env`. Then stop and restart both `npm run
+     expo:dev` and `npm run server:dev`. Saving `.env` isn't enough, and
+     neither is a hot reload: `EXPO_PUBLIC_*` values are fixed into the bundle
+     when Expo starts (a production build inlines them as plain strings), and
+     the API reads `.env` once at startup. If the address still gets "Please
+     use your @illinois.edu email address", the app was started before the
+     variable was set. Restart with `npx expo start --clear`.
+   - **iOS build:** `EXPO_PUBLIC_REVIEW_EMAIL` in the EAS `production`
+     environment. EAS doesn't read `.env`.
+   - **Deployed API:** `REVIEW_EMAIL` in the API host's environment.
 3. Put the address and code in App Store Connect → the version → **App Review
    Information** → **Sign-in required**, and in the notes.
 
