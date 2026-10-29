@@ -44,6 +44,9 @@ async function initDb() {
   // (VibeProfile). vibe_profile only ever holds what toVibeProfile allows.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS intent VARCHAR`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vibe_profile JSONB`);
+  // Which Terms of Use version they agreed to, and when (constants/terms.ts).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version VARCHAR`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ`);
 
   // One row per block, keyed by email like likes. Blocking is mutual in
   // effect: either row hides the two people from each other everywhere.
@@ -340,6 +343,7 @@ type UserRow = {
   stays_spring_break: boolean | null; avatar_color: string | null;
   college: string | null; organizations: string[] | null; profile_image: string | null;
   intent: string | null; vibe_profile: unknown;
+  terms_version?: string | null;
 };
 
 const INTENTS = ["host", "joiner", "co_seeker", "sublessor", "sublessee"];
@@ -476,6 +480,7 @@ function toUserProfile(row: UserRow, callerEmail: string) {
     ...(row.profile_image ? { profileImage: row.profile_image } : {}),
     ...(row.intent && INTENTS.includes(row.intent) ? { intent: row.intent } : {}),
     ...(vibeProfile ? { vibeProfile } : {}),
+    ...(own && row.terms_version ? { termsVersion: row.terms_version } : {}),
   };
 }
 
@@ -814,7 +819,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         noise = 3, leaseType = "full_year", zone = "campustown",
         landlords = ["other"], staysThanksgiving = false, staysSpringBreak = false,
         avatarColor = "#005F73", college = "", organizations = [], profileImage = "",
-        intent: rawIntent, vibeProfile: rawVibe,
+        intent: rawIntent, vibeProfile: rawVibe, termsVersion: rawTerms,
       } = req.body;
 
       if (namesSomeoneElse(claimedEmail, caller.email, true)) {
@@ -833,6 +838,9 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       // null = not sent: the stored values are kept (COALESCE below), so a
       // device that hasn't filled these in yet can't wipe them.
       const intent: string | null = rawIntent ?? null;
+      // Like intent: not sent keeps what's stored, so an older device can't
+      // take an acceptance back.
+      const termsVersion = typeof rawTerms === "string" && rawTerms ? rawTerms.slice(0, 40) : null;
       const vibeProfile = rawVibe === undefined || rawVibe === null ? undefined : toVibeProfile(rawVibe);
       if (rawVibe !== undefined && rawVibe !== null && !vibeProfile) {
         return res.status(400).json({ error: "vibeProfile needs a valid identity and lookingFor" });
@@ -849,8 +857,9 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
           `INSERT INTO users (id, name, email, major, bio, budget, gender, gender_pref,
             cleanliness, noise, lease_type, zone, landlord, stays_thanksgiving,
             stays_spring_break, avatar_color, college, organizations, profile_image,
-            intent, vibe_profile)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+            intent, vibe_profile, terms_version, terms_accepted_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
+             CASE WHEN $22::varchar IS NULL THEN NULL ELSE NOW() END)
            ON CONFLICT (email) DO UPDATE SET
              name = EXCLUDED.name, major = EXCLUDED.major, bio = EXCLUDED.bio,
              budget = EXCLUDED.budget, gender = EXCLUDED.gender,
@@ -863,11 +872,15 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
              organizations = EXCLUDED.organizations,
              profile_image = EXCLUDED.profile_image,
              intent = COALESCE(EXCLUDED.intent, users.intent),
-             vibe_profile = COALESCE(EXCLUDED.vibe_profile, users.vibe_profile)`,
+             vibe_profile = COALESCE(EXCLUDED.vibe_profile, users.vibe_profile),
+             terms_accepted_at = CASE
+               WHEN EXCLUDED.terms_version IS NOT NULL AND EXCLUDED.terms_version IS DISTINCT FROM users.terms_version
+               THEN NOW() ELSE users.terms_accepted_at END,
+             terms_version = COALESCE(EXCLUDED.terms_version, users.terms_version)`,
           [id, name, email, major, bio, budget, gender, genderPref, cleanliness,
             noise, leaseType, zone, landlordJson, staysThanksgiving, staysSpringBreak,
             avatarColor, college, organizations, profileImage,
-            intent, vibeProfile ? JSON.stringify(vibeProfile) : null]
+            intent, vibeProfile ? JSON.stringify(vibeProfile) : null, termsVersion]
         );
       } catch (err) {
         // A new profile whose id is already someone else's: never overwrite theirs.

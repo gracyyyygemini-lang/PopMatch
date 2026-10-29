@@ -93,6 +93,8 @@ export interface UserProfile {
   organizations?: string[];
   intent?: Intent;
   vibeProfile?: VibeProfile;
+  /** The Terms of Use version they agreed to (constants/terms.ts). Own profile only. */
+  termsVersion?: string;
 }
 
 /**
@@ -750,7 +752,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const merged = mergeProfile(cached, server);
       // Saved before intent / vibeProfile had columns: send this device's copy up.
-      if ((!server.intent && cached.intent) || (!server.vibeProfile && cached.vibeProfile)) {
+      if ((!server.intent && cached.intent) || (!server.vibeProfile && cached.vibeProfile)
+        || (cached.termsVersion && server.termsVersion !== cached.termsVersion)) {
         await pushProfile(merged);
         return;
       }

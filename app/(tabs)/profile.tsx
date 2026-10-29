@@ -769,6 +769,8 @@ ${message}`)
         <Group style={{ marginBottom: 12 }}>
           <Row icon="hand-left" tile={Colors.earth} title="Blocked students"
             subtitle="See who you've blocked, and unblock" onPress={() => router.push("/blocked")} />
+          <Row icon="document-text" tile={Colors.patina} title="Terms of Use"
+            subtitle="The rules everyone on PopMatch agrees to" onPress={() => router.push("/terms")} />
           {SUPPORT_EMAIL ? (
             <Row icon="mail" tile={Colors.industrial} title="Contact us" subtitle={SUPPORT_EMAIL}
               onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=PopMatch`)} />

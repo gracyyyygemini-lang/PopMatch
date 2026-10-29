@@ -40,6 +40,7 @@ import {
 } from "@/lib/auth";
 import { uploadProfileImage } from "@/lib/uploads";
 import { fetchUserProfile } from "@/lib/users";
+import { TERMS_VERSION } from "@/constants/terms";
 import { font } from "@/constants/typography";
 
 const MAJORS = [
@@ -162,6 +163,7 @@ export default function OnboardingScreen() {
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [name, setName] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [major, setMajor] = useState("");
   const [showMajorPicker, setShowMajorPicker] = useState(false);
   const [intent, setIntent] = useState<Intent>("joiner");
@@ -309,8 +311,8 @@ export default function OnboardingScreen() {
       case 1:
         return !!intent;
       case 2:
-        // Name only. A photo helps but shouldn't block anyone at the door.
-        return name.trim().length > 0;
+        // Name and the Terms. A photo helps but shouldn't block anyone at the door.
+        return name.trim().length > 0 && agreedToTerms;
       default:
         return true;
     }
@@ -367,6 +369,7 @@ export default function OnboardingScreen() {
       staysSpringBreak: isSupplySide ? false : staysSpringBreak,
       avatarColor,
       intent,
+      termsVersion: TERMS_VERSION,
       ...(avatarUrl ? { profileImage: avatarUrl } : {}),
     };
 
@@ -690,6 +693,27 @@ export default function OnboardingScreen() {
               Budget, neighborhood, lease type and roommate preferences all live in
               your profile — set them whenever you like.
             </Text>
+
+            {/* Required (App Store guideline 1.2): agree to the zero-tolerance terms before using PopMatch. */}
+            <View style={styles.termsRow}>
+              <TouchableOpacity
+                style={styles.termsCheckTouch}
+                onPress={() => { setAgreedToTerms(v => !v); Haptics.selectionAsync(); }}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: agreedToTerms }}
+                accessibilityLabel="I agree to the Terms of Use"
+              >
+                <View style={[styles.termsBox, agreedToTerms && styles.termsBoxOn]}>
+                  {agreedToTerms && <Ionicons name="checkmark" size={16} color={Colors.white} />}
+                </View>
+                <Text style={styles.termsText}>
+                  I agree to the Terms of Use, including zero tolerance for abusive behavior and objectionable content.
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={() => router.push("/terms")} style={styles.termsLink} accessibilityRole="link">
+              <Text style={styles.termsLinkText}>Read the Terms of Use</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -879,6 +903,16 @@ const styles = StyleSheet.create({
   },
   // 13 + 18 (line) + 13 = 44pt tall; the text alone is ~360pt wide, so no
   // horizontal padding (it would only make the line wrap on narrow phones).
+  termsRow: { marginTop: 20 },
+  termsCheckTouch: { flexDirection: "row", alignItems: "flex-start", gap: 12, minHeight: 44, paddingVertical: 4 },
+  termsBox: {
+    width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: Colors.illiniBlue,
+    alignItems: "center", justifyContent: "center", marginTop: 1, backgroundColor: Colors.white,
+  },
+  termsBoxOn: { backgroundColor: Colors.illiniBlue },
+  termsText: { ...font.regular, fontSize: 14, lineHeight: 20, color: Colors.textPrimary, flex: 1 },
+  termsLink: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", marginLeft: 36 },
+  termsLinkText: { ...font.semibold, fontSize: 14, color: Colors.industrial, textDecorationLine: "underline" },
   fallbackLink: {
     alignSelf: "center",
     marginTop: 37,

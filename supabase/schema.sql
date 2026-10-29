@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS users (
 -- Databases created before intent / vibe_profile existed.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS intent VARCHAR;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS vibe_profile JSONB;
+-- Which Terms of Use version they agreed to, and when (constants/terms.ts).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version VARCHAR;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
 
 -- Two tables nothing ever used: friendships (superseded by friend_adds) and
 -- break_posts (Crash & Cash lives in crash_posts). Dropped from databases

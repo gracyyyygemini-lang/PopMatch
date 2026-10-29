@@ -259,6 +259,20 @@ Also set `EXPO_PUBLIC_SUPPORT_EMAIL` (in EAS for builds, `.env` locally). It's
 the "Contact us" row on Profile and the address on the report confirmation,
 App Review's "published contact information". Unset, both are hidden.
 
+### Terms of Use
+
+The text is in `constants/terms.ts`. It's a **draft written for you to
+review, not legal advice**, and while `TERMS_IS_DRAFT` is `true` the screen
+says so in an orange "DRAFT" box. Have it reviewed, then set it to `false`.
+It includes the zero-tolerance clause App Review asks for (guideline 1.2).
+
+Everyone agrees before using the app: new students tick a box on the last
+onboarding step, and anyone signed in who hasn't agreed to the current
+`TERMS_VERSION` gets the Terms with an "Agree and continue" button. The
+version and time are stored in `users.terms_version` / `terms_accepted_at`.
+Change the wording, bump `TERMS_VERSION` (it's a date), and everyone is asked
+again. Profile → Terms of Use shows them any time.
+
 ### Account deletion
 
 Profile → **Delete Account** (App Store guideline 5.1.1(v)) calls
@@ -357,13 +371,20 @@ address still gets Supabase's emailed codes.
    5. Tap "Verify & Continue".
 
    AFTER SIGNING IN
-   The app asks a few setup questions (your name, what you're looking for, and so on). Any answers are fine. Then you'll land on the Home screen, which has three main sections:
+   The app asks a few setup questions (what you're looking for, then your name). Any answers are fine. On the last one, tick "I agree to the Terms of Use…" — the "Find My Match" button stays grey until you do. Then you'll land on the Home screen, which has three main sections:
 
    - Find a roommate: a deck of student profiles. Swipe right to like someone and left to pass. When two students like each other, it's a match and they can message each other.
    - Browse sublets: rooms and apartments near campus that students are subletting. You can search, filter by price, and open a listing to see its photos and details. "Post a sublet" walks through listing a place.
    - Crash & Cash: short posts from students who need a place to stay for a night or a break, or who are offering one.
 
    Messages are in the Inbox tab, and your profile is in the Profile tab.
+
+   SAFETY FEATURES
+   - Report or block: tap the "⋯" button on any profile in Find a roommate (top right), on any listing (next to the poster's name), on any Crash & Cash post, or in any conversation (top right). Reports go to our moderators, who act on them within 24 hours.
+   - Blocked students: Profile → Blocked students.
+   - Terms of Use (including zero tolerance for objectionable content and abusive users): Profile → Terms of Use. Everyone agrees to them during sign-up.
+   - Contact us: Profile → Contact us.
+   - Delete your account: Profile → Delete Account (at the bottom). It permanently deletes the account and everything in it.
 
    The app is new, so there may be only a few listings and profiles to browse. Everything you do with the demo account is real and saved to our database, and we'll delete the account and its data after review.
    ```

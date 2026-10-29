@@ -61,6 +61,10 @@ function RootLayoutNav() {
         name="blocked"
         options={{ headerShown: false, presentation: "card" }}
       />
+      <Stack.Screen
+        name="terms"
+        options={{ headerShown: false, presentation: "card", gestureEnabled: false }}
+      />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

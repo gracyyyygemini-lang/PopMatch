@@ -1,5 +1,5 @@
 import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,6 +8,8 @@ import React from "react";
 import Colors from "@/constants/colors";
 import { useResponsive } from "@/hooks/useResponsive";
 import WebSidebar from "@/components/WebSidebar";
+import { useApp } from "@/context/AppContext";
+import { TERMS_VERSION } from "@/constants/terms";
 import { font } from "@/constants/typography";
 
 function NativeTabLayout() {
@@ -101,6 +103,13 @@ function ClassicTabLayout({ hideTabBar }: { hideTabBar?: boolean }) {
 
 export default function TabLayout() {
   const { isDesktop } = useResponsive();
+  const { currentUser } = useApp();
+
+  // Everyone agrees to the current Terms before using the app, including
+  // students who joined before there were any (App Store guideline 1.2).
+  if (currentUser && currentUser.termsVersion !== TERMS_VERSION) {
+    return <Redirect href="/terms?accept=1" />;
+  }
 
   if (!isDesktop && isLiquidGlassAvailable()) {
     return <NativeTabLayout />;

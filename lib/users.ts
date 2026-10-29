@@ -43,6 +43,9 @@ export function mergeProfile(local: UserProfile, server: UserProfile): UserProfi
     intent: server.intent ?? local.intent,
     vibeProfile: server.vibeProfile ?? local.vibeProfile,
     profileImage: server.profileImage ?? local.profileImage,
+    // Versions are dates (constants/terms.ts): keep whichever agreement is
+    // newer, so one made offline isn't undone before it reaches the server.
+    termsVersion: [server.termsVersion, local.termsVersion].filter(Boolean).sort().pop(),
   };
 }
 
