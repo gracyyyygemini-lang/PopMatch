@@ -222,6 +222,17 @@ CREATE TABLE IF NOT EXISTS reports (
   UNIQUE (reporter_email, target_type, target_id)
 );
 
+-- Banned students, by email. The API refuses every request from a banned
+-- email and hides everything they posted. Kept when they delete their
+-- account, so the same email can't sign up again.
+CREATE TABLE IF NOT EXISTS bans (
+  email VARCHAR PRIMARY KEY,
+  reason TEXT NOT NULL DEFAULT '',
+  banned_by VARCHAR NOT NULL,          -- the admin's email
+  report_id INT,                       -- the report it came from, if any
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Indexes ────────────────────────────────────────────────────────────────
 -- The app filters listings constantly; these keep the marketplace fast as the
 -- table grows past a few hundred rows.
@@ -285,6 +296,7 @@ ALTER TABLE friend_adds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crash_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bans ENABLE ROW LEVEL SECURITY;
 
 -- ─── Avatar storage ─────────────────────────────────────────────────────────
 -- Creates the public "avatars" bucket that lib/uploads.ts writes to, so you

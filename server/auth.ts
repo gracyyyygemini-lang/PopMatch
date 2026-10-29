@@ -74,10 +74,16 @@ export function requireAuth({ getKey, issuer }: AuthOptions) {
 
     try {
       const normalized = email.trim().toLowerCase();
-      const [row] = await query<{ id: string }>(
-        "SELECT id FROM users WHERE lower(email) = $1",
+      const [row] = await query<{ id: string | null; banned: boolean }>(
+        `SELECT (SELECT id FROM users WHERE lower(email) = $1) AS id,
+                EXISTS (SELECT 1 FROM bans WHERE email = $1) AS banned`,
         [normalized]
       );
+      // A ban takes effect on the next request, not when the token expires.
+      // Deleting the account stays possible (App Store guideline 5.1.1(v)).
+      if (row?.banned && !(req.method === "DELETE" && req.path === "/account")) {
+        return res.status(403).json({ error: "This account has been suspended for breaking PopMatch's rules.", code: "banned" });
+      }
       req.caller = { email: normalized, userId: row?.id ?? null, authId: typeof authId === "string" && authId ? authId : null };
       return next();
     } catch (err) {

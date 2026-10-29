@@ -4,6 +4,7 @@ import type { JWTVerifyGetKey } from "jose";
 import { query } from "./db";
 import { adminClient, deleteAccount } from "./account";
 import { sendReportAlert } from "./alerts";
+import { DECISIONS, resolveReport } from "./moderation";
 import {
   callerUserId, namesSomeoneElse, requireAdmin, requireAuth, supabaseSigningKeys,
 } from "./auth";
@@ -83,6 +84,20 @@ async function initDb() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (status, created_at)`);
   await query(`ALTER TABLE reports ENABLE ROW LEVEL SECURITY`);
+
+  // Banned students, by email. Every API request from a banned email is
+  // refused (requireAuth), and cutOff hides everything they posted. Kept
+  // when they delete their account, so the same email can't sign up again.
+  await query(`
+    CREATE TABLE IF NOT EXISTS bans (
+      email VARCHAR PRIMARY KEY,
+      reason TEXT NOT NULL DEFAULT '',
+      banned_by VARCHAR NOT NULL,
+      report_id INT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(`ALTER TABLE bans ENABLE ROW LEVEL SECURITY`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS vouches (
@@ -329,19 +344,22 @@ type UserRow = {
 const INTENTS = ["host", "joiner", "co_seeker", "sublessor", "sublessee"];
 
 /**
- * SQL that's true when either of two people (lowercased-email expressions)
- * has blocked the other. Every read that shows one student to another, and
- * every way of contacting someone, is gated on NOT this.
+ * SQL that's true when two people (lowercased-email expressions) must not
+ * see or reach each other: either has blocked the other, or either is
+ * banned. Every read that shows one student to another, and every way of
+ * contacting someone, is gated on NOT this, so a ban hides everything a
+ * banned student posted at once, everywhere.
  */
-const blockedBetween = (a: string, b: string) => `EXISTS (
+const cutOff = (a: string, b: string) => `(EXISTS (
   SELECT 1 FROM blocks bl
   WHERE (bl.blocker_email = ${a} AND bl.blocked_email = ${b})
-     OR (bl.blocker_email = ${b} AND bl.blocked_email = ${a}))`;
+     OR (bl.blocker_email = ${b} AND bl.blocked_email = ${a}))
+  OR EXISTS (SELECT 1 FROM bans bn WHERE bn.email IN (${a}, ${b})))`;
 
-/** Whether the caller and the student with users.id `otherId` are blocked either way. */
-async function isBlockedWith(callerEmail: string, otherId: string): Promise<boolean> {
+/** Whether the caller and the student with users.id `otherId` are cut off from each other (see cutOff). */
+async function isCutOffFrom(callerEmail: string, otherId: string): Promise<boolean> {
   const [row] = await query<{ blocked: boolean }>(
-    `SELECT EXISTS (SELECT 1 FROM users ou WHERE ou.id = $2 AND ${blockedBetween("$1", "lower(ou.email)")}) AS blocked`,
+    `SELECT EXISTS (SELECT 1 FROM users ou WHERE ou.id = $2 AND ${cutOff("$1", "lower(ou.email)")}) AS blocked`,
     [callerEmail, otherId]
   );
   return !!row?.blocked;
@@ -679,7 +697,7 @@ function listingFilter(q: Request["query"], callerEmail: string): { where: strin
   const params: unknown[] = [callerEmail];
   const conditions = [
     "l.leased = FALSE",
-    `NOT EXISTS (SELECT 1 FROM users bu WHERE bu.id = l.user_id AND ${blockedBetween("$1", "lower(bu.email)")})`,
+    `NOT EXISTS (SELECT 1 FROM users bu WHERE bu.id = l.user_id AND ${cutOff("$1", "lower(bu.email)")})`,
   ];
   const add = (sql: (n: string) => string, value: unknown) => {
     params.push(value);
@@ -914,7 +932,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       const rows = await query<UserRow>(
         `SELECT * FROM users u
          WHERE lower(u.email) <> $1
-           AND NOT ${blockedBetween("$1", "lower(u.email)")}
+           AND NOT ${cutOff("$1", "lower(u.email)")}
            ${deck ? `AND NOT EXISTS (
              SELECT 1 FROM passes p WHERE p.passer_email = $1 AND p.passed_email = lower(u.email)
            )` : ""}
@@ -943,7 +961,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       }
       const likedEmail = await emailOfUser(req.body.likedUserId);
       // Blocked either way looks the same as not existing.
-      if (!likedEmail || await isBlockedWith(likerEmail, String(req.body.likedUserId))) {
+      if (!likedEmail || await isCutOffFrom(likerEmail, String(req.body.likedUserId))) {
         return res.status(404).json({ error: "Student not found" });
       }
       if (likerEmail === likedEmail) {
@@ -1009,7 +1027,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
           AND theirs.liked_email = mine.liker_email
          JOIN users u ON lower(u.email) = mine.liked_email
          WHERE mine.liker_email = $1
-           AND NOT ${blockedBetween("$1", "mine.liked_email")}
+           AND NOT ${cutOff("$1", "mine.liked_email")}
          ORDER BY matched_at DESC`,
         [email]
       );
@@ -1034,7 +1052,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
     JOIN friend_adds theirs
       ON theirs.adder_email = mine.added_email AND theirs.added_email = mine.adder_email
     WHERE mine.adder_email = ${param}
-      AND NOT ${blockedBetween("mine.adder_email", "mine.added_email")}`;
+      AND NOT ${cutOff("mine.adder_email", "mine.added_email")}`;
 
   // The caller's confirmed friends. :email must be the caller.
   app.get("/api/friends/:email", async (req: Request, res: Response) => {
@@ -1077,7 +1095,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       // Blocked either way: record nothing, but answer the same, so this
       // can't be used to find out about a block.
       const [{ blocked }] = await query<{ blocked: boolean }>(
-        `SELECT ${blockedBetween("$1", "$2")} AS blocked`, [adderEmail, addedEmail]
+        `SELECT ${cutOff("$1", "$2")} AS blocked`, [adderEmail, addedEmail]
       );
       if (!blocked) {
         await query(
@@ -1120,7 +1138,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
 
   // ─── BLOCKS ──────────────────────────────────────────────────────────────────
   // The caller blocks userId. From then on neither sees the other anywhere
-  // (blockedBetween) and neither can message the other. The blocked student
+  // (cutOff) and neither can message the other. The blocked student
   // is never told.
 
   app.post("/api/blocks", async (req: Request, res: Response) => {
@@ -1331,7 +1349,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       // An unknown id runs the same queries as a stranger and finds nothing.
       const targetEmail = target?.email ?? "";
       // Blocked either way: the same answer as for a stranger.
-      if (targetEmail && await isBlockedWith(viewerEmail, String(req.params.userId))) {
+      if (targetEmail && await isCutOffFrom(viewerEmail, String(req.params.userId))) {
         return res.json({ degree: null, mutualFriends: [], vouchedBy: [], sharedOrgs: [] });
       }
 
@@ -1508,7 +1526,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       const rows = await query<CrashPostRow>(
         `${CRASH_POST_SELECT}
          WHERE p.status = 'active' AND p.target_date >= NOW()
-           AND NOT EXISTS (SELECT 1 FROM users bu WHERE bu.id = p.user_id AND ${blockedBetween("$1", "lower(bu.email)")})
+           AND NOT EXISTS (SELECT 1 FROM users bu WHERE bu.id = p.user_id AND ${cutOff("$1", "lower(bu.email)")})
            ${text ? `AND (p.story ILIKE $2 ESCAPE '\\' OR p.dates ILIKE $2 ESCAPE '\\')` : ""}
          ORDER BY p.created_at DESC`,
         text ? [req.caller!.email, containsPattern(text)] : [req.caller!.email]
@@ -1665,6 +1683,69 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
   // ─── ADMIN ───────────────────────────────────────────────────────────────────
 
   // ADMIN_EMAILS only.
+  // ADMIN_EMAILS only: the report queue, oldest open first (that's the one
+  // closest to the 24-hour mark). Includes reporters' emails and private
+  // messages that were reported, so it never leaves this route.
+  app.get("/api/admin/reports", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const status = typeof req.query.status === "string" ? req.query.status : "open";
+      if (!["open", "actioned", "dismissed", "all"].includes(status)) {
+        return res.status(400).json({ error: "status must be open, actioned, dismissed or all" });
+      }
+      const rows = await query<any>(
+        `SELECT r.*, u.name AS target_user_name,
+           EXISTS (SELECT 1 FROM bans b WHERE b.email = lower(u.email)) AS target_banned,
+           (SELECT count(*)::int FROM reports o
+             WHERE o.target_type = r.target_type AND o.target_id = r.target_id AND o.status = 'open') AS open_reports_on_target
+         FROM reports r LEFT JOIN users u ON u.id = r.target_user_id
+         WHERE $1 = 'all' OR r.status = $1
+         ORDER BY r.created_at ${status === "open" ? "ASC" : "DESC"}
+         LIMIT 200`,
+        [status]
+      );
+      return res.json(rows.map(r => ({
+        id: r.id,
+        targetType: r.target_type,
+        targetId: r.target_id,
+        targetUserId: r.target_user_id,
+        targetUserName: r.target_user_name ?? "(deleted account)",
+        targetBanned: r.target_banned,
+        openReportsOnTarget: r.open_reports_on_target,
+        reporterEmail: r.reporter_email,
+        reason: r.reason,
+        details: r.details,
+        snapshot: r.snapshot,
+        status: r.status,
+        alertSent: r.alert_sent,
+        createdAt: new Date(r.created_at).getTime(),
+        ...(r.resolved_at ? { resolvedAt: new Date(r.resolved_at).getTime(), resolvedBy: r.resolved_by, resolutionNote: r.resolution_note } : {}),
+      })));
+    } catch (err) {
+      console.error("GET /api/admin/reports", err);
+      return res.status(500).json({ error: "Failed to load reports" });
+    }
+  });
+
+  // ADMIN_EMAILS only: act on a report. decision: dismiss, remove (take the
+  // content down), ban (eject the student), or remove_and_ban.
+  app.post("/api/admin/reports/:id/resolve", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      const decision = req.body?.decision;
+      const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 1000) : "";
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "Report id must be a number" });
+      if (!DECISIONS.includes(decision)) {
+        return res.status(400).json({ error: `decision must be one of ${DECISIONS.join(", ")}` });
+      }
+      const result = await resolveReport(id, decision, note, req.caller!.email, adminClient(supabaseUrl));
+      if (!result) return res.status(404).json({ error: "Report not found" });
+      return res.json(result);
+    } catch (err) {
+      console.error("POST /api/admin/reports/:id/resolve", err);
+      return res.status(500).json({ error: "Failed to resolve the report. Nothing was changed." });
+    }
+  });
+
   app.get("/api/admin/stats", requireAdmin, async (_req: Request, res: Response) => {
     try {
       const [userCount] = await query<{ count: string }>("SELECT COUNT(*) as count FROM users");
@@ -1744,7 +1825,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if (known.length === 0) {
         return res.status(404).json({ error: "That person isn't on PopMatch yet" });
       }
-      if (await isBlockedWith(req.caller!.email, participant2Id)) {
+      if (await isCutOffFrom(req.caller!.email, participant2Id)) {
         return res.status(403).json({ error: "You can't message this person" });
       }
 
@@ -1786,7 +1867,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
            AND NOT EXISTS (
              SELECT 1 FROM users ou
              WHERE ou.id = CASE WHEN c.participant1_id = $1 THEN c.participant2_id ELSE c.participant1_id END
-               AND ${blockedBetween("$2", "lower(ou.email)")})
+               AND ${cutOff("$2", "lower(ou.email)")})
          ORDER BY COALESCE(last.created_at, c.created_at) DESC`,
         [userId, req.caller!.email]
       );
@@ -1817,7 +1898,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         return res.status(403).json({ error: "You're not in this conversation" });
       }
       const otherId = participants.find(id => id !== senderId) ?? senderId;
-      if (await isBlockedWith(req.caller!.email, otherId)) {
+      if (await isCutOffFrom(req.caller!.email, otherId)) {
         return res.status(403).json({ error: "You can't message this person" });
       }
 
@@ -1855,7 +1936,7 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
         return res.status(403).json({ error: "You're not in this conversation" });
       }
       const otherId = participants.find(id => id !== userId) ?? userId;
-      if (await isBlockedWith(req.caller!.email, otherId)) {
+      if (await isCutOffFrom(req.caller!.email, otherId)) {
         return res.status(403).json({ error: "This conversation isn't available" });
       }
       const rows = await query<MessageRow>(

@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { apiRequest } from "@/lib/query-client";
 import { font } from "@/constants/typography";
+import ReportsQueue from "@/components/admin/ReportsQueue";
 
 interface AdminData {
   users: number;
@@ -115,6 +116,9 @@ export default function AdminScreen() {
           }]}
           showsVerticalScrollIndicator={false}
         >
+          {/* First: App Review expects reports handled within 24 hours. */}
+          <ReportsQueue />
+
           <Text style={s.sectionTitle}>Live Stats</Text>
           <View style={s.statsRow}>
             <StatCard icon="people-outline" value={data.users} label="Total Users" color={Colors.ocean} />
@@ -170,7 +174,7 @@ export default function AdminScreen() {
                     <Text style={[s.issueBadgeNum, { color: Colors.earth }]}>#{i + 1}</Text>
                   </View>
                   <Text style={s.issueName}>{issue.issue_category}</Text>
-                  <Text style={s.issueCount}>{issue.count} reports</Text>
+                  <Text style={s.issueCount}>{issue.count} mentions</Text>
                 </View>
               ))}
             </>

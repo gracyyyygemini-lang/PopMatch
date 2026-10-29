@@ -11,7 +11,9 @@ import getPool from "./db";
  *
  * If a step fails the request fails and the client says so; running it again
  * picks up where it stopped (each step skips what's already gone). The table
- * list matches the review-account cleanup SQL in SETUP.md.
+ * list matches the review-account cleanup SQL in SETUP.md. `bans` is left
+ * alone on purpose: a banned student deleting their account mustn't be able
+ * to sign up again with the same email.
  */
 
 export const PHOTO_BUCKETS = ["avatars", "listing-photos"];

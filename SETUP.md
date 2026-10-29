@@ -220,6 +220,30 @@ domain, which is far beyond the handful of reports a campus app gets, since
 it's one email per report. The paid plan starts at $20/month for 50,000.
 Check resend.com/pricing in case those numbers have changed.
 
+**Handling a report.** Open the app signed in as an admin (`ADMIN_EMAILS`),
+go to Profile, tap the version number five times, then Admin. The Reports
+queue is at the top, oldest first, with any report over 18 hours old
+outlined in red. Each one shows what was reported, why, who reported it, and
+the saved copy. The actions:
+
+- **Dismiss:** it doesn't break the rules, and nothing changes.
+- **Delete listing / post / conversation**, or **Clear profile** (bio, photo
+  and prompt answer): takes the content down.
+- **Remove + ban:** takes the content down and ejects the student.
+- **Ban only.**
+
+A ban adds the student's email to `bans`. From their next request the API
+refuses everything except deleting their account, and everything they
+posted disappears for everyone, the same way a block hides it. With
+`SUPABASE_SERVICE_ROLE_KEY` set, their Supabase sign-in is also banned;
+without it the app says so, and you ban them by hand under Authentication →
+Users. Resolving a report also settles any other open reports of the same
+thing. Deleted content can't be restored.
+
+**Unbanning** (if a ban was a mistake): in the SQL Editor,
+`DELETE FROM bans WHERE email = '<their email>';`. Then lift the sign-in ban
+in Supabase under Authentication → Users, on that user.
+
 Also set `EXPO_PUBLIC_SUPPORT_EMAIL` (in EAS for builds, `.env` locally). It's
 the "Contact us" row on Profile and the address on the report confirmation,
 App Review's "published contact information". Unset, both are hidden.
@@ -412,6 +436,9 @@ Account**. That does steps 1 and 2 below, plus the Storage photos, in one go
 
    **Deliberately skipped:**
    - `stats` holds only totals (subleases, matches), nothing per person.
+   - `bans` keeps a banned student's email after they delete their account,
+     so the same email can't sign up again. Delete that row by hand only if
+     you mean to unban them.
    - Photos in Storage (`avatars`, `listing-photos`). Delete the folder named
      after the user's auth id in each bucket, under **Storage**. The SQL
      editor can't remove the files themselves.
