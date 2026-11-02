@@ -883,9 +883,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [postsError]);
 
   /**
-   * Photos are required, so an upload failure fails the whole post. Uploads go
-   * to fixed per-slot paths and the save is idempotent per post.id, so calling
-   * this again with the same post finishes the job without duplicates.
+   * Photos are optional, but any that are picked must upload: a failure fails
+   * the whole post. Uploads go to fixed per-slot paths and the save is
+   * idempotent per post.id, so calling this again with the same post finishes
+   * the job without duplicates.
    */
   const addSublease = async (post: SubleasePost): Promise<SubleasePost> => {
     try {

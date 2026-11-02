@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import type { JWTVerifyGetKey } from "jose";
 import { query } from "./db";
-import { adminClient, deleteAccount } from "./account";
+import { adminClient, deleteAccount, removeListingPhotos } from "./account";
 import { sendReportAlert } from "./alerts";
 import { isReviewEmail, ReviewLoginError, reviewLogin } from "./reviewLogin";
 import { DECISIONS, resolveReport } from "./moderation";
@@ -721,7 +721,12 @@ function listingFilter(q: Request["query"], callerEmail: string): { where: strin
   return { where: conditions.join(" AND "), params };
 }
 
-const INCREMENTABLE_STATS = ["successful_subleases", "total_matches"];
+// listing_*: how Hosts and Sublessors handle the listing step at signup
+// (published there, skipped it, or skipped and published later).
+const INCREMENTABLE_STATS = [
+  "successful_subleases", "total_matches",
+  "listing_published_at_signup", "listing_skipped_at_signup", "listing_published_after_skip",
+];
 
 const CRASH_VIBES = ["sos", "offering"];
 const CRASH_CURRENCIES = ["cash", "boba", "lion_cover", "food", "favor"];
@@ -1544,6 +1549,10 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
       if ("error" in parsed) return res.status(400).json(parsed.error);
 
       const id = String(req.params.id);
+      // Read before the update so photos the edit dropped can be cleaned up.
+      const [before] = await query<{ details: unknown }>(
+        "SELECT details FROM listings WHERE id = $1 AND user_id = $2", [id, userId]
+      );
       const updated = await query(
         `UPDATE listings SET building_name = $3, address = $4, category = $5, lease_type = $6,
           price_per_month = $7, landlord = $8, zone = $9, available_during_breaks = $10,
@@ -1558,6 +1567,12 @@ export async function registerRoutes(app: Express, options: RouteOptions = {}): 
           ? res.status(403).json({ error: "You can only change your own listings" })
           : res.status(404).json({ error: "Listing not found" });
       }
+
+      const photoUrls = (d: ListingDetails) => [...(d.images ?? []), ...(d.floorPlanUrl ? [d.floorPlanUrl] : [])];
+      const kept = new Set(photoUrls(toListingDetails(req.body)));
+      const dropped = photoUrls(toListingDetails(before?.details)).filter(url => !kept.has(url));
+      const admin = dropped.length > 0 && req.caller!.authId ? adminClient(supabaseUrl) : null;
+      if (admin) await removeListingPhotos(admin, req.caller!.authId!, dropped);
 
       const [row] = await query<ListingRow>(`${LISTING_SELECT} WHERE l.id = $1`, [id]);
       return res.json(toListing(row));

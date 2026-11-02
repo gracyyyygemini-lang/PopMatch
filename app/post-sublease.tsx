@@ -11,6 +11,7 @@ import * as ImagePicker from "expo-image-picker";
 import Colors, { AVATAR_COLORS } from "@/constants/colors";
 import { showError, confirmAction } from "@/lib/alert";
 import { CATEGORY_LABELS, marketplaceTab } from "@/lib/marketplaceTabs";
+import { bumpStat } from "@/lib/stats";
 import {
   useApp, SubleasePost, LeaseType, Landlord, Zone, BreakType,
   KitchenType, BathroomType, CleaningFrequency, ShoePolicy, Amenities, DEFAULT_AMENITIES
@@ -135,7 +136,7 @@ const TOTAL_STEPS = 4;
 
 export default function PostSubleaseScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, subleases, addSublease, updateSublease, setCurrentUser, setIsOnboarded } = useApp();
+  const { currentUser, subleases, refreshPosts, addSublease, updateSublease, setCurrentUser, setIsOnboarded } = useApp();
   // One id per listing, kept across retries (and in the draft), so a second
   // tap after a failed publish reuses the uploaded photos and can't create a duplicate.
   const postIdRef = useRef(Date.now().toString() + Math.random().toString(36).substr(2, 6));
@@ -147,6 +148,13 @@ export default function PostSubleaseScreen() {
     ? subleases.find(s => s.id === editId && s.userId === currentUser?.id)
     : undefined;
   const [prefilled, setPrefilled] = useState(false);
+  // Refetch before deciding the listing is gone: the cached feed can predate it.
+  const [editLookupDone, setEditLookupDone] = useState(false);
+  useEffect(() => {
+    if (!editId) return;
+    refreshPosts().finally(() => setEditLookupDone(true));
+  }, [editId]);
+  const editNotFound = !!editId && editLookupDone && !editingPost;
   const isHostMode = params.mode === "host";
   const isSublessorMode = params.mode === "sublessor";
   const isGateway = params.gateway === "1";
@@ -504,6 +512,8 @@ export default function PostSubleaseScreen() {
       router.canGoBack() ? router.back() : router.replace("/my-listings");
       return;
     }
+    if (isGateway) bumpStat("listing_published_at_signup");
+    else if (skippedAtSignup.current) bumpStat("listing_published_after_skip");
     await clearListingDraft(currentUser?.email);
 
     if (currentUser) {
@@ -532,6 +542,8 @@ export default function PostSubleaseScreen() {
 
   const handleSkip = async () => {
     Haptics.selectionAsync();
+    bumpStat("listing_skipped_at_signup");
+    skippedAtSignup.current = true;
     // Kept even if untouched, so Home can offer "Finish your listing".
     await saveListingDraft(currentUser?.email, currentDraft());
     await finishOnboarding("/(tabs)");
@@ -548,7 +560,10 @@ export default function PostSubleaseScreen() {
   };
   const currentDraft = () => ({
     mode: params.mode, step, postId: postIdRef.current, fields: draftFields, updatedAt: Date.now(),
+    skipped: skippedAtSignup.current,
   });
+  // Carried in the draft so a later publish can be counted as a comeback.
+  const skippedAtSignup = useRef(false);
 
   const [draftLoaded, setDraftLoaded] = useState(false);
   // The first run after restoring would just echo the draft back, or store an
@@ -586,6 +601,7 @@ export default function PostSubleaseScreen() {
     let active = true;
     loadListingDraft(currentUser?.email).then(draft => {
       if (!active) return;
+      skippedAtSignup.current = !!draft?.skipped;
       // A Host draft shouldn't resume as a sublease, or the other way round.
       if (draft && draft.mode === params.mode) {
         postIdRef.current = draft.postId || postIdRef.current;
@@ -665,6 +681,15 @@ export default function PostSubleaseScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, {
         paddingBottom: insets.bottom + 80
       }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
+        {editNotFound && (
+          <View style={styles.gatewayBanner}>
+            <Ionicons name="alert-circle-outline" size={16} color={Colors.darkTeal} />
+            <Text style={styles.gatewayBannerText}>
+              {"This listing can't be edited. It may have been marked leased, or it couldn't load — check your connection and try again."}
+            </Text>
+          </View>
+        )}
 
         {isGateway && step === 0 && (
           <View style={styles.gatewayBanner}>

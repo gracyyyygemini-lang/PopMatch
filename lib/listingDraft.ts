@@ -12,6 +12,8 @@ export interface ListingDraft {
   postId: string;
   fields: Record<string, unknown>;
   bannerDismissed?: boolean;
+  /** Skipped at signup; publishing later counts as listing_published_after_skip. */
+  skipped?: boolean;
   updatedAt: number;
 }
 
