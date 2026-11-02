@@ -8,11 +8,12 @@ import { font } from "@/constants/typography";
 import { useApp } from "@/context/AppContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import { Group, GroupHeading, Row, ScreenTitle } from "@/components/ui/Grouped";
+import { listingEditHref, PHOTOS_STEP } from "@/lib/listingDraft";
 
 /**
  * Your own sublets and crash posts, from the feeds already loaded in context.
- * Managing them (mark leased / filled) stays on the marketplace and Crash &
- * Cash, where your posts are listed first.
+ * Sublets open in the listing wizard to edit. Marking leased / filled stays on
+ * the marketplace and Crash & Cash, where your posts are listed first.
  */
 export default function MyListingsScreen() {
   const insets = useSafeAreaInsets();
@@ -37,11 +38,19 @@ export default function MyListingsScreen() {
 
         <GroupHeading>Sublets</GroupHeading>
         <Group>
-          {mySublets.map(s => (
+          {/* Flat list of Rows, not fragments, so Group can mark the last one. */}
+          {mySublets.flatMap(s => [
             <Row key={s.id} icon="home" tile={Colors.illiniBlue} title={s.buildingName}
               subtitle={`$${s.pricePerMonth}/month${s.address ? ` · ${s.address}` : ""}`}
-              onPress={() => router.push("/marketplace")} />
-          ))}
+              detail={<Text style={styles.editText}>Edit</Text>}
+              accessibilityLabel={`Edit ${s.buildingName}`}
+              onPress={() => router.push(listingEditHref(s))} />,
+            ...(s.images?.length ? [] : [
+              <Row key={`${s.id}-photos`} icon="camera" tile={Colors.illiniOrange} title="Add photos"
+                subtitle={`${s.buildingName} has none yet`}
+                onPress={() => router.push(listingEditHref(s, PHOTOS_STEP))} />,
+            ]),
+          ])}
           <Row icon="add" tile={Colors.illiniOrange} title="Post a sublet"
             subtitle={mySublets.length ? "List another place" : "You haven't listed a place yet"}
             onPress={() => router.push("/post-sublease")} />
@@ -72,5 +81,6 @@ const styles = StyleSheet.create({
   content: { alignSelf: "center", width: "100%" },
   back: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginLeft: -6, marginBottom: 8, paddingVertical: 4 },
   backText: { ...font.regular, fontSize: 17, color: Colors.illiniBlue },
+  editText: { ...font.regular, fontSize: 15, color: Colors.illiniBlue, marginRight: 4 },
   footnote: { ...font.regular, fontSize: 13, color: Colors.textSecondaryOnBg, marginTop: 12, paddingHorizontal: 4 },
 });

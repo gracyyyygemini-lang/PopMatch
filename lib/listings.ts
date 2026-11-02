@@ -68,6 +68,12 @@ export async function createListing(post: SubleasePost): Promise<SubleasePost> {
   return (await res.json()) as SubleasePost;
 }
 
+/** Saves changes to one of your listings under its existing id. */
+export async function updateListing(post: SubleasePost): Promise<SubleasePost> {
+  const res = await apiRequest("PUT", `/api/listings/${encodeURIComponent(post.id)}`, toListingPayload(post));
+  return (await res.json()) as SubleasePost;
+}
+
 /** Marks it leased: it stays in the table but leaves everyone's marketplace. */
 export async function markListingLeased(id: string): Promise<void> {
   await apiRequest("DELETE", `/api/listings/${encodeURIComponent(id)}`);

@@ -38,10 +38,6 @@ function RootLayoutNav() {
         options={{ headerShown: false, presentation: "modal" }}
       />
       <Stack.Screen
-        name="link-listing"
-        options={{ headerShown: false, presentation: "card" }}
-      />
-      <Stack.Screen
         name="chat"
         options={{ headerShown: false, presentation: "card" }}
       />

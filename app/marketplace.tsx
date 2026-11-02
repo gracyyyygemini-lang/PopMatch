@@ -23,15 +23,9 @@ import { PostsSyncBanner } from "@/components/PostsSyncBanner";
 import { useResponsive } from "@/hooks/useResponsive";
 import { showError } from "@/lib/alert";
 import { font } from "@/constants/typography";
+import { listingEditHref, PHOTOS_STEP } from "@/lib/listingDraft";
+import { CATEGORY_LABELS, marketplaceTab } from "@/lib/marketplaceTabs";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  all: "All",
-  roommate_openings: "Roommate Openings",
-  summer_only: "Summer Only",
-  august_gap: "August Gap",
-  semester_takeover: "Semester / Full Year",
-  short_term: "Short-Term & Events",
-};
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   all: "apps-outline",
@@ -448,8 +442,7 @@ function SubleaseCard({ post, onMarkLeased }: {
   const { getTrustInfo, currentUser, startConversation } = useApp();
   const trust = getTrustInfo(post.userId);
   const initials = post.userName.split(" ").map(n => n[0]).join("").slice(0, 2);
-  const rawCat = post.listingType === "roommate" ? "roommate_openings" : (post.category || "semester_takeover");
-  const cat = rawCat === "summer" ? "summer_only" : ["spring", "fall", "full_year"].includes(rawCat) ? "semester_takeover" : rawCat;
+  const cat = marketplaceTab(post);
   const catColor = CATEGORY_COLORS[cat] || Colors.ocean;
   const isOwner = currentUser?.id === post.userId;
   const [galleryVisible, setGalleryVisible] = useState(false);
@@ -469,6 +462,14 @@ function SubleaseCard({ post, onMarkLeased }: {
         </View>
       )}
       <CardPhotoSection post={post} onImagePress={hasValidImages ? () => setGalleryVisible(true) : undefined} />
+      {isOwner && !post.images?.some(isValidImageUri) && (
+        <TouchableOpacity style={styles.addPhotosPrompt} accessibilityRole="link"
+          onPress={() => { Haptics.selectionAsync(); router.push(listingEditHref(post, PHOTOS_STEP)); }}>
+          <Ionicons name="camera-outline" size={14} color={Colors.ocean} />
+          <Text style={styles.addPhotosText}>No photos yet. </Text>
+          <Text style={styles.addPhotosLink}>Add photos</Text>
+        </TouchableOpacity>
+      )}
       <FullScreenGallery
         images={allImages}
         visible={galleryVisible}
@@ -632,6 +633,17 @@ function SubleaseCard({ post, onMarkLeased }: {
             <Text style={styles.messageBtnText}>
               {post.listingType === "roommate" ? "Message Host" : `Message ${post.userName.split(" ")[0]}`}
             </Text>
+          </TouchableOpacity>
+        )}
+
+        {isOwner && (
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => { Haptics.selectionAsync(); router.push(listingEditHref(post)); }}
+            accessibilityLabel={`Edit ${post.buildingName}`}
+          >
+            <Ionicons name="create-outline" size={16} color={Colors.ocean} />
+            <Text style={styles.editBtnText}>Edit</Text>
           </TouchableOpacity>
         )}
 
@@ -1038,6 +1050,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.blueTint, paddingVertical: 8,
   },
   ownerBannerText: { ...font.bold, fontSize: 12, color: Colors.ocean },
+  addPhotosPrompt: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4,
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderSoft,
+  },
+  addPhotosText: { ...font.regular, fontSize: 12, color: Colors.charcoal },
+  addPhotosLink: { ...font.bold, fontSize: 12, color: Colors.ocean, textDecorationLine: "underline" },
   ownerTag: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
@@ -1106,6 +1124,13 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.ocean + "30",
   },
   messageBtnText: { ...font.bold, fontSize: 14, color: Colors.ocean },
+  // The owner's counterpart to Message, in the same outlined style.
+  editBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.ocean + "10", borderRadius: 12, paddingVertical: 12,
+    borderWidth: 1.5, borderColor: Colors.ocean + "30",
+  },
+  editBtnText: { ...font.bold, fontSize: 14, color: Colors.ocean },
   leasedBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: Colors.ponyo, borderRadius: 12, paddingVertical: 12, marginTop: 2,

@@ -64,6 +64,24 @@ async function deletePhotos(admin: SupabaseClient, authId: string): Promise<numb
 }
 
 /**
+ * Deletes listing photos an edit replaced or removed. Only paths inside the
+ * caller's own folder are touched, whatever the URLs say. Best effort: a
+ * leftover file costs storage, not correctness, so failures are only logged.
+ */
+export async function removeListingPhotos(admin: SupabaseClient, authId: string, urls: string[]) {
+  const marker = "/storage/v1/object/public/listing-photos/";
+  const paths = urls
+    .map(url => {
+      const at = url.indexOf(marker);
+      return at === -1 ? null : decodeURIComponent(url.slice(at + marker.length).split("?")[0]);
+    })
+    .filter((path): path is string => !!path && path.startsWith(`${authId}/`));
+  if (paths.length === 0) return;
+  const { error } = await admin.storage.from("listing-photos").remove(paths);
+  if (error) console.error("Removing replaced listing photos:", error.message);
+}
+
+/**
  * Each statement with what it's keyed on: users.id (null if their profile
  * never saved) or the lowercased email. Messages go first: the other
  * person's side of each thread is deleted along with the thread.

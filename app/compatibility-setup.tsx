@@ -215,7 +215,7 @@ export default function CompatibilitySetupScreen() {
       <View style={[s.header, { paddingTop: topPadding + 8 }, isDesktop && { maxWidth: contentMaxWidth, alignSelf: "center" as const, width: "100%" }]}>
         <View style={s.headerTextWrap}>
           <Text style={s.headerTitle}>Build Your Vibe</Text>
-          <Text style={s.headerSub}>Let's find your perfect UIUC housemate.</Text>
+          <Text style={s.headerSub}>{"Let's find your perfect UIUC housemate."}</Text>
         </View>
       </View>
 

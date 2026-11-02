@@ -4,7 +4,7 @@ import { fetchDeck, fetchUserProfile, fetchUsers, mergeProfile, saveUserProfile 
 import { fetchMutualMatches, saveLike, savePass } from "@/lib/likes";
 import { apiErrorMessage, fetchConversations, fetchMessages, openConversation, postMessage } from "@/lib/messages";
 import {
-  completeCrashPost as completeCrashPostOnServer, createCrashPost, createListing,
+  completeCrashPost as completeCrashPostOnServer, createCrashPost, createListing, updateListing,
   fetchCrashPosts, fetchListings, markListingLeased,
 } from "@/lib/listings";
 import { uploadPostPhoto } from "@/lib/uploads";
@@ -413,6 +413,8 @@ interface AppContextValue {
   subleases: SubleasePost[];
   /** Uploads the photos, then saves. Throws with a user-facing message; safe to call again with the same post. */
   addSublease: (post: SubleasePost) => Promise<SubleasePost>;
+  /** Saves edits to one of your own listings; same id, so never a second copy. */
+  updateSublease: (post: SubleasePost) => Promise<SubleasePost>;
   /** Marks it leased on the server. Throws with a user-facing message. */
   removeSublease: (id: string) => Promise<void>;
   /** From the crash_posts table; the device copy is only a cache for first paint. */
@@ -881,9 +883,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [postsError]);
 
   /**
-   * Photos are required, so an upload failure fails the whole post. Uploads go
-   * to fixed per-slot paths and the save is idempotent per post.id, so calling
-   * this again with the same post finishes the job without duplicates.
+   * Photos are optional, but any that are picked must upload: a failure fails
+   * the whole post. Uploads go to fixed per-slot paths and the save is
+   * idempotent per post.id, so calling this again with the same post finishes
+   * the job without duplicates.
    */
   const addSublease = async (post: SubleasePost): Promise<SubleasePost> => {
     try {
@@ -899,6 +902,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return saved;
     } catch (error) {
       console.error("[posts] Couldn't save the listing:", error);
+      throw new Error(apiErrorMessage(error));
+    }
+  };
+
+  /**
+   * Photos already uploaded pass straight through. New ones get a fresh path:
+   * the fixed per-slot paths addSublease uses could overwrite a photo the
+   * listing still shows (slots shift when one is cleared), and a reused URL
+   * can stay cached as the old picture.
+   */
+  const updateSublease = async (post: SubleasePost): Promise<SubleasePost> => {
+    try {
+      const userId = await resolveMyId();
+      const version = Date.now().toString(36);
+      const images = await Promise.all(
+        (post.images ?? []).map((uri, i) => uploadPostPhoto(post.id, `photo-${version}-${i}`, uri))
+      );
+      const floorPlanUrl = post.floorPlanUrl
+        ? await uploadPostPhoto(post.id, `floor-plan-${version}`, post.floorPlanUrl)
+        : undefined;
+      const saved = await updateListing({ ...post, userId, images, floorPlanUrl });
+      setSubleases(prev => prev.map(s => (s.id === saved.id ? saved : s)));
+      return saved;
+    } catch (error) {
+      console.error("[posts] Couldn't update the listing:", error);
       throw new Error(apiErrorMessage(error));
     }
   };
@@ -1269,7 +1297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     otpVerifiedEmail, setOtpVerifiedEmail,
     users, refreshUsers, deck, refreshDeck, matches, addMatch, scamBannerDismissed, dismissScamBanner,
     likedUserIds, passedUserIds, addLiked, addPassed, computeScore,
-    subleases, addSublease, removeSublease,
+    subleases, addSublease, updateSublease, removeSublease,
     crashPosts, addCrashPost, completeCrashPost, refreshPosts, postsError,
     friends, addFriend, removeFriend, toggleVouch, getTrustInfo,
     conversations, startConversation, startMatchConversation, sendMessage, retryMessage, getMessages,

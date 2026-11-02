@@ -136,6 +136,17 @@ export default function AdminScreen() {
             </View>
           )}
 
+          {/* Hosts and Sublessors at the listing step of signup: did the soft gate pay off? */}
+          <View style={s.infoCard}>
+            <Ionicons name="home-outline" size={20} color={Colors.ocean} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.infoValue}>
+                {data.stats.listing_published_at_signup ?? 0} / {data.stats.listing_skipped_at_signup ?? 0} / {data.stats.listing_published_after_skip ?? 0}
+              </Text>
+              <Text style={s.infoLabel}>Listings at signup: published / skipped / published later after skipping</Text>
+            </View>
+          </View>
+
           <Text style={s.sectionTitle}>Feedback Overview</Text>
 
           {totalFeedback === 0 ? (
